@@ -1,14 +1,22 @@
 {
-  "name": "matchpredict-frontend-tests",
-  "private": true,
-  "type": "module",
+  "name": "football-prediction",
+  "version": "1.0.0",
+  "description": "足球比赛预测系统",
+  "main": "index.html",
   "scripts": {
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "start": "serve",
+    "build": "echo 'No build step required'"
   },
-  "devDependencies": {
-    "vitest": "^1.6.0",
-    "jsdom": "^24.0.0",
-    "fast-check": "^3.19.0"
-  }
+  "keywords": [
+    "football",
+    "prediction",
+    "betting",
+    "odds"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "serve": "^14.2.0"
+  },
+  "devDependencies": {}
 }
