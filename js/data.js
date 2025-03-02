@@ -3,7 +3,8 @@ const LEAGUES = {
     "PL": "英超",
     "PD": "西甲",
     "SA": "意甲",
-    "BL1": "德甲"
+    "BL1": "德甲",
+    "FL1": "法甲"
 };
 
 // 存储各联赛的球队特征数据
@@ -12,8 +13,8 @@ let featuresData = {};
 // 预加载所有联赛的数据
 async function loadAllLeaguesData() {
     const loadingOverlay = document.getElementById('loading-overlay');
-
-
+    loadingOverlay.classList.remove('hidden');
+    
     try {
         // 并行加载所有联赛数据
         const promises = Object.keys(LEAGUES).map(leagueCode => 
@@ -26,7 +27,7 @@ async function loadAllLeaguesData() {
         console.error('加载数据失败:', error);
         alert('加载球队数据失败，请刷新页面重试');
     } finally {
-       
+        loadingOverlay.classList.add('hidden');
     }
 }
 
@@ -101,14 +102,3 @@ function logUserPrediction(matches) {
     // 保存到本地存储
     localStorage.setItem('prediction_logs', JSON.stringify(logs));
 }
-
-// 在 app.js 的 DOMContentLoaded 事件处理函数开始处添加
-document.addEventListener('DOMContentLoaded', function() {
-    // 确保加载遮罩在页面加载后隐藏
-    const loadingOverlay = document.getElementById('loading-overlay');
-    if (loadingOverlay) {
-        loadingOverlay.classList.add('hidden');
-    }
-    
-    // 其余代码...
-});

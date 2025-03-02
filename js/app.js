@@ -62,13 +62,13 @@ document.addEventListener('DOMContentLoaded', function() {
             populateTeamSelects(leagueCode, Object.keys(featuresData[leagueCode]));
         } else {
             // 否则加载数据
-
+            loadingOverlay.classList.remove('hidden');
             loadLeagueData(leagueCode)
                 .then(() => {
                     loadingOverlay.classList.add('hidden');
                 })
                 .catch(error => {
-                   
+                    loadingOverlay.classList.add('hidden');
                     alert(`加载 ${LEAGUES[leagueCode]} 数据失败: ${error.message}`);
                 });
         }
@@ -243,8 +243,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // 预测比赛
     function predictMatches() {
         if (matches.length === 0) return;
-
         
+        // 显示加载动画
+        loadingOverlay.classList.remove('hidden');
         
         // 使用setTimeout来模拟异步操作，让UI有时间更新
         setTimeout(() => {
@@ -273,7 +274,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const best_parlay = all_combinations.length > 0 ? all_combinations[0] : null;
                 
                 // 渲染结果
-                displayIndividualResults(individual_predictions);
+                renderIndividualPredictions(individual_predictions);
                 renderBestParlay(best_parlay);
                 renderAllParlays(all_combinations);
                 
@@ -286,135 +287,81 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.error('预测出错:', error);
                 alert('预测过程中发生错误: ' + error.message);
             } finally {
-                
+                // 隐藏加载动画
+                loadingOverlay.classList.add('hidden');
             }
         }, 100);
     }
     
     // 渲染单场预测结果
-    function displayIndividualResults(predictions) {
+    function renderIndividualPredictions(predictions) {
         const container = document.getElementById('individual-results');
         container.innerHTML = '';
         
-        predictions.forEach(prediction => {
-            const homeWinPercentage = (prediction.home_win_prob * 100).toFixed(1);
-            const drawPercentage = (prediction.draw_prob * 100).toFixed(1);
-            const awayWinPercentage = (prediction.away_win_prob * 100).toFixed(1);
-            
-            const bestBet = prediction.best_bet;
-            const bestEV = prediction.best_ev.toFixed(2);
-            
-            let bestBetText = '';
-            if (bestBet === 'home') {
-                bestBetText = `主胜 (${prediction.home_odds})`;
-            } else if (bestBet === 'draw') {
-                bestBetText = `平局 (${prediction.draw_odds})`;
-            } else {
-                bestBetText = `客胜 (${prediction.away_odds})`;
+        predictions.forEach((pred, index) => {
+            // 格式化结果名称
+            function formatResult(result) {
+                if (result === 'home') return '主胜';
+                if (result === 'draw') return '平局';
+                if (result === 'away') return '客胜';
+                return result;
             }
             
-            // 格式化最可能的比分（前三个）
-            let scoresHTML = '<div class="no-data">无数据</div>';
-            if (prediction.most_likely_scores && prediction.most_likely_scores.length > 0) {
-                scoresHTML = prediction.most_likely_scores.map(score => 
-                    `<div class="prediction-item">${score[0]} (${(score[1] * 100).toFixed(1)}%)</div>`
-                ).join('');
-            }
-            
-            // 格式化最可能的半场比分（前三个）
-            let htScoresHTML = '<div class="no-data">无数据</div>';
-            if (prediction.most_likely_ht_scores && prediction.most_likely_ht_scores.length > 0) {
-                htScoresHTML = prediction.most_likely_ht_scores.map(score => 
-                    `<div class="prediction-item">${score[0]} (${(score[1] * 100).toFixed(1)}%)</div>`
-                ).join('');
-            }
-            
-            // 格式化最可能的半全场结果（前三个）
-            let htftHTML = '<div class="no-data">无数据</div>';
-            if (prediction.most_likely_htft && prediction.most_likely_htft.length > 0) {
-                htftHTML = prediction.most_likely_htft.map(htft => {
-                    // 将半全场结果格式化为中文
-                    const [ht, ft] = htft[0].split('/');
-                    const htText = ht === 'H' ? '主胜' : (ht === 'D' ? '平局' : '客胜');
-                    const ftText = ft === 'H' ? '主胜' : (ft === 'D' ? '平局' : '客胜');
-                    return `<div class="prediction-item">${htText}/${ftText} (${(htft[1] * 100).toFixed(1)}%)</div>`;
-                }).join('');
-            }
-            
-            // 格式化最可能的总进球数（前三个）
-            let totalGoalsHTML = '<div class="no-data">无数据</div>';
-            if (prediction.most_likely_total_goals && prediction.most_likely_total_goals.length > 0) {
-                totalGoalsHTML = prediction.most_likely_total_goals.map(goals => 
-                    `<div class="prediction-item">${goals[0]} (${(goals[1] * 100).toFixed(1)}%)</div>`
-                ).join('');
-            }
-            
-            const resultCard = document.createElement('div');
-            resultCard.className = 'result-card';
-            
-            resultCard.innerHTML = `
-                <div class="match-info">
-                    <div class="league">${getLeagueName(prediction.league_code)}</div>
-                    <div class="teams">${prediction.home_team} vs ${prediction.away_team}</div>
-                </div>
+            // 创建投注选项HTML
+            let betsHTML = '';
+            pred.all_bets.forEach(([result, ev, odds, prob]) => {
+                const resultName = formatResult(result);
+                const evClass = ev > 0 ? 'positive-ev' : 'negative-ev';
                 
-                <div class="prediction-details">
+                betsHTML += `
+                    <div class="bet-option ${result === pred.best_bet ? 'best-bet' : ''}">
+                        <div class="bet-name">${resultName}</div>
+                        <div class="bet-details">
+                            <span class="bet-odds">赔率: ${odds.toFixed(2)}</span>
+                            <span class="bet-prob">概率: ${(prob * 100).toFixed(1)}%</span>
+                            <span class="bet-ev ${evClass}">期望值: ${ev.toFixed(4)}</span>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            const card = document.createElement('div');
+            card.className = 'prediction-card';
+            
+            card.innerHTML = `
+                <div class="prediction-header">
+                    <h3>${pred.home_team} vs ${pred.away_team}</h3>
+                    <div class="match-number">比赛 #${index + 1}</div>
+                </div>
+                <div class="prediction-content">
                     <div class="probabilities">
                         <div class="prob-item">
+                            <div class="prob-value">${(pred.home_win_prob * 100).toFixed(1)}%</div>
                             <div class="prob-label">主胜</div>
-                            <div class="prob-value">${homeWinPercentage}%</div>
                         </div>
                         <div class="prob-item">
+                            <div class="prob-value">${(pred.draw_prob * 100).toFixed(1)}%</div>
                             <div class="prob-label">平局</div>
-                            <div class="prob-value">${drawPercentage}%</div>
                         </div>
                         <div class="prob-item">
+                            <div class="prob-value">${(pred.away_win_prob * 100).toFixed(1)}%</div>
                             <div class="prob-label">客胜</div>
-                            <div class="prob-value">${awayWinPercentage}%</div>
                         </div>
                     </div>
-                    
-                    <div class="detailed-predictions">
-                        <div class="detail-item">
-                            <div class="detail-label">最可能比分:</div>
-                            <div class="detail-value">${scoresHTML}</div>
-                        </div>
-                        <div class="detail-item">
-                            <div class="detail-label">最可能半场比分:</div>
-                            <div class="detail-value">${htScoresHTML}</div>
-                        </div>
-                        <div class="detail-item">
-                            <div class="detail-label">最可能半全场:</div>
-                            <div class="detail-value">${htftHTML}</div>
-                        </div>
-                        <div class="detail-item">
-                            <div class="detail-label">最可能总进球:</div>
-                            <div class="detail-value">${totalGoalsHTML}</div>
-                        </div>
+                    <div class="betting-options">
+                        <h4>投注选项</h4>
+                        ${betsHTML}
                     </div>
-                    
-                    <div class="best-bet">
-                        <div class="bet-label">最佳投注:</div>
-                        <div class="bet-value">${bestBetText} (期望值: ${bestEV})</div>
+                    <div class="best-prediction">
+                        <div class="best-label">最佳投注</div>
+                        <div class="best-value">${formatResult(pred.best_bet)}</div>
+                        <div class="best-ev">期望值: ${pred.best_ev.toFixed(4)}</div>
                     </div>
                 </div>
             `;
             
-            container.appendChild(resultCard);
+            container.appendChild(card);
         });
-    }
-    
-    // 辅助函数：获取联赛名称
-    function getLeagueName(leagueCode) {
-        const leagueNames = {
-            'PL': '英超',
-            'PD': '西甲',
-            'SA': '意甲',
-            'BL1': '德甲',
-            'FL1': '法甲'
-        };
-        
-        return leagueNames[leagueCode] || leagueCode;
     }
     
     // 渲染最佳串关
@@ -552,10 +499,6 @@ document.addEventListener('DOMContentLoaded', function() {
             container.appendChild(parlayElement);
         }
     }
-    
-  
-    
-
     
     // 调用初始化函数
     init();
