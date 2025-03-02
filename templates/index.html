@@ -1,520 +1,124 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MatchPredict Pro – AI足球预测平台</title>
-<meta name="description" content="融合五大联赛历史权重与 AI 大模型的足球预测系统">
-<link rel="icon" href="/static/favicon.ico">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/static/style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>足球比赛预测系统</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-futbol"></i> 足球比赛预测系统</h1>
+            <p>基于数据分析的足球比赛预测工具</p>
+        </header>
 
-<!-- ── FOOTBALL FIELD SVG DECORATION ── -->
-<svg class="field-deco" viewBox="0 0 800 500" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-  <rect width="800" height="500" fill="none" stroke="rgba(74,222,128,0.05)" stroke-width="2"/>
-  <line x1="400" y1="0" x2="400" y2="500" stroke="rgba(74,222,128,0.05)" stroke-width="2"/>
-  <circle cx="400" cy="250" r="80" fill="none" stroke="rgba(74,222,128,0.05)" stroke-width="2"/>
-  <circle cx="400" cy="250" r="6" fill="rgba(74,222,128,0.08)"/>
-  <rect x="0" y="150" width="120" height="200" fill="none" stroke="rgba(74,222,128,0.05)" stroke-width="2"/>
-  <rect x="680" y="150" width="120" height="200" fill="none" stroke="rgba(74,222,128,0.05)" stroke-width="2"/>
-</svg>
+        <main>
+            <section class="match-input-section">
+                <h2>添加比赛</h2>
+                <div class="match-form">
+                    <div class="form-group">
+                        <label for="league-select">选择联赛:</label>
+                        <select id="league-select">
+                            <option value="">请选择联赛</option>
+                            <option value="PL">英超 (Premier League)</option>
+                            <option value="PD">西甲 (La Liga)</option>
+                            <option value="SA">意甲 (Serie A)</option>
+                            <option value="BL1">德甲 (Bundesliga)</option>
+                            <option value="FL1">法甲 (Ligue 1)</option>
+                        </select>
+                    </div>
 
-<!-- ── HEADER ── -->
-<header id="site-header">
-  <div class="logo">
-    <span class="logo-icon">⚽</span> MATCH<span style="-webkit-text-fill-color:initial;color:var(--orange)">PRO</span>
-  </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="home-team-select">主队:</label>
+                            <select id="home-team-select" disabled>
+                                <option value="">请先选择联赛</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="away-team-select">客队:</label>
+                            <select id="away-team-select" disabled>
+                                <option value="">请先选择联赛</option>
+                            </select>
+                        </div>
+                    </div>
 
-  <nav class="nav-tabs">
-    <button id="tab-classic" class="tab-btn active" onclick="switchTab('classic')">
-      <i class="fas fa-brain"></i> <span>深度权重</span>
-    </button>
-    <button id="tab-ai" class="tab-btn" onclick="switchTab('ai')">
-      <i class="fas fa-robot"></i> <span>AI 大模型</span>
-    </button>
-    <button id="tab-smart" class="tab-btn" onclick="switchTab('smart')">
-      <i class="fas fa-crosshairs"></i> <span>智能选场</span>
-    </button>
-    <button id="tab-wc" class="tab-btn" onclick="switchTab('wc')">
-      <i class="fas fa-globe"></i> <span>世界杯预测</span>
-    </button>
-    <button id="tab-record" class="tab-btn" onclick="switchTab('record')">
-      <i class="fas fa-chart-line"></i> <span>预测回顾</span>
-    </button>
-  </nav>
+                    <div class="form-row odds-row">
+                        <div class="form-group">
+                            <label for="home-odds">主胜赔率:</label>
+                            <input type="number" id="home-odds" step="0.01" min="1.01" placeholder="例如: 2.10">
+                        </div>
+                        <div class="form-group">
+                            <label for="draw-odds">平局赔率:</label>
+                            <input type="number" id="draw-odds" step="0.01" min="1.01" placeholder="例如: 3.50">
+                        </div>
+                        <div class="form-group">
+                            <label for="away-odds">客胜赔率:</label>
+                            <input type="number" id="away-odds" step="0.01" min="1.01" placeholder="例如: 3.20">
+                        </div>
+                    </div>
 
-    <div class="nav-right" id="nav-right">
-    {% if current_user %}
-    <div class="user-pill">
-      <span class="credits-badge">
-        <i class="fas fa-coins"></i>
-        <span class="credit-num" id="credits-display">{{ current_user.credits|default(0) }}</span>
-        <span class="credit-label">积分</span>
-      </span>
-      <button class="btn-checkin" id="checkin-btn" onclick="doCheckin()" {% if already_checked %}disabled style="opacity:0.5; pointer-events:none;"{% endif %}>
-        <i class="fas fa-calendar-check"></i>
-        <span>{% if already_checked %}已签到{% else %}签到{% endif %}</span>
-      </button>
-      <div class="user-actions">
-        <a href="/profile" class="btn-user-link">
-          <i class="fas fa-user-circle"></i>
-          <span>用户中心</span>
-        </a>
-        <button class="btn-logout" onclick="doLogout()">退出</button>
-      </div>
-    </div>
-    {% else %}
-    <button class="btn-primary" style="padding:.5rem 1.1rem;font-size:.82rem" onclick="openModal('login')">
-      <i class="fas fa-sign-in-alt"></i> 登录 / 注册
-    </button>
-    {% endif %}
-  </div>
-</header>
+                    <button id="add-match-btn" class="btn primary-btn">
+                        <i class="fas fa-plus-circle"></i> 添加比赛
+                    </button>
+                </div>
+            </section>
 
-<!-- ── HERO ── -->
-<section class="hero">
-  <div class="hero-inner">
-    <div class="hero-badge"><span class="dot-live"></span> 实时分析系统 · OpenRouter owl-alpha</div>
-    <h1>Expert <span class="grad-text">Football</span><br>Intelligence</h1>
-    <p>融合五大联赛过去5赛季历史数据权重 + AI 大模型深度研报</p>
-    <div class="hero-stats">
-      <div class="hstat"><span class="hstat-v">90%+</span><span class="hstat-l">综合准确率</span></div>
-      <div class="hstat-div"></div>
-      <div class="hstat"><span class="hstat-v">5</span><span class="hstat-l">顶级联赛</span></div>
-      <div class="hstat-div"></div>
-      <div class="hstat"><span class="hstat-v">AI</span><span class="hstat-l">智能研报</span></div>
-    </div>
-  </div>
-</section>
+            <section class="matches-list-section">
+                <h2>已添加比赛 <span id="match-count">(0)</span></h2>
+                <div id="matches-container" class="matches-container">
+                    <p class="empty-message">尚未添加任何比赛</p>
+                </div>
+                <div class="action-buttons">
+                    <button id="clear-matches-btn" class="btn secondary-btn" disabled>
+                        <i class="fas fa-trash-alt"></i> 清空比赛
+                    </button>
+                    <button id="predict-btn" class="btn primary-btn" disabled>
+                        <i class="fas fa-chart-line"></i> 开始预测
+                    </button>
+                </div>
+            </section>
 
-<!-- ── APP MAIN ── -->
-<main class="app-main">
+            <section id="results-section" class="results-section hidden">
+                <h2>预测结果</h2>
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="individual">单场预测</button>
+                    <button class="tab-btn" data-tab="best-parlay">最佳串关</button>
+                    <button class="tab-btn" data-tab="all-parlays">其他组合</button>
+                </div>
+                
+                <div id="individual-tab" class="tab-content active">
+                    <div id="individual-results" class="individual-results">
+                        <!-- 单场预测结果将在这里动态生成 -->
+                    </div>
+                </div>
+                
+                <div id="best-parlay-tab" class="tab-content">
+                    <div id="best-parlay-result" class="parlay-result">
+                        <!-- 最佳串关结果将在这里动态生成 -->
+                    </div>
+                </div>
+                
+                <div id="all-parlays-tab" class="tab-content">
+                    <div id="all-parlays-results" class="all-parlays-results">
+                        <!-- 其他串关组合将在这里动态生成 -->
+                    </div>
+                </div>
+            </section>
+        </main>
 
-  <!-- ═══ TAB 1: CLASSIC ═══ -->
-  <div id="panel-classic" class="tab-panel">
-    <div class="two-col">
-
-      <div class="form-card">
-        <h2 class="card-title"><i class="fas fa-database"></i> 深度权重预测</h2>
-        <p class="card-sub">泊松分布 + 历史胜率/进球/主客场优势多维权重模型</p>
-
-        <div class="field-group">
-          <label>选择联赛</label>
-          <select id="c-league" class="field-select" onchange="loadTeams()">
-            <option value="">── 请选择联赛 ──</option>
-            <option value="PL">🏴󠁧󠁢󠁥󠁮󠁧󠁿 英超 Premier League</option>
-            <option value="PD">🇪🇸 西甲 La Liga</option>
-            <option value="SA">🇮🇹 意甲 Serie A</option>
-            <option value="BL1">🇩🇪 德甲 Bundesliga</option>
-            <option value="FL1">🇫🇷 法甲 Ligue 1</option>
-          </select>
-        </div>
-
-        <div class="teams-row">
-          <div class="field-group" style="margin-bottom:0">
-            <label>主队</label>
-            <select id="c-home" class="field-select"><option value="">先选联赛</option></select>
-          </div>
-          <div class="vs-badge">VS</div>
-          <div class="field-group" style="margin-bottom:0">
-            <label>客队</label>
-            <select id="c-away" class="field-select"><option value="">先选联赛</option></select>
-          </div>
-        </div>
-
-        <div style="margin-bottom:1rem"></div>
-
-        <div class="odds-grid">
-          <div class="field-group" style="margin-bottom:0">
-            <label>主胜赔率</label>
-            <input type="number" id="c-ho" class="field-input" step="0.01" min="1.01" placeholder="2.10">
-          </div>
-          <div class="field-group" style="margin-bottom:0">
-            <label>平局赔率</label>
-            <input type="number" id="c-do" class="field-input" step="0.01" min="1.01" placeholder="3.40">
-          </div>
-          <div class="field-group" style="margin-bottom:0">
-            <label>客胜赔率</label>
-            <input type="number" id="c-ao" class="field-input" step="0.01" min="1.01" placeholder="3.20">
-          </div>
-        </div>
-
-        <div style="margin-bottom:1.5rem"></div>
-        <button class="btn-primary full" onclick="runClassic()">
-          <i class="fas fa-chart-bar"></i> 开始权重分析
-        </button>
-
-        <div style="margin-top:1.5rem;font-size:.75rem;color:var(--muted);text-align:center">
-          ⚠️ 预测仅供参考，不构成投注建议
-        </div>
-        <div style="margin-top:.75rem;display:flex;align-items:center;justify-content:center;gap:.4rem;font-size:.72rem;color:var(--muted)">
-          <i class="fas fa-coins" style="color:#f5c842"></i> 每次消耗 <span style="color:#f5c842;font-weight:800">1 积分</span>
-        </div>
-      </div>
-
-      <div>
-        <div id="classic-result" class="result-card hidden">
-          <div id="classic-result-inner"></div>
-        </div>
-        <div id="classic-placeholder" class="result-card placeholder-card">
-          <i class="fas fa-futbol fa-3x"></i>
-          <p>选择联赛、球队、填写赔率后点击分析</p>
-          <p class="sub">系统将调用历史权重 + 泊松模型给出完整预测</p>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- ═══ TAB 2: AI ═══ -->
-  <div id="panel-ai" class="tab-panel hidden">
-    <div class="two-col">
-
-      <div class="form-card">
-        <div class="card-header-row">
-          <h2 class="card-title"><i class="fas fa-ticket-alt"></i> 赛事广场</h2>
-          <div class="auto-sync-badge" id="sync-status-badge" title="每 10 分钟自动同步（五大联赛 + 解放者杯 + 巴甲 + 英冠等）">
-            <span class="dot-live"></span>
-            <span id="sync-status-text">自动更新中</span>
-          </div>
-        </div>
-        <p class="card-sub">点击选择比赛加入队列，最多5场，然后用 AI 大模型深度分析</p>
-        <div id="lottery-list" class="lottery-list">
-          <div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> 正在加载...</div>
-        </div>
-      </div>
-
-      <div class="sticky-aside">
-        <div class="result-card">
-          <h3 class="card-title"><i class="fas fa-shopping-basket"></i> 待分析队列</h3>
-          <div id="ai-cart" class="ai-cart">
-            <div class="empty-msg">请从左侧点击选择比赛</div>
-          </div>
-          <div class="cart-footer">
-            <!-- 引擎 & 模型选择器 -->
-            <div id="ai-engine-picker" style="margin-bottom:0.8rem; display:none;">
-              <div style="font-size:0.78rem; color:var(--muted); margin-bottom:0.4rem;">
-                <i class="fas fa-sliders-h" style="margin-right:0.3rem;"></i>分析引擎 &amp; 模型
-              </div>
-              <select id="ai-engine-sel"
-                style="width:100%;padding:0.45rem 0.6rem;border-radius:7px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);color:var(--cream);font-size:0.82rem;margin-bottom:0.4rem;cursor:pointer;outline:none;"
-                onchange="onAIEngineChange()">
-              </select>
-              <select id="ai-model-sel"
-                style="width:100%;padding:0.45rem 0.6rem;border-radius:7px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);color:var(--cream);font-size:0.82rem;cursor:pointer;outline:none;">
-              </select>
-            </div>
-            <div class="cost-row">
-              <span>本次消耗积分</span>
-              <span id="ai-cost" class="cost-val">0</span>
-            </div>
-            <button id="ai-run-btn" class="btn-primary full disabled" onclick="runAI()">
-              <i class="fas fa-robot"></i> AI 大模型分析
-            </button>
-          </div>
-        </div>
-      </div>
-
+        <footer>
+            <p>© 2024 足球比赛预测系统 | 数据仅供参考，请理性投注</p>
+        </footer>
     </div>
 
-    <div id="ai-results" class="ai-results hidden"></div>
-  </div>
-
-  <!-- ═══ TAB 5: 预测战绩 ═══ -->
-  <div id="panel-record" class="tab-panel hidden">
-    <!-- Hero：始终可见 -->
-    <header class="pr-hero">
-      <div class="pr-hero-icon"><i class="fas fa-chart-pie"></i></div>
-      <h2 class="pr-hero-title">预测回顾</h2>
-      <p class="pr-hero-subtitle">ML 模型预测 vs 真实比赛结果，逐场对照</p>
-    </header>
-
-    <!-- 状态区：loading / error / empty（与 content 互斥） -->
-    <div id="pr-status" class="pr-status">
-      <div class="pr-loading"><i class="fas fa-spinner fa-spin fa-2x"></i><span>加载中…</span></div>
+    <div id="loading-overlay" class="loading-overlay hidden">
+        <div class="spinner"></div>
+        <p>正在分析数据，请稍候...</p>
     </div>
 
-    <!-- 内容区：仅在 total_predicted > 0 时由 JS 显示 -->
-    <section id="pr-content" class="pr-content" hidden>
-      <!-- 4 统计卡 -->
-      <div id="pr-stats" class="pr-stats"></div>
-      <!-- 分联赛准确率（条件展示） -->
-      <div id="pr-leagues" class="pr-leagues" hidden></div>
-      <!-- 14 天趋势（条件展示） -->
-      <div id="pr-trend" class="pr-trend" hidden></div>
-      <!-- ML 模型评估（F1 / Brier / 校准） -->
-      <div id="pr-eval" class="pr-eval" hidden></div>
-      <!-- 筛选条 -->
-      <div id="pr-filter" class="pr-filter">
-        <select id="pr-filter-league">
-          <option value="">全部联赛</option>
-          <option value="英超">🏴󠁧󠁢󠁥󠁮󠁧󠁿 英超</option>
-          <option value="西甲">🇪🇸 西甲</option>
-          <option value="意甲">🇮🇹 意甲</option>
-          <option value="德甲">🇩🇪 德甲</option>
-          <option value="法甲">🇫🇷 法甲</option>
-          <option value="欧冠">🏆 欧冠</option>
-          <option value="欧协联">🥈 欧协联</option>
-          <option value="解放者杯">🌎 解放者杯</option>
-          <option value="巴甲">🇧🇷 巴甲</option>
-          <option value="英冠">🏴󠁧󠁢󠁥󠁮󠁧󠁿 英冠</option>
-          <option value="德乙">🇩🇪 德乙</option>
-        </select>
-        <select id="pr-filter-result">
-          <option value="">全部结果</option>
-          <option value="correct">✅ 胜平负命中</option>
-          <option value="wrong">❌ 胜平负未中</option>
-          <option value="score_hit">🎯 比分精确命中</option>
-        </select>
-      </div>
-      <!-- 比赛对比卡片列表 -->
-      <div id="pr-list" class="pr-list"></div>
-      <!-- 分页器 -->
-      <div id="pr-pagination" class="pr-pagination"></div>
-    </section>
-  </div>
-
-  <!-- ═══ TAB 3: WORLD CUP ═══ -->
-  <div id="panel-wc" class="tab-panel hidden">
-    <!-- Countdown Section -->
-    <div class="wc-countdown-container">
-      <div class="wc-countdown-inner">
-        <h2 class="wc-title"><i class="fas fa-trophy"></i> 2026 美加墨世界杯</h2>
-        <div class="wc-timer" id="wc-timer">
-          <div class="time-box"><span id="wc-days">000</span><small>天</small></div>
-          <div class="time-box"><span id="wc-hours">00</span><small>时</small></div>
-          <div class="time-box"><span id="wc-mins">00</span><small>分</small></div>
-          <div class="time-box"><span id="wc-secs">00</span><small>秒</small></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- WC Sub-tabs -->
-    <div class="wc-tabs">
-      <button class="wc-tab-btn active" onclick="switchWCTab('single')">单场预测</button>
-      <button class="wc-tab-btn" onclick="switchWCTab('simulate')">全赛程模拟</button>
-    </div>
-
-    <!-- WC Single Match Prediction -->
-    <div id="wc-single" class="wc-panel">
-      <div class="form-card" style="margin: 0 auto; max-width: 600px;">
-        <h2 class="card-title"><i class="fas fa-balance-scale"></i> 国家队权重预测</h2>
-        <p class="card-sub">基于FIFA排名及近期大赛表现的深度权重模型</p>
-
-        <div class="teams-row" style="margin-top:1rem">
-          <div class="field-group" style="margin-bottom:0">
-            <label>主队</label>
-            <select id="wc-home" class="field-select"></select>
-          </div>
-          <div class="vs-badge">VS</div>
-          <div class="field-group" style="margin-bottom:0">
-            <label>客队</label>
-            <select id="wc-away" class="field-select"></select>
-          </div>
-        </div>
-
-        <div style="margin-bottom:1rem"></div>
-
-        <div class="odds-grid">
-          <div class="field-group" style="margin-bottom:0">
-            <label>主胜赔率</label>
-            <input type="number" id="wc-ho" class="field-input" step="0.01" min="1.01" placeholder="2.10">
-          </div>
-          <div class="field-group" style="margin-bottom:0">
-            <label>平局赔率</label>
-            <input type="number" id="wc-do" class="field-input" step="0.01" min="1.01" placeholder="3.10">
-          </div>
-          <div class="field-group" style="margin-bottom:0">
-            <label>客胜赔率</label>
-            <input type="number" id="wc-ao" class="field-input" step="0.01" min="1.01" placeholder="3.50">
-          </div>
-        </div>
-
-        <div style="margin-bottom:1.5rem"></div>
-        <button class="btn-primary full" onclick="runWCSingle()">
-          <i class="fas fa-magic"></i> 开始预测
-        </button>
-
-        <div style="margin-top:.75rem;display:flex;align-items:center;justify-content:center;gap:.4rem;font-size:.72rem;color:var(--muted)">
-          <i class="fas fa-coins" style="color:#f5c842"></i> 每次消耗 <span style="color:#f5c842;font-weight:800">1 积分</span>
-        </div>
-      </div>
-      <div id="wc-single-result" class="result-card hidden" style="margin: 2rem auto; max-width: 600px;"></div>
-    </div>
-
-    <!-- WC Tournament Simulation -->
-    <div id="wc-simulate" class="wc-panel hidden">
-      <div class="form-card" style="margin: 0 auto; max-width: 800px; text-align: center;">
-        <h2 class="card-title"><i class="fas fa-project-diagram"></i> 淘汰赛全赛程模拟</h2>
-        <p class="card-sub" style="margin-bottom:1.5rem">使用当前16强权重自动推演从1/8决赛到夺冠的全赛程结果（包含比分）</p>
-        
-        <button class="btn-accent" style="padding: 1rem 3rem; font-size: 1.1rem; border-radius: 50px;" onclick="runWCSimulate()">
-          <i class="fas fa-sitemap"></i> 立即开始推演
-        </button>
-
-        <div style="margin-top:1rem;display:flex;align-items:center;justify-content:center;gap:.4rem;font-size:.85rem;color:var(--muted)">
-          <i class="fas fa-coins" style="color:#f5c842"></i> 每次消耗 <span style="color:#f5c842;font-weight:800">5 积分</span>
-        </div>
-      </div>
-      <div id="wc-bracket" class="wc-bracket hidden"></div>
-    </div>
-  </div>
-
-  <!-- ═══ TAB 3: SMART PICK ═══ -->
-  <div id="panel-smart" class="tab-panel hidden">
-
-    <!-- 说明横幅 -->
-    <div class="smart-hero-banner">
-      <div class="smart-hero-inner">
-        <div class="smart-hero-icon"><i class="fas fa-crosshairs"></i></div>
-        <div>
-          <h2 class="smart-hero-title">智能选场 <span class="smart-badge-new">NEW</span></h2>
-          <p class="smart-hero-sub">基于 3500+ 场历史比赛训练的 AI 模型，自动分析五大联赛即将开赛比赛，给出胜平负概率和推荐。选一场感兴趣的，深度分析仅需 2 积分。</p>
-        </div>
-      </div>
-      <!-- 简洁说明指引 -->
-      <div class="smart-guide-row">
-        <div class="smart-guide-step">
-          <div class="smart-guide-num">1</div>
-          <div class="smart-guide-text">选择联赛或日期筛选比赛</div>
-        </div>
-        <div class="smart-guide-arrow"><i class="fas fa-chevron-right"></i></div>
-        <div class="smart-guide-step">
-          <div class="smart-guide-num">2</div>
-          <div class="smart-guide-text">查看 AI 预测概率和推荐</div>
-        </div>
-        <div class="smart-guide-arrow"><i class="fas fa-chevron-right"></i></div>
-        <div class="smart-guide-step">
-          <div class="smart-guide-num">3</div>
-          <div class="smart-guide-text">点击「深度分析」获取完整研报</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 筛选栏 -->
-    <div class="smart-filter-bar">
-      <div class="smart-filter-left">
-        <button class="smart-filter-btn active" onclick="filterSmartLeague('all', this)">🌍 全部</button>
-        <button class="smart-filter-btn" onclick="filterSmartLeague('英超', this)">🏴󠁧󠁢󠁥󠁮󠁧󠁿 英超</button>
-        <button class="smart-filter-btn" onclick="filterSmartLeague('西甲', this)">🇪🇸 西甲</button>
-        <button class="smart-filter-btn" onclick="filterSmartLeague('意甲', this)">🇮🇹 意甲</button>
-        <button class="smart-filter-btn" onclick="filterSmartLeague('德甲', this)">🇩🇪 德甲</button>
-        <button class="smart-filter-btn" onclick="filterSmartLeague('法甲', this)">🇫🇷 法甲</button>
-        <button class="smart-filter-btn" onclick="filterSmartLeague('欧冠', this)">🏆 欧冠</button>
-        <button class="smart-filter-btn" onclick="filterSmartLeague('欧协联', this)">🥈 欧协联</button>
-        <button class="smart-filter-btn" onclick="filterSmartLeague('解放者杯', this)">🌎 解放者杯</button>
-        <button class="smart-filter-btn" onclick="filterSmartLeague('巴甲', this)">🇧🇷 巴甲</button>
-        <button class="smart-filter-btn" onclick="filterSmartLeague('英冠', this)">🏴󠁧󠁢󠁥󠁮󠁧󠁿 英冠</button>
-        <button class="smart-filter-btn" onclick="filterSmartLeague('德乙', this)">🇩🇪 德乙</button>
-      </div>
-      <div class="smart-filter-right">
-        <span id="smart-match-count" class="smart-count-badge">加载中...</span>
-      </div>
-    </div>
-
-    <!-- 比赛列表 -->
-    <div id="smart-match-list" class="smart-match-list">
-      <div class="spinner-overlay"><i class="fas fa-spinner fa-spin fa-2x"></i><span>正在加载比赛数据...</span></div>
-    </div>
-
-    <!-- 免责声明 -->
-    <div class="disclaimer" style="max-width:860px;margin:1.5rem auto 0">
-      ⚠️ 预测基于历史数据统计模型，命中率约 60-65%，不构成投注建议。理性娱乐，量力而行。
-    </div>
-
-  </div>
-
-  <!-- 深度分析结果弹窗 -->
-  <div id="smart-detail-overlay" class="modal-overlay hidden" onclick="closeSmartDetail()"></div>
-  <div id="smart-detail-modal" class="smart-detail-modal hidden">
-    <div class="smart-detail-inner" id="smart-detail-inner">
-      <div class="smart-detail-loading">
-        <i class="fas fa-spinner fa-spin fa-2x"></i>
-        <p>AI 正在深度分析，通常需要 10-20 秒...</p>
-      </div>
-    </div>
-    <button class="smart-detail-close" onclick="closeSmartDetail()"><i class="fas fa-times"></i></button>
-  </div>
-
-</main>
-
-<!-- ── AUTH MODALS ── -->
-<div id="modal-overlay" class="modal-overlay hidden" onclick="closeModal()"></div>
-
-<div id="modal-login" class="modal hidden">
-  <div class="modal-head">
-    <h2>⚽ 登录账号</h2>
-    <button class="modal-close" onclick="closeModal()">✕</button>
-  </div>
-  <form onsubmit="doLogin(event)">
-    <input type="text" id="l-user" placeholder="用户名" class="field-input full" required>
-    <input type="password" id="l-pass" placeholder="密码" class="field-input full" required>
-    <button type="submit" class="btn-primary full">登 录</button>
-  </form>
-  <p class="modal-footer">没有账号？<button class="btn-link" onclick="openModal('register')">立即注册</button></p>
-</div>
-
-<div id="modal-register" class="modal hidden">
-  <div class="modal-head">
-    <h2>🎯 创建账号</h2>
-    <button class="modal-close" onclick="closeModal()">✕</button>
-  </div>
-  <form onsubmit="doRegister(event)">
-    <input type="text" id="r-user" placeholder="用户名（至少3位）" class="field-input full" required>
-    <input type="email" id="r-email" placeholder="邮箱地址" class="field-input full" required>
-    <input type="password" id="r-pass" placeholder="密码（至少6位）" class="field-input full" required>
-    <button type="submit" class="btn-accent full">注 册</button>
-  </form>
-  <p class="modal-footer">已有账号？<button class="btn-link" onclick="openModal('login')">返回登录</button></p>
-</div>
-
-<!-- ── CREDITS INSUFFICIENT MODAL ── -->
-<div id="credits-modal" class="modal hidden" style="max-width:380px">
-  <div class="modal-head">
-    <h2>💰 积分不足</h2>
-    <button class="modal-close" onclick="closeCreditsModal()">✕</button>
-  </div>
-  <p id="credits-modal-msg" style="margin:.5rem 0 1.2rem;font-size:.88rem;color:var(--muted)"></p>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:1.4rem">
-    <div style="background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);border-radius:12px;padding:.8rem;text-align:center">
-      <div style="font-size:1.2rem;font-weight:900;color:#f87171" id="credits-modal-cost">0</div>
-      <div style="font-size:.68rem;color:var(--muted);margin-top:.2rem">本次需要</div>
-    </div>
-    <div style="background:rgba(245,200,66,.08);border:1px solid rgba(245,200,66,.2);border-radius:12px;padding:.8rem;text-align:center">
-      <div style="font-size:1.2rem;font-weight:900;color:#f5c842" id="credits-modal-cur">0</div>
-      <div style="font-size:.68rem;color:var(--muted);margin-top:.2rem">当前剩余</div>
-    </div>
-  </div>
-  <div style="font-size:.78rem;color:var(--muted);margin-bottom:1.2rem;line-height:1.7;background:rgba(255,255,255,.03);padding:.8rem;border-radius:10px">
-    💡 <b>获取积分方式：</b><br>
-    📅 每日签到：普通用户 +6，会员 +30<br>
-    🛒 后续可付费购买积分包
-  </div>
-  <div style="display:flex;gap:.7rem">
-    <button class="btn-primary" style="flex:1" onclick="closeCreditsModal(); doCheckin()">立即签到</button>
-    <a href="/profile" class="btn-primary" style="flex:1;text-align:center;text-decoration:none">前往个人中心</a>
-  </div>
-</div>
-
-<div id="toast" class="toast hidden"></div>
-
-<style>
-/* Field SVG decoration */
-.field-deco {
-  position: fixed;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  width: 900px; height: 560px;
-  pointer-events: none;
-  z-index: 0; opacity: 1;
-}
-</style>
-
-<script src="/static/script.js"></script>
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>
-</html>
+</html> 
