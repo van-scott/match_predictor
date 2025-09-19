@@ -1,9 +1,3 @@
-"""
-⚠️ [已废弃] 老版数据采集脚本
-fetch_odds_data 的赔率采集功能已迁移到 sync_upcoming.py 的 sync_odds_from_api()。
-fetch_matches_data 已被 sync_historical.py / sync_upcoming.py 取代。
-保留仅供参考。
-"""
 import os
 import requests
 import json
@@ -27,6 +21,10 @@ def fetch_matches_data(league_id=DEFAULT_LEAGUE, season=DEFAULT_SEASON):
     
     if response.status_code == 200:
         data = response.json()
+        # 保存原始数据
+        ensure_data_dir()
+        with open(f"{DATA_DIR}/raw_matches_{league_id}_{season}.json", "w") as f:
+            json.dump(data, f)
         print(f"成功获取{len(data['matches'])}场比赛数据")
         return data
     else:
@@ -49,6 +47,11 @@ def fetch_odds_data(sport="soccer"):
     
     if response.status_code == 200:
         data = response.json()
+        # 保存原始数据
+        ensure_data_dir()
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        with open(f"{DATA_DIR}/raw_odds_{timestamp}.json", "w") as f:
+            json.dump(data, f)
         print(f"成功获取{len(data)}场比赛的赔率数据")
         return data
     else:
@@ -66,6 +69,10 @@ def fetch_team_data(league_id=DEFAULT_LEAGUE):
     
     if response.status_code == 200:
         data = response.json()
+        # 保存原始数据
+        ensure_data_dir()
+        with open(f"{DATA_DIR}/raw_teams_{league_id}.json", "w") as f:
+            json.dump(data, f)
         print(f"成功获取{len(data['teams'])}支球队数据")
         return data
     else:

@@ -1,10 +1,8 @@
-# ⚠️ [已废弃] 配置文件示例
-# 实际配置已迁移到 .env 文件，此文件仅供参考。
-# 请复制 .env.example → .env 并填入您的实际配置
+# 配置文件示例
+# 请复制此文件为 config_local.py 并填入您的实际配置
 
 # Gemini API配置  
-# 请设置环境变量: export GEMINI_API_KEY="your_api_key_here"
-GEMINI_API_KEY = ""  # 已移动到环境变量
+GEMINI_API_KEY = "AIzaSyDy9pYAEW7e2Ewk__9TCHAD5X_G1VhCtVw"
 GEMINI_MODEL = "gemini-2.5-flash-preview-05-20"
 
 # Flask配置
