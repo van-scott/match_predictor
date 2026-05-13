@@ -1445,7 +1445,7 @@ class PredictionDatabase:
                     match_id = str(match.get('match_id', ''))
                     home_team = match.get('home_team', '')
                     away_team = match.get('away_team', '')
-                    league_name = match.get('competition', '')
+                    league_name = match.get('league_name') or match.get('competition', '')
                     match_date_val = match.get('match_date')
                     
                     # 处理时间

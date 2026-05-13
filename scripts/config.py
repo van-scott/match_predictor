@@ -8,7 +8,7 @@ SECRET_KEY = "your_secret_key_here"
 
 # 外部API配置
 FOOTBALL_DATA_BASE_URL = "http://api.football-data.org/v4"
-FOOTBALL_DATA_API_KEY = os.getenv("FOOTBALL_DATA_API_KEY", "demo")
+FOOTBALL_DATA_API_KEY = os.getenv("FOOTBALL_DATA_API_KEY", "d318f21f939e4752a93313937fd203e9")
 
 ODDS_API_BASE_URL = "https://api.the-odds-api.com/v4"
 ODDS_API_KEY = os.getenv("ODDS_API_KEY", "demo")
