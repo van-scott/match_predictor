@@ -848,7 +848,6 @@ def can_user_predict_api():
             app.logger.error("检查预测权限失败: 数据库未配置或初始化失败", exc_info=True)
             return jsonify({'success': False, 'message': '检查失败：数据库服务不可用'}), 500
 
-        # 刷新用户数据以获取最新状态，特别是每日预测次数可能已重置
         user_data_from_db = prediction_db.get_user_by_username(current_user['username'])
         if not user_data_from_db:
             app.logger.error(f"检查预测权限失败: 数据库中未找到用户 {current_user['username']}", exc_info=True)
@@ -878,5 +877,213 @@ def can_user_predict_api():
         app.logger.error(f"检查预测权限失败（捕获到异常）: {e}", exc_info=True)
         return jsonify({'success': False, 'message': '检查失败'}), 500
 
+
+# ── 积分 & 签到 ───────────────────────────────────────────────────────────────
+
+@app.route('/api/user/credits', methods=['GET'])
+def get_user_credits():
+    """获取当前用户积分"""
+    current_user = get_current_user()
+    if not current_user or not prediction_db:
+        return jsonify({'success': False, 'credits': 0, 'message': '未登录'}), 401
+    credits = prediction_db.get_user_credits(current_user['id'])
+    return jsonify({'success': True, 'credits': credits})
+
+
+@app.route('/api/user/checkin', methods=['POST'])
+def user_checkin():
+    """每日签到"""
+    current_user = get_current_user()
+    if not current_user or not prediction_db:
+        return jsonify({'success': False, 'message': '请先登录'}), 401
+    result = prediction_db.checkin(current_user['id'], current_user['user_type'])
+    return jsonify(result)
+
+
+# ── 世界杯预测 ────────────────────────────────────────────────────────────────
+
+# 16 强权重（FIFA排名 + 近期表现综合评分，越高越强）
+WC_TEAM_WEIGHTS = {
+    "阿根廷": 97, "法国": 95, "巴西": 93, "英格兰": 91,
+    "西班牙": 90, "德国": 88, "葡萄牙": 87, "荷兰": 85,
+    "意大利": 83, "比利时": 82, "克罗地亚": 80, "乌拉圭": 79,
+    "哥伦比亚": 77, "美国": 75, "墨西哥": 74, "日本": 73,
+}
+
+def _wc_predict_match(home: str, away: str, ho: float = None, do_: float = None, ao: float = None):
+    """基于权重计算世界杯单场结果"""
+    import math, random
+    w_h = WC_TEAM_WEIGHTS.get(home, 75)
+    w_a = WC_TEAM_WEIGHTS.get(away, 75)
+
+    # 主场优势 +5%
+    w_h_adj = w_h * 1.05
+
+    # 基础概率（Softmax）
+    exp_h = math.exp(w_h_adj / 20)
+    exp_d = math.exp((w_h_adj + w_a) / 45)
+    exp_a = math.exp(w_a / 20)
+    total = exp_h + exp_d + exp_a
+
+    prob_h = exp_h / total
+    prob_d = exp_d / total
+    prob_a = exp_a / total
+
+    # 如果有赔率，融合赔率隐含概率（权重 30%）
+    if ho and do_ and ao:
+        implied_h = 1 / ho
+        implied_d = 1 / do_
+        implied_a = 1 / ao
+        s = implied_h + implied_d + implied_a
+        implied_h /= s; implied_d /= s; implied_a /= s
+        prob_h = prob_h * 0.7 + implied_h * 0.3
+        prob_d = prob_d * 0.7 + implied_d * 0.3
+        prob_a = prob_a * 0.7 + implied_a * 0.3
+
+    # 预测比分（泊松均值）
+    lambda_h = max(0.5, (w_h_adj / w_a) * 1.3)
+    lambda_a = max(0.3, (w_a / w_h_adj) * 1.1)
+    score_h = min(5, round(lambda_h * random.uniform(0.7, 1.3)))
+    score_a = min(5, round(lambda_a * random.uniform(0.7, 1.3)))
+
+    if prob_h >= prob_d and prob_h >= prob_a:
+        rec = "主胜"
+    elif prob_d >= prob_a:
+        rec = "平局"
+    else:
+        rec = "客胜"
+
+    return {
+        "home_team": home,
+        "away_team": away,
+        "probabilities": {
+            "home": round(prob_h, 3),
+            "draw": round(prob_d, 3),
+            "away": round(prob_a, 3),
+        },
+        "home_score_pred": score_h,
+        "away_score_pred": score_a,
+        "recommendation": rec,
+    }
+
+
+@app.route('/api/wc/predict', methods=['POST'])
+def wc_predict():
+    """世界杯单场预测（消耗1积分）"""
+    try:
+        current_user = get_current_user()
+        if not current_user:
+            return jsonify({'success': False, 'message': '请先登录'}), 401
+
+        # 扣除积分
+        if prediction_db:
+            ok = prediction_db.deduct_credits(current_user['id'], 1)
+            if not ok:
+                credits = prediction_db.get_user_credits(current_user['id'])
+                return jsonify({
+                    'success': False,
+                    'error_code': 'INSUFFICIENT_CREDITS',
+                    'message': '积分不足',
+                    'credits': credits,
+                    'cost': 1,
+                }), 402
+
+        data = request.get_json() or {}
+        home = data.get('home_team', '')
+        away = data.get('away_team', '')
+        ho = float(data['ho']) if data.get('ho') else None
+        do_ = float(data['do']) if data.get('do') else None
+        ao = float(data['ao']) if data.get('ao') else None
+
+        if not home or not away:
+            return jsonify({'success': False, 'message': '请选择主队和客队'}), 400
+
+        prediction = _wc_predict_match(home, away, ho, do_, ao)
+        credits = prediction_db.get_user_credits(current_user['id']) if prediction_db else 0
+
+        return jsonify({'success': True, 'prediction': prediction, 'credits': credits})
+
+    except Exception as e:
+        app.logger.error(f"世界杯预测失败: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/wc/simulate', methods=['POST'])
+def wc_simulate():
+    """淘汰赛全赛程模拟（消耗5积分）"""
+    try:
+        current_user = get_current_user()
+        if not current_user:
+            return jsonify({'success': False, 'message': '请先登录'}), 401
+
+        if prediction_db:
+            ok = prediction_db.deduct_credits(current_user['id'], 5)
+            if not ok:
+                credits = prediction_db.get_user_credits(current_user['id'])
+                return jsonify({
+                    'success': False,
+                    'error_code': 'INSUFFICIENT_CREDITS',
+                    'message': '积分不足（本次需5分）',
+                    'credits': credits,
+                    'cost': 5,
+                }), 402
+
+        import random
+
+        teams = list(WC_TEAM_WEIGHTS.keys())  # 16支
+        random.shuffle(teams)
+
+        def sim_match(home, away):
+            p = _wc_predict_match(home, away)
+            r = random.random()
+            if r < p['probabilities']['home']:
+                winner = home
+            elif r < p['probabilities']['home'] + p['probabilities']['draw']:
+                # 淘汰赛无平局，胜率高者晋级
+                winner = home if p['probabilities']['home'] >= p['probabilities']['away'] else away
+            else:
+                winner = away
+            return {
+                'home': home, 'away': away,
+                'score': f"{p['home_score_pred']}-{p['away_score_pred']}",
+                'winner': winner,
+            }
+
+        # 1/8 决赛
+        r16_matches = [sim_match(teams[i*2], teams[i*2+1]) for i in range(8)]
+        r16_winners = [m['winner'] for m in r16_matches]
+
+        # 1/4 决赛
+        qf_matches = [sim_match(r16_winners[i*2], r16_winners[i*2+1]) for i in range(4)]
+        qf_winners = [m['winner'] for m in qf_matches]
+
+        # 半决赛
+        sf_matches = [sim_match(qf_winners[0], qf_winners[1]), sim_match(qf_winners[2], qf_winners[3])]
+        sf_winners = [m['winner'] for m in sf_matches]
+
+        # 决赛
+        final_match = sim_match(sf_winners[0], sf_winners[1])
+
+        bracket = {
+            'r16': r16_matches,
+            'qf': qf_matches,
+            'sf': sf_matches,
+            'final': [final_match],
+        }
+
+        credits = prediction_db.get_user_credits(current_user['id']) if prediction_db else 0
+        return jsonify({'success': True, 'bracket': bracket, 'credits': credits})
+
+    except Exception as e:
+        app.logger.error(f"世界杯模拟失败: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=8000) 
+    # 启动时确保积分字段存在
+    if prediction_db:
+        try:
+            prediction_db.ensure_credits_columns()
+        except Exception as e:
+            app.logger.warning(f"积分字段初始化跳过: {e}")
+    app.run(debug=True, host='0.0.0.0', port=8000)

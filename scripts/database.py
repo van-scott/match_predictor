@@ -826,6 +826,112 @@ class PredictionDatabase:
         else:
             return daily_used < 3
 
+    # ── 积分系统 ─────────────────────────────────────────────────────────────
+
+    def get_user_credits(self, user_id: int) -> int:
+        """获取用户当前积分"""
+        try:
+            with self.get_db_connection() as conn:
+                cursor = conn.cursor()
+                # 尝试从 credits 字段获取，若字段不存在返回默认值
+                try:
+                    cursor.execute("SELECT credits FROM users WHERE id = %s", (user_id,))
+                    row = cursor.fetchone()
+                    return row[0] if row and row[0] is not None else 0
+                except Exception:
+                    return 0
+        except Exception as e:
+            logger.error(f"获取积分失败: {e}")
+            return 0
+
+    def deduct_credits(self, user_id: int, cost: int) -> bool:
+        """扣除用户积分，余额不足返回 False"""
+        try:
+            with self.get_db_connection() as conn:
+                cursor = conn.cursor()
+                # 先检查余额
+                cursor.execute("SELECT credits FROM users WHERE id = %s FOR UPDATE", (user_id,))
+                row = cursor.fetchone()
+                current = row[0] if row and row[0] is not None else 0
+                if current < cost:
+                    return False
+                cursor.execute(
+                    "UPDATE users SET credits = credits - %s WHERE id = %s",
+                    (cost, user_id)
+                )
+                return True
+        except Exception as e:
+            logger.error(f"扣除积分失败: {e}")
+            return False
+
+    def add_credits(self, user_id: int, amount: int) -> bool:
+        """增加用户积分"""
+        try:
+            with self.get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "UPDATE users SET credits = COALESCE(credits, 0) + %s WHERE id = %s",
+                    (amount, user_id)
+                )
+                return True
+        except Exception as e:
+            logger.error(f"增加积分失败: {e}")
+            return False
+
+    def checkin(self, user_id: int, user_type: str) -> dict:
+        """
+        每日签到：普通用户 +6，会员 +30。
+        同一天重复签到返回 {'success': False, 'msg': '今日已签到'}
+        """
+        try:
+            with self.get_db_connection() as conn:
+                cursor = conn.cursor()
+                today = datetime.now().date()
+
+                # 检查今日是否已签到
+                cursor.execute(
+                    "SELECT last_checkin_date FROM users WHERE id = %s",
+                    (user_id,)
+                )
+                row = cursor.fetchone()
+                last_checkin = row[0] if row else None
+
+                if last_checkin and last_checkin == today:
+                    return {'success': False, 'msg': '今日已签到，明日再来'}
+
+                amount = 30 if user_type == 'premium' else 6
+                cursor.execute(
+                    """UPDATE users SET
+                        credits = COALESCE(credits, 0) + %s,
+                        last_checkin_date = %s
+                       WHERE id = %s""",
+                    (amount, today, user_id)
+                )
+
+                # 查询最新积分
+                cursor.execute("SELECT credits FROM users WHERE id = %s", (user_id,))
+                new_credits = cursor.fetchone()[0]
+
+                return {'success': True, 'added': amount, 'credits': new_credits}
+
+        except Exception as e:
+            logger.error(f"签到失败: {e}")
+            return {'success': False, 'msg': str(e)}
+
+    def ensure_credits_columns(self):
+        """确保 users 表有 credits 和 last_checkin_date 字段（幂等操作）"""
+        try:
+            with self.get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    ALTER TABLE users
+                        ADD COLUMN IF NOT EXISTS credits INTEGER DEFAULT 20,
+                        ADD COLUMN IF NOT EXISTS last_checkin_date DATE;
+                """)
+                logger.info("积分字段检查/添加完成")
+        except Exception as e:
+            logger.error(f"添加积分字段失败: {e}")
+
 
 # 创建全局数据库实例
 prediction_db = PredictionDatabase()
