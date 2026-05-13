@@ -61,10 +61,10 @@ def process_match_data(matches_data):
     # 转换日期格式
     df['match_date'] = pd.to_datetime(df['match_date'])
     
-    # 保存处理后的数据
-    ensure_data_dir()
-    df.to_csv(MATCHES_DATA_FILE, index=False)
-    print(f"处理后的比赛数据已保存至 {MATCHES_DATA_FILE}")
+    # 保存至数据库
+    from scripts.database import prediction_db
+    prediction_db.save_historical_matches(processed_data)
+    print("处理后的比赛数据已存入数据库 historical_matches 表")
     
     return df
 
@@ -111,10 +111,10 @@ def process_odds_data(odds_data):
     # 转换日期格式
     df['commence_time'] = pd.to_datetime(df['commence_time'])
     
-    # 保存处理后的数据
-    ensure_data_dir()
-    df.to_csv(ODDS_DATA_FILE, index=False)
-    print(f"处理后的赔率数据已保存至 {ODDS_DATA_FILE}")
+    # 保存至数据库
+    from scripts.database import prediction_db
+    prediction_db.save_match_odds(processed_data)
+    print("处理后的赔率数据已存入数据库 match_odds 表")
     
     return df
 
@@ -128,28 +128,17 @@ def load_or_process_data(raw_data=None):
     if raw_data:
         matches_df = process_match_data(raw_data['matches'])
         odds_df = process_odds_data(raw_data['odds'])
+        return {
+            "matches": matches_df,
+            "odds": odds_df
+        }
     else:
-        # 尝试从文件加载
-        try:
-            matches_df = pd.read_csv(MATCHES_DATA_FILE)
-            matches_df['match_date'] = pd.to_datetime(matches_df['match_date'])
-            print(f"从{MATCHES_DATA_FILE}加载了比赛数据")
-        except:
-            print(f"无法加载{MATCHES_DATA_FILE}，请先收集和处理数据")
-            matches_df = None
-            
-        try:
-            odds_df = pd.read_csv(ODDS_DATA_FILE)
-            odds_df['commence_time'] = pd.to_datetime(odds_df['commence_time'])
-            print(f"从{ODDS_DATA_FILE}加载了赔率数据")
-        except:
-            print(f"无法加载{ODDS_DATA_FILE}，请先收集和处理数据")
-            odds_df = None
-    
-    return {
-        "matches": matches_df,
-        "odds": odds_df
-    }
+        # 尝试从数据库加载
+        from scripts.database import prediction_db
+        db_data = prediction_db.get_training_data()
+        if db_data['matches'] is None or db_data['matches'].empty:
+            print("数据库中没有训练数据，请先执行数据抓取")
+        return db_data
 
 if __name__ == "__main__":
     # 测试数据处理功能

@@ -900,6 +900,65 @@ def user_checkin():
     return jsonify(result)
 
 
+# ── 管理员初始化接口 ──────────────────────────────────────────────────────────
+
+@app.route('/api/admin/init-db', methods=['POST'])
+def admin_init_db():
+    """
+    一键初始化数据库表结构 + 超管账号。
+    需在请求 Body 或 Header 携带 ADMIN_SECRET 密钥鉴权。
+
+    Body JSON 参数（均可选）：
+      secret   — 管理员密钥（必须与环境变量 ADMIN_SECRET 一致）
+      username — 超管用户名，默认 'admin'
+      email    — 超管邮箱，默认 'admin@matchpro.com'
+      password — 初始密码，默认 'admin888'
+    """
+    try:
+        data = request.get_json() or {}
+        secret = data.get('secret') or request.headers.get('X-Admin-Secret', '')
+        expected = os.environ.get('ADMIN_SECRET', '')
+
+        if not expected:
+            return jsonify({
+                'success': False,
+                'message': '服务器未配置 ADMIN_SECRET 环境变量，禁止操作'
+            }), 403
+
+        if secret != expected:
+            app.logger.warning(f"非法的 init-db 请求，来源 IP: {request.remote_addr}")
+            return jsonify({'success': False, 'message': '密钥错误，拒绝访问'}), 403
+
+        if not prediction_db:
+            return jsonify({'success': False, 'message': '数据库未连接'}), 500
+
+        # 1. 建表 + 注释 + 索引
+        prediction_db.init_tables()
+
+        # 2. 确保积分字段存在（兼容旧表）
+        prediction_db.ensure_credits_columns()
+
+        # 3. 初始化超管账号
+        admin_result = prediction_db.init_admin(
+            username=data.get('username', 'admin'),
+            email=data.get('email', 'admin@matchpro.com'),
+            password=data.get('password', 'admin888'),
+        )
+
+        app.logger.info(f"数据库初始化完成，超管: {admin_result}")
+        return jsonify({
+            'success': True,
+            'message': '数据库初始化完成',
+            'tables': ['users', 'match_predictions', 'daily_matches'],
+            'admin': admin_result,
+        })
+
+    except Exception as e:
+        app.logger.error(f"数据库初始化失败: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+
 # ── 世界杯预测 ────────────────────────────────────────────────────────────────
 
 # 16 强权重（FIFA排名 + 近期表现综合评分，越高越强）

@@ -70,122 +70,449 @@ class PredictionDatabase:
             raise Exception(f"数据库连接失败: {e}")
     
     def init_tables(self):
-        """初始化数据库表 - 应该作为独立的管理任务运行，而非应用启动时自动运行。"""
+        """
+        初始化数据库表结构（幂等，可重复执行）。
+        建议作为独立管理任务运行，而非应用启动时自动调用。
+
+        表说明：
+          users            — 用户主表，含角色 / 积分 / 签到 / 会员信息
+          match_predictions — 预测记录表，关联用户，支持回填实际结果
+          daily_matches     — 体彩每日比赛缓存表，由同步脚本定期写入
+        """
         conn = None
         try:
-            conn = self._get_conn() # 使用内部方法获取原始连接
+            conn = self._get_conn()
             cursor = conn.cursor()
-            
-            # 创建用户表
-            create_users_table = """
-            CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                username VARCHAR(50) UNIQUE NOT NULL,
-                email VARCHAR(100) UNIQUE NOT NULL,
-                password_hash VARCHAR(255) NOT NULL,
-                user_type VARCHAR(20) DEFAULT 'free',
-                membership_expires DATE,
-                daily_predictions_used INTEGER DEFAULT 0,
-                last_prediction_date DATE DEFAULT CURRENT_DATE,
-                total_predictions INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_login TIMESTAMP,
-                is_active BOOLEAN DEFAULT TRUE
-            );
-            """
-            
-            # 创建预测记录表
-            create_predictions_table = """
-            CREATE TABLE IF NOT EXISTS match_predictions (
-                id SERIAL PRIMARY KEY,
-                prediction_id VARCHAR(100) UNIQUE NOT NULL,
-                user_id INTEGER REFERENCES users(id),
-                username VARCHAR(50),
-                prediction_mode VARCHAR(20) NOT NULL,
-                home_team VARCHAR(100) NOT NULL,
-                away_team VARCHAR(100) NOT NULL,
-                league_name VARCHAR(100),
-                match_time TIMESTAMP,
-                home_odds DECIMAL(6,2),
-                draw_odds DECIMAL(6,2),
-                away_odds DECIMAL(6,2),
-                predicted_result VARCHAR(20),
-                prediction_confidence DECIMAL(5,2),
-                ai_analysis TEXT,
-                user_ip VARCHAR(45),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                actual_result VARCHAR(20),
-                actual_score VARCHAR(20),
-                is_correct BOOLEAN,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-            """
-            
-            # 创建每日比赛表
-            create_daily_matches_table = """
-            CREATE TABLE IF NOT EXISTS daily_matches (
-                id SERIAL PRIMARY KEY,
-                match_id VARCHAR(100) UNIQUE NOT NULL,
-                home_team VARCHAR(100) NOT NULL,
-                away_team VARCHAR(100) NOT NULL,
-                league_name VARCHAR(100),
-                match_date DATE NOT NULL,
-                match_time TIME,
-                match_datetime TIMESTAMP,
-                match_num VARCHAR(20),
-                match_status VARCHAR(20),
-                home_odds DECIMAL(6,2),
-                draw_odds DECIMAL(6,2),
-                away_odds DECIMAL(6,2),
-                goal_line VARCHAR(10),
-                data_source VARCHAR(50) DEFAULT 'china_lottery',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                is_active BOOLEAN DEFAULT TRUE
-            );
-            """
-            
-            cursor.execute(create_users_table)
-            cursor.execute(create_predictions_table)
-            cursor.execute(create_daily_matches_table)
-            
-            # 创建索引
-            create_index_sql = [
-                # 预测表索引
-                "CREATE INDEX IF NOT EXISTS idx_predictions_mode ON match_predictions(prediction_mode);",
-                "CREATE INDEX IF NOT EXISTS idx_predictions_created ON match_predictions(created_at);",
-                "CREATE INDEX IF NOT EXISTS idx_predictions_teams ON match_predictions(home_team, away_team);",
-                "CREATE INDEX IF NOT EXISTS idx_predictions_result ON match_predictions(is_correct);",
-                
-                # 每日比赛表索引
-                "CREATE INDEX IF NOT EXISTS idx_daily_matches_date ON daily_matches(match_date);",
-                "CREATE INDEX IF NOT EXISTS idx_daily_matches_teams ON daily_matches(home_team, away_team);",
-                "CREATE INDEX IF NOT EXISTS idx_daily_matches_league ON daily_matches(league_name);",
-                "CREATE INDEX IF NOT EXISTS idx_daily_matches_status ON daily_matches(match_status);",
-                "CREATE INDEX IF NOT EXISTS idx_daily_matches_active ON daily_matches(is_active);",
-                "CREATE INDEX IF NOT EXISTS idx_daily_matches_datetime ON daily_matches(match_datetime);"
+
+            # ── 1. 用户表 ────────────────────────────────────────────────────
+            # user_type 取值：
+            #   'free'    — 普通免费用户，每日预测次数有限，积分每日签到获取
+            #   'premium' — 付费会员，积分获取翻倍，membership_expires 控制到期
+            #   'admin'   — 超级管理员，不受次数 / 积分限制，可无限预测
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id                     SERIAL          PRIMARY KEY,
+                    username               VARCHAR(50)     UNIQUE NOT NULL,   -- 用户名（唯一）
+                    email                  VARCHAR(100)    UNIQUE NOT NULL,   -- 邮箱（唯一）
+                    password_hash          VARCHAR(255)    NOT NULL,          -- SHA-256 密码哈希
+                    user_type              VARCHAR(20)     NOT NULL DEFAULT 'free',
+                                                                              -- 角色：free / premium / admin
+                    membership_expires     DATE,                              -- 会员到期日（NULL=永久/非会员）
+                    credits                INTEGER         NOT NULL DEFAULT 20,-- 当前积分余额
+                    last_checkin_date      DATE,                              -- 最近一次签到日期（防重复签到）
+                    daily_predictions_used INTEGER         NOT NULL DEFAULT 0, -- 今日已使用预测次数
+                    last_prediction_date   DATE            DEFAULT CURRENT_DATE,-- 最近预测日期（用于每日重置）
+                    total_predictions      INTEGER         NOT NULL DEFAULT 0, -- 累计预测总次数
+                    created_at             TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    last_login             TIMESTAMP,                         -- 最近登录时间
+                    is_active              BOOLEAN         NOT NULL DEFAULT TRUE -- 账号是否启用
+                );
+            """)
+            # 字段注释（PostgreSQL COMMENT ON COLUMN）
+            for col, comment in [
+                ("id",                     "用户主键，自增"),
+                ("username",               "登录用户名，全局唯一"),
+                ("email",                  "绑定邮箱，全局唯一"),
+                ("password_hash",          "SHA-256 哈希密码，禁止明文存储"),
+                ("user_type",              "用户角色：free=免费 / premium=会员 / admin=超管"),
+                ("membership_expires",     "会员到期日；NULL 表示非会员或永久有效"),
+                ("credits",                "积分余额：签到/充值增加，每次预测消耗"),
+                ("last_checkin_date",      "最近签到日期，用于防止同日重复签到"),
+                ("daily_predictions_used", "当日已使用预测次数，每日凌晨重置"),
+                ("last_prediction_date",   "最近一次预测日期，用于触发每日次数重置"),
+                ("total_predictions",      "历史累计预测总次数"),
+                ("created_at",             "账号注册时间"),
+                ("last_login",             "最近登录时间"),
+                ("is_active",              "账号是否激活；FALSE 表示封禁/注销"),
+            ]:
+                cursor.execute(
+                    f"COMMENT ON COLUMN users.{col} IS %s", (comment,)
+                )
+            cursor.execute("COMMENT ON TABLE users IS '用户主表：含角色、积分、签到、会员到期等信息';")
+
+            # ── 2. 预测记录表 ────────────────────────────────────────────────
+            # prediction_mode 取值：AI / Classic / Lottery / WorldCup
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS match_predictions (
+                    id                    SERIAL          PRIMARY KEY,
+                    prediction_id         VARCHAR(100)    UNIQUE NOT NULL,    -- 业务唯一ID（模式_队伍_时间戳）
+                    user_id               INTEGER         REFERENCES users(id) ON DELETE SET NULL,
+                    username              VARCHAR(50),                        -- 冗余字段，方便查询无需 JOIN
+                    prediction_mode       VARCHAR(20)     NOT NULL,           -- 预测模式：AI/Classic/Lottery/WorldCup
+                    home_team             VARCHAR(100)    NOT NULL,           -- 主队名称
+                    away_team             VARCHAR(100)    NOT NULL,           -- 客队名称
+                    league_name           VARCHAR(100),                       -- 联赛名称
+                    match_time            TIMESTAMP,                          -- 比赛开始时间
+                    home_odds             DECIMAL(6,2),                       -- 主胜赔率
+                    draw_odds             DECIMAL(6,2),                       -- 平局赔率
+                    away_odds             DECIMAL(6,2),                       -- 客胜赔率
+                    predicted_result      VARCHAR(20),                        -- 预测结果：主胜/平局/客胜
+                    prediction_confidence DECIMAL(5,2),                       -- 预测置信度 0-10
+                    ai_analysis           TEXT,                               -- AI 分析全文
+                    user_ip               VARCHAR(45),                        -- 用户 IP（IPv4/IPv6）
+                    created_at            TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    actual_result         VARCHAR(20),                        -- 实际比赛结果（回填）
+                    actual_score          VARCHAR(20),                        -- 实际比分（回填）
+                    is_correct            BOOLEAN,                            -- 预测是否正确（回填后计算）
+                    updated_at            TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            cursor.execute("COMMENT ON TABLE match_predictions IS '预测记录表：记录每次预测详情，支持结果回填与准确率统计';")
+            # 预测表字段注释
+            for col, comment in [
+                ("id", "预测主键，自增"),
+                ("prediction_id", "业务唯一ID（模式_队伍_时间戳）"),
+                ("user_id", "关联用户ID"),
+                ("username", "冗余字段，方便查询无需 JOIN"),
+                ("prediction_mode", "预测模式：AI/Classic/Lottery/WorldCup"),
+                ("home_team", "主队名称"),
+                ("away_team", "客队名称"),
+                ("league_name", "联赛名称"),
+                ("match_time", "比赛开始时间"),
+                ("home_odds", "主胜赔率"),
+                ("draw_odds", "平局赔率"),
+                ("away_odds", "客胜赔率"),
+                ("predicted_result", "预测结果：主胜/平局/客胜"),
+                ("prediction_confidence", "预测置信度 0-10"),
+                ("ai_analysis", "AI 分析全文"),
+                ("user_ip", "用户 IP（IPv4/IPv6）"),
+                ("created_at", "预测创建时间"),
+                ("actual_result", "实际比赛结果（回填）"),
+                ("actual_score", "实际比分（回填）"),
+                ("is_correct", "预测是否正确（回填后计算）"),
+                ("updated_at", "最后更新时间")
+            ]:
+                cursor.execute(f"COMMENT ON COLUMN match_predictions.{col} IS %s", (comment,))
+
+            # ── 3. 每日体彩比赛缓存表 ───────────────────────────────────────
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS daily_matches (
+                    id           SERIAL          PRIMARY KEY,
+                    match_id     VARCHAR(100)    UNIQUE NOT NULL,             -- 体彩官方比赛编号
+                    home_team    VARCHAR(100)    NOT NULL,                    -- 主队中文名
+                    away_team    VARCHAR(100)    NOT NULL,                    -- 客队中文名
+                    league_name  VARCHAR(100),                                -- 所属联赛
+                    match_date   DATE            NOT NULL,                    -- 比赛日期
+                    match_time   TIME,                                        -- 比赛时间（时分秒）
+                    match_datetime TIMESTAMP,                                 -- 完整比赛时间戳
+                    match_num    VARCHAR(20),                                 -- 期号/场次编号
+                    match_status VARCHAR(20),                                 -- 状态：未开始/进行中/已结束
+                    home_odds    DECIMAL(6,2),                                -- 主胜赔率（胜平负）
+                    draw_odds    DECIMAL(6,2),                                -- 平局赔率
+                    away_odds    DECIMAL(6,2),                                -- 客胜赔率
+                    goal_line    VARCHAR(10),                                 -- 进球数大小球基准线
+                    data_source  VARCHAR(50)     NOT NULL DEFAULT 'china_lottery',
+                                                                             -- 数据来源：china_lottery / manual
+                    created_at   TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at   TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    is_active    BOOLEAN         NOT NULL DEFAULT TRUE        -- FALSE=已删除/下架
+                );
+            """)
+            cursor.execute("COMMENT ON TABLE daily_matches IS '体彩每日比赛缓存表：由 sync_daily_matches.py 定期同步写入';")
+            # 每日比赛表字段注释
+            for col, comment in [
+                ("id", "自增主键"),
+                ("match_id", "体彩官方比赛编号，唯一"),
+                ("home_team", "主队中文名"),
+                ("away_team", "客队中文名"),
+                ("league_name", "所属联赛"),
+                ("match_date", "比赛日期"),
+                ("match_time", "比赛时间（时分秒）"),
+                ("match_datetime", "完整比赛时间戳"),
+                ("match_num", "期号/场次编号"),
+                ("match_status", "状态：未开始/进行中/已结束"),
+                ("home_odds", "主胜赔率（胜平负）"),
+                ("draw_odds", "平局赔率"),
+                ("away_odds", "客胜赔率"),
+                ("goal_line", "进球数大小球基准线"),
+                ("data_source", "数据来源：china_lottery / manual"),
+                ("created_at", "记录创建时间"),
+                ("updated_at", "最后更新时间"),
+                ("is_active", "FALSE=已删除/下架")
+            ]:
+                cursor.execute(f"COMMENT ON COLUMN daily_matches.{col} IS %s", (comment,))
+
+            # ── 4. 历史比赛库 (historical_matches) ──────────────────────────
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS historical_matches (
+                    id                    SERIAL          PRIMARY KEY,
+                    match_id              VARCHAR(100)    UNIQUE NOT NULL,
+                    season                VARCHAR(20),
+                    league_name           VARCHAR(100),
+                    match_date            DATE,
+                    match_time            TIME,
+                    match_datetime        TIMESTAMP,
+                    home_team             VARCHAR(100)    NOT NULL,
+                    away_team             VARCHAR(100)    NOT NULL,
+                    full_time_home_goals  INTEGER,
+                    full_time_away_goals  INTEGER,
+                    full_time_result      VARCHAR(10),
+                    half_time_home_goals  INTEGER,
+                    half_time_away_goals  INTEGER,
+                    half_time_result      VARCHAR(10),
+                    created_at            TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at            TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            cursor.execute("COMMENT ON TABLE historical_matches IS '历史比赛库：存储过去所有完赛的赛事详情，用于 AI 训练';")
+
+            # ── 5. 赔率库 (match_odds) ──────────────────────────────────────
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS match_odds (
+                    id                    SERIAL          PRIMARY KEY,
+                    match_id              VARCHAR(100),
+                    home_team             VARCHAR(100)    NOT NULL,
+                    away_team             VARCHAR(100)    NOT NULL,
+                    match_date            DATE            NOT NULL,
+                    bookmaker             VARCHAR(50)     NOT NULL,
+                    home_odds             DECIMAL(8,3),
+                    draw_odds             DECIMAL(8,3),
+                    away_odds             DECIMAL(8,3),
+                    updated_at            TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    created_at            TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(home_team, away_team, match_date, bookmaker)
+                );
+            """)
+            cursor.execute("COMMENT ON TABLE match_odds IS '赔率库：存储不同博彩公司的实时及初盘赔率';")
+
+            # ── 6. 球队战力评分 (team_ratings) ────────────────────────────────
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS team_ratings (
+                    id                    SERIAL          PRIMARY KEY,
+                    team_name             VARCHAR(100)    UNIQUE NOT NULL,
+                    league_name           VARCHAR(100),
+                    elo_rating            DECIMAL(10,2),
+                    pi_rating             DECIMAL(10,2),
+                    xg_for                DECIMAL(8,3),
+                    xg_against            DECIMAL(8,3),
+                    updated_at            TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            cursor.execute("COMMENT ON TABLE team_ratings IS '球队战力评分：基于 Elo, PI 等算法的战力评估值';")
+
+            # ── 7. 比赛特征表 (match_features) ────────────────────────────────
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS match_features (
+                    match_id              VARCHAR(100)    PRIMARY KEY,
+                    form_home             JSONB,
+                    form_away             JSONB,
+                    h2h                   JSONB,
+                    xg_home               DECIMAL(8,3),
+                    xg_away               DECIMAL(8,3),
+                    created_at            TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            cursor.execute("COMMENT ON TABLE match_features IS '比赛特征表：存储清洗加工后的、可直接喂给 AI 的特征向量';")
+
+            # ── 8. AI 分析结果 (analysis_results) ─────────────────────────────
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS analysis_results (
+                    id                    SERIAL          PRIMARY KEY,
+                    match_id              VARCHAR(100)    NOT NULL,
+                    analysis_text         TEXT,
+                    win_prob              DECIMAL(5,4),
+                    draw_prob             DECIMAL(5,4),
+                    lose_prob             DECIMAL(5,4),
+                    recommendation        VARCHAR(100),
+                    created_at            TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            cursor.execute("COMMENT ON TABLE analysis_results IS 'AI 分析结果：存储模型跑批后的概率预测与文字建议';")
+
+            # ── 9. 未开赛程 (upcoming_fixtures) ──────────────────────────────
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS upcoming_fixtures (
+                    id                    SERIAL          PRIMARY KEY,
+                    fixture_id            VARCHAR(100)    UNIQUE NOT NULL,
+                    league_name           VARCHAR(100),
+                    home_team             VARCHAR(100)    NOT NULL,
+                    away_team             VARCHAR(100)    NOT NULL,
+                    match_time            TIMESTAMP,
+                    status                VARCHAR(20)     DEFAULT 'NS',
+                    updated_at            TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            cursor.execute("COMMENT ON TABLE upcoming_fixtures IS '未开赛程：存储即将进行的、尚未有结果的赛事排期';")
+
+            # ── 10. 日志系统 (sync_log / update_log) ──────────────────────────
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS sync_log (
+                    id                    SERIAL          PRIMARY KEY,
+                    sync_time             TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    matches_count         INTEGER         DEFAULT 0,
+                    status                VARCHAR(20),
+                    error_message         TEXT
+                );
+                CREATE TABLE IF NOT EXISTS data_update_log (
+                    id                    SERIAL          PRIMARY KEY,
+                    module_name           VARCHAR(50),
+                    data_type             VARCHAR(50),
+                    records_updated       INTEGER,
+                    started_at            TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    completed_at          TIMESTAMP
+                );
+            """)
+
+            # ── 11. 其他辅助表 (articles / matches / league_standings) ──────────
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS articles (
+                    id                    SERIAL          PRIMARY KEY,
+                    title                 VARCHAR(255)    NOT NULL,
+                    content               TEXT,
+                    tags                  VARCHAR(255),
+                    pdf_url               TEXT,
+                    arxiv_id              VARCHAR(50),
+                    created_at            TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE TABLE IF NOT EXISTS matches (
+                    match_id              VARCHAR(100)    PRIMARY KEY,
+                    match_num             VARCHAR(20),
+                    league_name           VARCHAR(100),
+                    home_team             VARCHAR(100)    NOT NULL,
+                    away_team             VARCHAR(100)    NOT NULL,
+                    match_date            DATE,
+                    match_time            TIME,
+                    status                VARCHAR(20),
+                    created_at            TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE TABLE IF NOT EXISTS league_standings (
+                    id                    SERIAL          PRIMARY KEY,
+                    league_name           VARCHAR(100)    NOT NULL,
+                    season                VARCHAR(20)     NOT NULL,
+                    team_name             VARCHAR(100)    NOT NULL,
+                    position              INTEGER,
+                    played                INTEGER,
+                    points                INTEGER,
+                    updated_at            TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+
+            # ── 12. 外部战力数据 (club_elo_ratings / club_matches) ───────────
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS club_elo_ratings (
+                    id                    SERIAL          PRIMARY KEY,
+                    club                  VARCHAR(100)    NOT NULL,
+                    country               VARCHAR(50),
+                    elo_rating            DECIMAL(10,2),
+                    snapshot_date         DATE            NOT NULL,
+                    created_at            TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE TABLE IF NOT EXISTS club_matches (
+                    id                    SERIAL          PRIMARY KEY,
+                    match_date            DATE            NOT NULL,
+                    home_team             VARCHAR(100)    NOT NULL,
+                    away_team             VARCHAR(100)    NOT NULL,
+                    ft_home_goals         INTEGER,
+                    ft_away_goals         INTEGER,
+                    ft_result             VARCHAR(10),
+                    created_at            TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+
+            # ── 13. 索引 ─────────────────────────────────────────────────────
+            indexes = [
+                # users
+                "CREATE INDEX IF NOT EXISTS idx_users_type     ON users(user_type);",
+                "CREATE INDEX IF NOT EXISTS idx_users_active   ON users(is_active);",
+                # match_predictions
+                "CREATE INDEX IF NOT EXISTS idx_pred_user      ON match_predictions(user_id);",
+                "CREATE INDEX IF NOT EXISTS idx_pred_mode      ON match_predictions(prediction_mode);",
+                "CREATE INDEX IF NOT EXISTS idx_pred_created   ON match_predictions(created_at);",
+                "CREATE INDEX IF NOT EXISTS idx_pred_teams     ON match_predictions(home_team, away_team);",
+                "CREATE INDEX IF NOT EXISTS idx_pred_correct   ON match_predictions(is_correct);",
+                # daily_matches
+                "CREATE INDEX IF NOT EXISTS idx_dm_date        ON daily_matches(match_date);",
+                "CREATE INDEX IF NOT EXISTS idx_dm_teams       ON daily_matches(home_team, away_team);",
+                "CREATE INDEX IF NOT EXISTS idx_dm_league      ON daily_matches(league_name);",
+                "CREATE INDEX IF NOT EXISTS idx_dm_status      ON daily_matches(match_status);",
+                "CREATE INDEX IF NOT EXISTS idx_dm_active      ON daily_matches(is_active);",
+                "CREATE INDEX IF NOT EXISTS idx_dm_datetime    ON daily_matches(match_datetime);",
+                # historical_matches
+                "CREATE INDEX IF NOT EXISTS idx_hist_dt        ON historical_matches(match_datetime);",
+                "CREATE INDEX IF NOT EXISTS idx_hist_teams     ON historical_matches(home_team, away_team);",
+                # match_odds
+                "CREATE INDEX IF NOT EXISTS idx_odds_date      ON match_odds(match_date);",
+                "CREATE INDEX IF NOT EXISTS idx_odds_teams     ON match_odds(home_team, away_team);",
+                # upcoming_fixtures
+                "CREATE INDEX IF NOT EXISTS idx_up_time        ON upcoming_fixtures(match_time);",
             ]
-            
-            for sql in create_index_sql:
+            for sql in indexes:
                 cursor.execute(sql)
-            
+
             conn.commit()
             cursor.close()
-            logger.info("数据库表初始化成功")
-            
+            logger.info("✅ 数据库表初始化成功（含注释 & 索引）")
+
         except Exception as e:
             logger.error(f"数据库表初始化失败: {e}", exc_info=True)
             if conn:
                 conn.rollback()
-                conn.close()
-            raise Exception(f"数据库初始化失败: {e}") # 重新抛出异常
+            raise Exception(f"数据库初始化失败: {e}")
         finally:
             if conn:
                 try:
                     conn.close()
-                    logger.info("数据库连接已关闭")
-                except Exception as e:
-                    logger.error(f"关闭数据库连接失败: {e}", exc_info=True)
+                except Exception:
+                    pass
+
+    def init_admin(self, username: str = 'admin', email: str = 'admin@matchpro.com',
+                   password: str = 'admin888') -> dict:
+        """
+        初始化超级管理员账号（幂等，已存在则跳过）。
+
+        超管特性：
+          - user_type = 'admin'
+          - credits = 999999（近似无限）
+          - 不受每日次数限制（can_user_predict 对 admin 恒返回 True）
+          - 世界杯预测 / 积分消耗接口跳过扣费
+
+        Args:
+            username: 管理员用户名，默认 'admin'
+            email:    管理员邮箱，默认 'admin@matchpro.com'
+            password: 初始明文密码（写入时会被哈希），默认 'admin888'
+
+        Returns:
+            {'created': True/False, 'username': ..., 'message': ...}
+        """
+        import hashlib
+        password_hash = hashlib.sha256(password.encode()).hexdigest()
+        try:
+            with self.get_db_connection() as conn:
+                cursor = conn.cursor()
+
+                # 检查是否已存在同名 admin
+                cursor.execute(
+                    "SELECT id, username FROM users WHERE username = %s OR (user_type = 'admin' AND email = %s)",
+                    (username, email)
+                )
+                existing = cursor.fetchone()
+                if existing:
+                    logger.info(f"超管账号已存在，跳过创建: {existing[1]}")
+                    return {
+                        'created': False,
+                        'username': existing[1],
+                        'message': f'超管账号 [{existing[1]}] 已存在，未重复创建'
+                    }
+
+                cursor.execute(
+                    """
+                    INSERT INTO users
+                        (username, email, password_hash, user_type, credits,
+                         membership_expires, is_active)
+                    VALUES
+                        (%s, %s, %s, 'admin', 999999, NULL, TRUE)
+                    """,
+                    (username, email, password_hash)
+                )
+                logger.info(f"✅ 超管账号创建成功: {username}")
+                return {
+                    'created': True,
+                    'username': username,
+                    'message': f'超管账号 [{username}] 创建成功，初始密码已设置'
+                }
+        except Exception as e:
+            logger.error(f"创建超管账号失败: {e}", exc_info=True)
+            return {'created': False, 'username': username, 'message': str(e)}
     
     def save_prediction(self, prediction_data: Dict[str, Any]) -> bool:
         """
@@ -820,11 +1147,15 @@ class PredictionDatabase:
             return False
     
     def can_user_predict(self, user_id: int, user_type: str, daily_used: int) -> bool:
-        """检查用户是否可以进行预测"""
-        if user_type == 'premium':
+        """
+        检查用户是否可以进行预测。
+          admin   → 永远允许（无次数限制）
+          premium → 永远允许
+          free    → 今日次数 < 3 时允许
+        """
+        if user_type in ('admin', 'premium'):
             return True
-        else:
-            return daily_used < 3
+        return daily_used < 3
 
     # ── 积分系统 ─────────────────────────────────────────────────────────────
 
@@ -845,14 +1176,25 @@ class PredictionDatabase:
             return 0
 
     def deduct_credits(self, user_id: int, cost: int) -> bool:
-        """扣除用户积分，余额不足返回 False"""
+        """
+        扣除用户积分，余额不足返回 False。
+        admin 角色跳过扣分，直接返回 True。
+        """
         try:
             with self.get_db_connection() as conn:
                 cursor = conn.cursor()
-                # 先检查余额
-                cursor.execute("SELECT credits FROM users WHERE id = %s FOR UPDATE", (user_id,))
+                # 查询角色 & 当前积分
+                cursor.execute(
+                    "SELECT user_type, credits FROM users WHERE id = %s FOR UPDATE",
+                    (user_id,)
+                )
                 row = cursor.fetchone()
-                current = row[0] if row and row[0] is not None else 0
+                if not row:
+                    return False
+                user_type, current = row[0], (row[1] or 0)
+                # admin 无限制，直接放行
+                if user_type == 'admin':
+                    return True
                 if current < cost:
                     return False
                 cursor.execute(
@@ -932,6 +1274,158 @@ class PredictionDatabase:
         except Exception as e:
             logger.error(f"添加积分字段失败: {e}")
 
+    def save_historical_matches(self, matches_list: List[Dict[str, Any]]) -> int:
+        """
+        保存历史比赛数据（替代原先写入CSV的逻辑）
+        """
+        saved_count = 0
+        try:
+            with self.get_db_connection() as conn:
+                cursor = conn.cursor()
+                for match in matches_list:
+                    # 转换数据以适应表结构
+                    match_id = str(match.get('match_id', ''))
+                    home_team = match.get('home_team', '')
+                    away_team = match.get('away_team', '')
+                    league_name = match.get('competition', '')
+                    match_date_val = match.get('match_date')
+                    
+                    # 处理时间
+                    match_date = None
+                    match_time = None
+                    match_datetime = None
+                    if match_date_val:
+                        try:
+                            # 假设传入的是 YYYY-MM-DD 或 YYYY-MM-DD HH:MM:SS
+                            if isinstance(match_date_val, str):
+                                dt = datetime.fromisoformat(match_date_val.replace('Z', '+00:00'))
+                            else:
+                                dt = match_date_val
+                            match_datetime = dt
+                            match_date = dt.date()
+                            match_time = dt.time()
+                        except:
+                            pass
+                            
+                    full_time_home_goals = match.get('home_score')
+                    full_time_away_goals = match.get('away_score')
+                    full_time_result = match.get('result')
+                    half_time_home_goals = match.get('half_time_home')
+                    half_time_away_goals = match.get('half_time_away')
+
+                    insert_sql = """
+                    INSERT INTO historical_matches (
+                        match_id, home_team, away_team, league_name, 
+                        match_date, match_time, match_datetime,
+                        full_time_home_goals, full_time_away_goals, full_time_result,
+                        half_time_home_goals, half_time_away_goals
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                    ) ON CONFLICT (match_id) DO UPDATE SET
+                        home_team = EXCLUDED.home_team,
+                        away_team = EXCLUDED.away_team,
+                        league_name = EXCLUDED.league_name,
+                        match_date = EXCLUDED.match_date,
+                        match_time = EXCLUDED.match_time,
+                        match_datetime = EXCLUDED.match_datetime,
+                        full_time_home_goals = EXCLUDED.full_time_home_goals,
+                        full_time_away_goals = EXCLUDED.full_time_away_goals,
+                        full_time_result = EXCLUDED.full_time_result,
+                        half_time_home_goals = EXCLUDED.half_time_home_goals,
+                        half_time_away_goals = EXCLUDED.half_time_away_goals,
+                        updated_at = CURRENT_TIMESTAMP
+                    """
+                    cursor.execute(insert_sql, (
+                        match_id, home_team, away_team, league_name,
+                        match_date, match_time, match_datetime,
+                        full_time_home_goals, full_time_away_goals, full_time_result,
+                        half_time_home_goals, half_time_away_goals
+                    ))
+                    saved_count += 1
+                cursor.close()
+            logger.info(f"✅ 成功将 {saved_count} 场历史比赛写入数据库")
+            return saved_count
+        except Exception as e:
+            logger.error(f"写入 historical_matches 失败: {e}", exc_info=True)
+            return saved_count
+
+    def save_match_odds(self, odds_list: List[Dict[str, Any]]) -> int:
+        """
+        保存比赛赔率数据（替代原先写入CSV的逻辑）
+        """
+        saved_count = 0
+        try:
+            with self.get_db_connection() as conn:
+                cursor = conn.cursor()
+                for odd in odds_list:
+                    match_id = str(odd.get('match_id', ''))
+                    home_team = odd.get('home_team', '')
+                    away_team = odd.get('away_team', '')
+                    bookmaker = odd.get('bookmaker', '')
+                    market = odd.get('market', '')
+                    outcome = odd.get('outcome', '')
+                    price = float(odd.get('price', 0.0))
+                    
+                    dt_val = odd.get('commence_time')
+                    match_date = None
+                    if dt_val:
+                        try:
+                            if isinstance(dt_val, str):
+                                dt = datetime.fromisoformat(dt_val.replace('Z', '+00:00'))
+                            else:
+                                dt = dt_val
+                            match_date = dt.date()
+                        except:
+                            pass
+
+                    # match_odds 需要根据 outcome 填入 home_odds / draw_odds / away_odds
+                    home_odds = price if outcome == home_team else None
+                    draw_odds = price if outcome.lower() == 'draw' else None
+                    away_odds = price if outcome == away_team else None
+
+                    # 由于 ON CONFLICT 需要 unique (home_team, away_team, match_date, bookmaker)，如果已有记录则更新对应的赔率
+                    insert_sql = """
+                    INSERT INTO match_odds (
+                        match_id, home_team, away_team, match_date, bookmaker,
+                        home_odds, draw_odds, away_odds
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s
+                    ) ON CONFLICT (home_team, away_team, match_date, bookmaker) DO UPDATE SET
+                        home_odds = COALESCE(EXCLUDED.home_odds, match_odds.home_odds),
+                        draw_odds = COALESCE(EXCLUDED.draw_odds, match_odds.draw_odds),
+                        away_odds = COALESCE(EXCLUDED.away_odds, match_odds.away_odds),
+                        updated_at = CURRENT_TIMESTAMP
+                    """
+                    cursor.execute(insert_sql, (
+                        match_id, home_team, away_team, match_date, bookmaker,
+                        home_odds, draw_odds, away_odds
+                    ))
+                    saved_count += 1
+                cursor.close()
+            logger.info(f"✅ 成功将 {saved_count} 条赔率数据写入数据库")
+            return saved_count
+        except Exception as e:
+            logger.error(f"写入 match_odds 失败: {e}", exc_info=True)
+            return saved_count
+
+    def get_training_data(self) -> dict:
+        """
+        从数据库拉取训练所需数据，返回 DataFrame 格式字典
+        """
+        import pandas as pd
+        try:
+            with self.get_db_connection() as conn:
+                matches_df = pd.read_sql("SELECT * FROM historical_matches ORDER BY match_datetime DESC", conn)
+                odds_df = pd.read_sql("SELECT * FROM match_odds ORDER BY match_date DESC", conn)
+            logger.info(f"✅ 成功从数据库读取 {len(matches_df)} 场比赛，{len(odds_df)} 条赔率")
+            return {
+                "matches": matches_df,
+                "odds": odds_df
+            }
+        except Exception as e:
+            logger.error(f"读取训练数据失败: {e}", exc_info=True)
+            return {"matches": None, "odds": None}
+
 
 # 创建全局数据库实例
 prediction_db = PredictionDatabase()
@@ -941,33 +1435,7 @@ def main():
     """测试函数"""
     try:
         db = PredictionDatabase()
-        print("✅ 数据库连接和表创建成功")
-        
-        # 测试保存AI预测
-        test_match = {
-            'home_team': '测试主队',
-            'away_team': '测试客队',
-            'league_name': '测试联赛',
-            'match_time': '2025-09-20 15:00:00',
-            'odds': {
-                'home_odds': '2.10',
-                'draw_odds': '3.20',
-                'away_odds': '2.80'
-            }
-        }
-        
-        success = db.save_ai_prediction(
-            match_data=test_match,
-            prediction_result='主胜',
-            confidence=7.5,
-            ai_analysis='这是一个测试预测',
-            user_ip='127.0.0.1'
-        )
-        
-        if success:
-            print("✅ 测试预测保存成功")
-        else:
-            print("❌ 测试预测保存失败")
+        print("✅ 数据库连接成功")
         
         # 获取统计信息
         stats = db.get_prediction_stats()
@@ -975,7 +1443,6 @@ def main():
         
     except Exception as e:
         print(f"❌ 测试失败: {e}")
-
 
 if __name__ == "__main__":
     main()
