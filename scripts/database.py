@@ -255,6 +255,26 @@ class PredictionDatabase:
                 );
             """)
             cursor.execute("COMMENT ON TABLE historical_matches IS '历史比赛库：存储过去所有完赛的赛事详情，用于 AI 训练';")
+            for col, comment in [
+                ("id", "自增主键"),
+                ("match_id", "业务唯一比赛ID"),
+                ("season", "赛季（如 2023/24）"),
+                ("league_name", "联赛名称"),
+                ("match_date", "比赛日期"),
+                ("match_time", "比赛时间"),
+                ("match_datetime", "比赛完整时间戳"),
+                ("home_team", "主队名称"),
+                ("away_team", "客队名称"),
+                ("full_time_home_goals", "全场主队进球"),
+                ("full_time_away_goals", "全场客队进球"),
+                ("full_time_result", "全场赛果 (H/D/A)"),
+                ("half_time_home_goals", "半场主队进球"),
+                ("half_time_away_goals", "半场客队进球"),
+                ("half_time_result", "半场赛果 (H/D/A)"),
+                ("created_at", "记录创建时间"),
+                ("updated_at", "记录最后更新时间")
+            ]:
+                cursor.execute(f"COMMENT ON COLUMN historical_matches.{col} IS %s", (comment,))
 
             # ── 5. 赔率库 (match_odds) ──────────────────────────────────────
             cursor.execute("""
@@ -274,6 +294,20 @@ class PredictionDatabase:
                 );
             """)
             cursor.execute("COMMENT ON TABLE match_odds IS '赔率库：存储不同博彩公司的实时及初盘赔率';")
+            for col, comment in [
+                ("id", "自增主键"),
+                ("match_id", "关联比赛ID"),
+                ("home_team", "主队名称"),
+                ("away_team", "客队名称"),
+                ("match_date", "比赛日期"),
+                ("bookmaker", "博彩公司名称 (如 B365)"),
+                ("home_odds", "主胜赔率"),
+                ("draw_odds", "平局赔率"),
+                ("away_odds", "客胜赔率"),
+                ("updated_at", "赔率更新时间"),
+                ("created_at", "赔率抓取时间")
+            ]:
+                cursor.execute(f"COMMENT ON COLUMN match_odds.{col} IS %s", (comment,))
 
             # ── 6. 球队战力评分 (team_ratings) ────────────────────────────────
             cursor.execute("""
@@ -289,6 +323,17 @@ class PredictionDatabase:
                 );
             """)
             cursor.execute("COMMENT ON TABLE team_ratings IS '球队战力评分：基于 Elo, PI 等算法的战力评估值';")
+            for col, comment in [
+                ("id", "自增主键"),
+                ("team_name", "球队名称"),
+                ("league_name", "所属联赛"),
+                ("elo_rating", "Elo 评分（基于比赛结果的等级分）"),
+                ("pi_rating", "PI 评分（综合实力评分）"),
+                ("xg_for", "平均预期进球（攻势水平）"),
+                ("xg_against", "平均预期失球（防守水平）"),
+                ("updated_at", "评分更新时间")
+            ]:
+                cursor.execute(f"COMMENT ON COLUMN team_ratings.{col} IS %s", (comment,))
 
             # ── 7. 比赛特征表 (match_features) ────────────────────────────────
             cursor.execute("""
@@ -303,6 +348,16 @@ class PredictionDatabase:
                 );
             """)
             cursor.execute("COMMENT ON TABLE match_features IS '比赛特征表：存储清洗加工后的、可直接喂给 AI 的特征向量';")
+            for col, comment in [
+                ("match_id", "唯一比赛ID"),
+                ("form_home", "主队近期状态 (JSON 格式)"),
+                ("form_away", "客队近期状态 (JSON 格式)"),
+                ("h2h", "历史交锋数据 (JSON 格式)"),
+                ("xg_home", "本场主队预期进球"),
+                ("xg_away", "本场客队预期进球"),
+                ("created_at", "特征计算生成时间")
+            ]:
+                cursor.execute(f"COMMENT ON COLUMN match_features.{col} IS %s", (comment,))
 
             # ── 8. AI 分析结果 (analysis_results) ─────────────────────────────
             cursor.execute("""
@@ -318,6 +373,17 @@ class PredictionDatabase:
                 );
             """)
             cursor.execute("COMMENT ON TABLE analysis_results IS 'AI 分析结果：存储模型跑批后的概率预测与文字建议';")
+            for col, comment in [
+                ("id", "自增主键"),
+                ("match_id", "关联比赛ID"),
+                ("analysis_text", "AI 生成的详细文字分析"),
+                ("win_prob", "胜概率 (0.0 - 1.0)"),
+                ("draw_prob", "平概率"),
+                ("lose_prob", "负概率"),
+                ("recommendation", "推荐方案 (如: 胜、让胜)"),
+                ("created_at", "分析生成时间")
+            ]:
+                cursor.execute(f"COMMENT ON COLUMN analysis_results.{col} IS %s", (comment,))
 
             # ── 9. 未开赛程 (upcoming_fixtures) ──────────────────────────────
             cursor.execute("""
@@ -333,6 +399,17 @@ class PredictionDatabase:
                 );
             """)
             cursor.execute("COMMENT ON TABLE upcoming_fixtures IS '未开赛程：存储即将进行的、尚未有结果的赛事排期';")
+            for col, comment in [
+                ("id", "自增主键"),
+                ("fixture_id", "赛程ID"),
+                ("league_name", "联赛名称"),
+                ("home_team", "主队名称"),
+                ("away_team", "客队名称"),
+                ("match_time", "开赛时间"),
+                ("status", "状态 (NS=未开始)"),
+                ("updated_at", "记录更新时间")
+            ]:
+                cursor.execute(f"COMMENT ON COLUMN upcoming_fixtures.{col} IS %s", (comment,))
 
             # ── 10. 日志系统 (sync_log / update_log) ──────────────────────────
             cursor.execute("""
@@ -352,6 +429,26 @@ class PredictionDatabase:
                     completed_at          TIMESTAMP
                 );
             """)
+            cursor.execute("COMMENT ON TABLE sync_log IS '数据同步日志表';")
+            for col, comment in [
+                ("id", "自增主键"),
+                ("sync_time", "同步执行时间"),
+                ("matches_count", "更新比赛数量"),
+                ("status", "状态 (Success/Failed)"),
+                ("error_message", "错误详情")
+            ]:
+                cursor.execute(f"COMMENT ON COLUMN sync_log.{col} IS %s", (comment,))
+
+            cursor.execute("COMMENT ON TABLE data_update_log IS '模块数据更新细化日志';")
+            for col, comment in [
+                ("id", "自增主键"),
+                ("module_name", "所属模块 (如: Crawler, AI)"),
+                ("data_type", "数据类型 (如: Odds, Fixtures)"),
+                ("records_updated", "更新条数"),
+                ("started_at", "开始时间"),
+                ("completed_at", "结束时间")
+            ]:
+                cursor.execute(f"COMMENT ON COLUMN data_update_log.{col} IS %s", (comment,))
 
             # ── 11. 其他辅助表 (articles / matches / league_standings) ──────────
             cursor.execute("""
@@ -386,6 +483,44 @@ class PredictionDatabase:
                     updated_at            TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
             """)
+            cursor.execute("COMMENT ON TABLE articles IS '文章分析库：存储模型参考资料或分析文章';")
+            for col, comment in [
+                ("id", "自增主键"),
+                ("title", "文章标题"),
+                ("content", "内容全文"),
+                ("tags", "标签集合"),
+                ("pdf_url", "PDF 链接"),
+                ("arxiv_id", "Arxiv 文献 ID"),
+                ("created_at", "收录时间")
+            ]:
+                cursor.execute(f"COMMENT ON COLUMN articles.{col} IS %s", (comment,))
+
+            cursor.execute("COMMENT ON TABLE matches IS '全量赛事索引表';")
+            for col, comment in [
+                ("match_id", "全局唯一比赛ID"),
+                ("match_num", "场次编号/期号"),
+                ("league_name", "联赛名称"),
+                ("home_team", "主队名称"),
+                ("away_team", "客队名称"),
+                ("match_date", "比赛日期"),
+                ("match_time", "比赛时间"),
+                ("status", "当前状态"),
+                ("created_at", "记录创建时间")
+            ]:
+                cursor.execute(f"COMMENT ON COLUMN matches.{col} IS %s", (comment,))
+
+            cursor.execute("COMMENT ON TABLE league_standings IS '联赛积分榜';")
+            for col, comment in [
+                ("id", "自增主键"),
+                ("league_name", "联赛名称"),
+                ("season", "赛季"),
+                ("team_name", "球队名称"),
+                ("position", "当前排名"),
+                ("played", "已赛场次"),
+                ("points", "积分"),
+                ("updated_at", "更新时间")
+            ]:
+                cursor.execute(f"COMMENT ON COLUMN league_standings.{col} IS %s", (comment,))
 
             # ── 12. 外部战力数据 (club_elo_ratings / club_matches) ───────────
             cursor.execute("""
@@ -408,6 +543,29 @@ class PredictionDatabase:
                     created_at            TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
             """)
+            cursor.execute("COMMENT ON TABLE club_elo_ratings IS '外部俱乐部 Elo 等级分记录';")
+            for col, comment in [
+                ("id", "自增主键"),
+                ("club", "俱乐部名称"),
+                ("country", "所属国家"),
+                ("elo_rating", "Elo 评分"),
+                ("snapshot_date", "快照日期"),
+                ("created_at", "创建时间")
+            ]:
+                cursor.execute(f"COMMENT ON COLUMN club_elo_ratings.{col} IS %s", (comment,))
+
+            cursor.execute("COMMENT ON TABLE club_matches IS '外部俱乐部历史比赛详情';")
+            for col, comment in [
+                ("id", "自增主键"),
+                ("match_date", "比赛日期"),
+                ("home_team", "主队名称"),
+                ("away_team", "客队名称"),
+                ("ft_home_goals", "全场主进球"),
+                ("ft_away_goals", "全场客进球"),
+                ("ft_result", "全场赛果"),
+                ("created_at", "创建时间")
+            ]:
+                cursor.execute(f"COMMENT ON COLUMN club_matches.{col} IS %s", (comment,))
 
             # ── 13. 索引 ─────────────────────────────────────────────────────
             indexes = [
