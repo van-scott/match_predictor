@@ -68,6 +68,68 @@ LEAGUES = {
     "FL1": "法甲"
 }
 
+# ── 英文→中文球队名字典 ────────────────────────────────────────────────────
+TEAM_NAME_CN = {
+    # 英超
+    "Arsenal FC": "阿森纳", "Manchester City FC": "曼城", "Liverpool FC": "利物浦",
+    "Manchester United FC": "曼联", "Chelsea FC": "切尔西", "Tottenham Hotspur FC": "热刺",
+    "Newcastle United FC": "纽卡斯尔", "Brighton & Hove Albion FC": "布莱顿",
+    "Aston Villa FC": "阿斯顿维拉", "West Ham United FC": "西汉姆",
+    "Brentford FC": "布伦特福德", "Fulham FC": "富勒姆",
+    "Crystal Palace FC": "水晶宫", "Wolverhampton Wanderers FC": "狼队",
+    "Everton FC": "埃弗顿", "Nottingham Forest FC": "诺丁汉森林",
+    "Luton Town FC": "卢顿", "Burnley FC": "伯恩利", "Sheffield United FC": "谢菲尔德联",
+    "AFC Bournemouth": "伯恩茅斯", "Leicester City FC": "莱斯特城",
+    "Ipswich Town FC": "伊普斯维奇", "Southampton FC": "南安普顿",
+    "Sunderland AFC": "桑德兰", "Leeds United FC": "利兹联",
+    # 西甲
+    "Real Madrid CF": "皇家马德里", "FC Barcelona": "巴塞罗那",
+    "Atlético de Madrid": "马德里竞技", "Sevilla FC": "塞维利亚",
+    "Valencia CF": "瓦伦西亚", "Real Betis Balompié": "贝蒂斯",
+    "Real Sociedad de Fútbol": "皇家社会", "Athletic Club": "毕尔巴鄂竞技",
+    "Villarreal CF": "比利亚雷亚尔", "Celta de Vigo": "塞尔塔",
+    "Getafe CF": "赫塔费", "CA Osasuna": "奥萨苏纳",
+    "Rayo Vallecano de Madrid": "拉约巴列卡诺", "UD Almería": "阿尔梅里亚",
+    "Cadiz CF": "加的斯", "RCD Mallorca": "马略卡", "Girona FC": "赫罗纳",
+    "UD Las Palmas": "拉斯帕尔马斯", "Deportivo Alavés": "阿拉维斯",
+    "Real Valladolid CF": "巴利亚多利德", "Real Oviedo": "奥维耶多",
+    "RCD Espanyol de Barcelona": "西班牙人",
+    # 意甲
+    "FC Internazionale Milano": "国际米兰", "AC Milan": "AC米兰",
+    "Juventus FC": "尤文图斯", "SSC Napoli": "那不勒斯",
+    "AS Roma": "罗马", "SS Lazio": "拉齐奥", "Atalanta BC": "亚特兰大",
+    "ACF Fiorentina": "佛罗伦萨", "Bologna FC 1909": "博洛尼亚",
+    "Torino FC": "都灵", "Udinese Calcio": "乌迪内斯",
+    "Genoa CFC": "热那亚", "Cagliari Calcio": "卡利亚里",
+    "Hellas Verona FC": "维罗纳", "Frosinone Calcio": "弗罗西诺内",
+    "US Lecce": "莱切", "Empoli FC": "恩波利", "US Sassuolo Calcio": "萨索洛",
+    "Monza": "蒙扎", "Venezia FC": "威尼斯", "Parma Calcio 1913": "帕尔马",
+    "Como 1907": "科莫", "AC Monza": "蒙扎",
+    # 德甲
+    "FC Bayern München": "拜仁慕尼黑", "Borussia Dortmund": "多特蒙德",
+    "RB Leipzig": "莱比锡", "Bayer 04 Leverkusen": "勒沃库森",
+    "VfB Stuttgart": "斯图加特", "Eintracht Frankfurt": "法兰克福",
+    "VfL Wolfsburg": "沃尔夫斯堡", "SC Freiburg": "弗莱堡",
+    "Borussia Mönchengladbach": "门兴格拉德巴赫", "SV Werder Bremen": "不莱梅",
+    "Union Berlin": "柏林联合", "VfL Bochum 1848": "波鸿",
+    "Augsburg FC": "奥格斯堡", "1. FC Köln": "科隆",
+    "SV Darmstadt 98": "达姆施塔特", "1. FC Heidenheim 1846": "海登海姆",
+    "FC St. Pauli 1910": "圣保利", "Holstein Kiel": "基尔",
+    "1. FC Union Berlin": "柏林联合",
+    # 法甲
+    "Paris Saint-Germain FC": "巴黎圣日耳曼", "Olympique de Marseille": "马赛",
+    "AS Monaco FC": "摩纳哥", "Olympique Lyonnais": "里昂",
+    "OGC Nice": "尼斯", "Stade Rennais FC": "雷恩",
+    "RC Lens": "朗斯", "LOSC Lille": "里尔",
+    "Toulouse FC": "图卢兹", "RC Strasbourg Alsace": "斯特拉斯堡",
+    "Stade de Reims": "兰斯", "Montpellier HSC": "蒙彼利埃",
+    "FC Nantes": "南特", "Clermont Foot 63": "克莱蒙",
+    "FC Lorient": "洛里昂", "Le Havre AC": "勒阿弗尔",
+    "Stade Brestois 29": "布雷斯特", "FC Metz": "梅斯",
+    "Angers SCO": "昂热",
+}
+
+
 # 简化的球队数据
 TEAMS_DATA = {
     "PL": ["Arsenal FC", "Manchester City FC", "Liverpool FC", "Manchester United FC", "Chelsea FC", "Tottenham Hotspur FC", "Newcastle United FC", "Brighton & Hove Albion FC"],
@@ -213,61 +275,67 @@ def get_teams():
 
 @app.route('/api/lottery/matches')
 def get_lottery_matches():
-    """获取中国体育彩票比赛数据 - 仅从数据库获取"""
+    """获取未开赛比赛 - 从 upcoming_fixtures 表读取，供 AI 赛事广场使用"""
     try:
-        days = request.args.get('days', 3, type=int)
-        days = min(max(days, 1), 7)  # 限制在1-7天之间
-        
-        app.logger.info(f"📊 从数据库获取体彩数据 - 天数: {days}")
-        
+        days = request.args.get('days', 7, type=int)
+        days = min(max(days, 1), 14)
         if not prediction_db:
-            app.logger.error("❌ 数据库未初始化")
-            return jsonify({
-                'success': False,
-                'error': '数据库未配置',
-                'message': '数据库连接失败，请联系管理员'
-            }), 500
-        
-        try:
-            # 仅从数据库获取
-            db_matches = prediction_db.get_daily_matches(days_ahead=days)
-            
-            if db_matches and len(db_matches) > 0:
-                app.logger.info(f"✅ 从数据库获取到 {len(db_matches)} 场比赛")
-                
-                return jsonify({
-                    'success': True,
-                    'matches': db_matches,
-                    'count': len(db_matches),
-                    'message': f'从数据库获取 {len(db_matches)} 场比赛',
-                    'source': 'database'
-                })
+            return jsonify({'success': False, 'error': '数据库未配置'}), 500
+
+        with prediction_db.get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT fixture_id, league_code, league_name,
+                       home_team, away_team, match_time, matchday,
+                       home_odds, draw_odds, away_odds,
+                       ml_home_prob, ml_draw_prob, ml_away_prob, ml_recommendation
+                FROM upcoming_fixtures
+                WHERE status IN ('SCHEDULED','TIMED')
+                  AND match_time > NOW()
+                  AND match_time < NOW() + INTERVAL '%s days'
+                ORDER BY match_time ASC LIMIT 80
+            """ % days)
+            rows = cur.fetchall()
+            cols = ['fixture_id','league_code','league_name','home_team','away_team',
+                    'match_time','matchday','home_odds','draw_odds','away_odds',
+                    'ml_home_prob','ml_draw_prob','ml_away_prob','ml_recommendation']
+
+        matches = []
+        for r in rows:
+            d = dict(zip(cols, r))
+            ht, at = d['home_team'], d['away_team']
+            ht_cn = TEAM_NAME_CN.get(ht, '')
+            at_cn = TEAM_NAME_CN.get(at, '')
+            d['home_team_display'] = f"{ht_cn}({ht})" if ht_cn else ht
+            d['away_team_display'] = f"{at_cn}({at})" if at_cn else at
+            d['home_team_cn'] = ht_cn or ht
+            d['away_team_cn'] = at_cn or at
+            mt = d['match_time']
+            d['match_time'] = mt.isoformat() if mt else None
+            d['match_date'] = mt.strftime('%Y-%m-%d') if mt else None
+            odds = {}
+            if d['home_odds']: odds['h'] = d['home_odds']
+            if d['draw_odds']: odds['d'] = d['draw_odds']
+            if d['away_odds']: odds['a'] = d['away_odds']
+            d['odds'] = {'hhad': odds} if odds else {}
+            if d['ml_home_prob']:
+                d['ml_probs'] = {'home': round(d['ml_home_prob'],4),
+                                  'draw': round(d['ml_draw_prob'],4),
+                                  'away': round(d['ml_away_prob'],4)}
             else:
-                app.logger.warning("⚠️ 数据库中没有找到比赛数据")
-                
-                return jsonify({
-                    'success': False,
-                    'error': '暂无比赛数据',
-                    'message': '数据库中暂无比赛数据，请运行同步脚本更新数据：python scripts/sync_daily_matches.py --days 7'
-                }), 404
-                
-        except Exception as db_error:
-            app.logger.error(f"❌ 数据库获取失败: {db_error}")
-            
-            return jsonify({
-                'success': False,
-                'error': str(db_error),
-                'message': '数据库查询失败，请稍后重试'
-            }), 500
-            
+                d['ml_probs'] = None
+            matches.append(d)
+
+        if not matches:
+            return jsonify({'success': False, 'error': '暂无比赛数据',
+                'message': f'未来{days}天暂无未开赛比赛，请运行 make sync-upcoming'}), 404
+
+        return jsonify({'success': True, 'matches': matches,
+                        'count': len(matches), 'source': 'upcoming_fixtures'})
+
     except Exception as e:
-        app.logger.error(f"❌ 获取体彩数据失败: {e}")
-        
-        return jsonify({
-            'success': False,
-            'error': str(e),
-            'message': '系统错误，暂时无法获取数据'
-        }), 500
+        app.logger.error(f"获取比赛数据失败: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/save-prediction', methods=['POST'])
 def save_prediction():
@@ -1315,24 +1383,54 @@ def get_upcoming_matches():
              ml_h, ml_d, ml_a, ml_rec,
              open_h, open_d, open_a) = r
 
-            # 赔率变动计算
+            # 赔率变动
             odds_movement = {}
             if h_odds and open_h and float(open_h) > 0:
                 odds_movement = {
-                    'home_change':  round(float(h_odds) - float(open_h), 3),
-                    'draw_change':  round(float(d_odds or 0) - float(open_d or 0), 3) if d_odds and open_d else 0,
-                    'away_change':  round(float(a_odds or 0) - float(open_a or 0), 3) if a_odds and open_a else 0,
-                    'signal':       _interpret_odds_signal(float(open_h), float(h_odds))
+                    'home_change': round(float(h_odds) - float(open_h), 3),
+                    'draw_change': round(float(d_odds or 0) - float(open_d or 0), 3) if d_odds and open_d else 0,
+                    'away_change': round(float(a_odds or 0) - float(open_a or 0), 3) if a_odds and open_a else 0,
+                    'signal':      _interpret_odds_signal(float(open_h), float(h_odds))
                 }
 
+            # 中文队名
+            ht_cn = TEAM_NAME_CN.get(ht, '')
+            at_cn = TEAM_NAME_CN.get(at, '')
+
+            # ML预测：无数据时赔率降级推算
+            if ml_h:
+                ml_pred = {
+                    'home_prob': round(float(ml_h), 4),
+                    'draw_prob': round(float(ml_d), 4),
+                    'away_prob': round(float(ml_a), 4),
+                    'recommendation': ml_rec, 'source': 'ml',
+                }
+            elif h_odds and d_odds and a_odds:
+                rh, rd, ra = 1/float(h_odds), 1/float(d_odds), 1/float(a_odds)
+                tot = rh + rd + ra
+                ph2, pd2, pa2 = round(rh/tot,4), round(rd/tot,4), round(ra/tot,4)
+                best_lbl = '主胜' if ph2>=pd2 and ph2>=pa2 else ('平局' if pd2>=pa2 else '客胜')
+                best_p = max(ph2, pd2, pa2)
+                ml_pred = {
+                    'home_prob': ph2, 'draw_prob': pd2, 'away_prob': pa2,
+                    'recommendation': f'赔率推算{best_lbl}（{best_p*100:.1f}%）',
+                    'source': 'odds_fallback',
+                }
+            else:
+                ml_pred = None
+
             match_info = {
-                'fixture_id':   fix_id,
-                'league':       lg_name,
-                'league_code':  lg_code,
-                'home_team':    ht,
-                'away_team':    at,
-                'match_time':   mt.isoformat() if mt else None,
-                'matchday':     matchday,
+                'fixture_id':        fix_id,
+                'league':            lg_name,
+                'league_code':       lg_code,
+                'home_team':         ht,
+                'away_team':         at,
+                'home_team_cn':      ht_cn or ht,
+                'away_team_cn':      at_cn or at,
+                'home_team_display': f"{ht_cn}({ht})" if ht_cn else ht,
+                'away_team_display': f"{at_cn}({at})" if at_cn else at,
+                'match_time':        mt.isoformat() if mt else None,
+                'matchday':          matchday,
                 'current_odds': {
                     'home': float(h_odds) if h_odds else None,
                     'draw': float(d_odds) if d_odds else None,
@@ -1344,12 +1442,7 @@ def get_upcoming_matches():
                     'away': float(open_a) if open_a else None,
                 },
                 'odds_movement': odds_movement,
-                'ml_prediction': {
-                    'home_prob':   float(ml_h) if ml_h else None,
-                    'draw_prob':   float(ml_d) if ml_d else None,
-                    'away_prob':   float(ml_a) if ml_a else None,
-                    'recommendation': ml_rec,
-                } if ml_h else None,
+                'ml_prediction': ml_pred,
             }
             matches.append(match_info)
 

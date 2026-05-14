@@ -901,6 +901,11 @@ function buildSmartCard(m) {
     '英超': '🏴󠁧󠁢󠁥󠁮󠁧󠁿', '西甲': '🇪🇸', '意甲': '🇮🇹', '德甲': '🇩🇪', '法甲': '🇫🇷'
   }[m.league] || '⚽';
 
+  // source 来源标注（需先声明，在下面的 ml 判断块中使用）
+  const mlSource = ml?.source === 'odds_fallback'
+    ? '<span style="font-size:.6rem;color:var(--muted);margin-left:.3rem">（赔率推算）</span>'
+    : '';
+
   // 概率块
   let probHtml = '';
   if (ml) {
@@ -930,10 +935,11 @@ function buildSmartCard(m) {
     probHtml += `
       <div class="smart-rec-row">
         <span class="smart-rec-badge ${recClass}">${recIcon} ${rec || 'ML分析中'}</span>
-        <span style="font-size:.68rem;color:var(--muted)">基于3500+场训练</span>
+        <span style="font-size:.68rem;color:var(--muted)">${ml?.source==='ml' ? '基于3500+场训练' : '赔率反推概率'}${mlSource||''}</span>
       </div>`;
   } else {
-    probHtml = `<div class="smart-no-ml"><i class="fas fa-clock"></i> ML预测计算中，暂无数据</div>`;
+    // 无 ML 时显示一个更友好的占位（后端应已提供 odds_fallback）
+    probHtml = `<div class="smart-no-ml"><i class="fas fa-info-circle"></i> 暂无预测数据（球队历史场次不足）</div>`;
   }
 
   // 赔率块
@@ -979,12 +985,14 @@ function buildSmartCard(m) {
 
     <div class="smart-matchup">
       <div class="smart-team smart-team-home">
-        <div class="smart-team-name">${m.home_team}</div>
+        <div class="smart-team-name">${m.home_team_cn || m.home_team}</div>
+        <div class="smart-team-form" style="font-size:.6rem;opacity:.6">${m.home_team_cn ? m.home_team : ''}</div>
         <div class="smart-team-form">主场</div>
       </div>
       <div class="smart-vs">VS</div>
       <div class="smart-team smart-team-away">
-        <div class="smart-team-name">${m.away_team}</div>
+        <div class="smart-team-name">${m.away_team_cn || m.away_team}</div>
+        <div class="smart-team-form" style="font-size:.6rem;opacity:.6">${m.away_team_cn ? m.away_team : ''}</div>
         <div class="smart-team-form">客场</div>
       </div>
     </div>
