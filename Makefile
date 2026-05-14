@@ -79,3 +79,21 @@ clean: ## 删除虚拟环境和缓存文件
 	@find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	@find . -name "*.pyc" -delete 2>/dev/null || true
 	@echo "✅ 清理完成"
+
+sync-history: ## 同步历史比赛数据（三赛季，约3500+场）
+	@echo "📥 同步历史比赛数据..."
+	@$(VENV_PYTHON) scripts/sync_historical.py --leagues PL,PD,SA,BL1,FL1 --seasons 2023,2024
+	@echo "✅ 历史数据同步完成"
+
+sync-upcoming: ## 同步未来14天赛程 + 批量 ML 预测
+	@echo "🔄 同步未开赛赛程 + ML 预测..."
+	@$(VENV_PYTHON) scripts/sync_upcoming.py --days 14
+	@echo "✅ 赛程同步完成"
+
+train: ## 训练 ML 预测模型（需要先完成 sync-history）
+	@echo "🤖 训练 ML 模型..."
+	@$(VENV_PYTHON) scripts/train_model.py
+	@echo "✅ 模型训练完成"
+
+sync-all: sync-history train sync-upcoming ## 全量同步：历史数据 + 训练 + 未来赛程
+	@echo "🎉 全量同步完成"

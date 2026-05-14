@@ -23,10 +23,13 @@ except ImportError as e:
     ChinaSportsLotterySpider = None
 
 try:
-    from ai_predictor import AIFootballPredictor
-except ImportError as e:
-    print(f"导入AI预测器失败: {e}")
-    AIFootballPredictor = None
+    from scripts.ai_predictor import AIFootballPredictor
+except ImportError:
+    try:
+        from ai_predictor import AIFootballPredictor
+    except ImportError as e:
+        print(f"导入AI预测器失败: {e}")
+        AIFootballPredictor = None
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-in-production') # 在生产环境中务必设置一个强随机 SECRET_KEY
@@ -1138,7 +1141,350 @@ def wc_simulate():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
-if __name__ == '__main__':
+# ═══════════════════════════════════════════════════════════════════════════
+# 新智能预测 API：未开赛比赛 + ML 概率 + AI 分析 + 赔率变动
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.route('/api/upcoming-matches', methods=['GET'])
+def get_upcoming_matches():
+    """
+    获取即将开赛的比赛列表（已有 ML 预测概率）。
+    支持按联赛过滤、分页。
+    Query params:
+      league   - 联赛名称（如 英超）
+      days     - 未来N天（默认14）
+      page     - 页码（默认1）
+      per_page - 每页条数（默认20，最大50）
+    """
+    try:
+        league   = request.args.get('league')
+        days     = min(int(request.args.get('days', 14)), 30)
+        page     = max(int(request.args.get('page', 1)), 1)
+        per_page = min(int(request.args.get('per_page', 20)), 50)
+        offset   = (page - 1) * per_page
+
+        if not prediction_db:
+            return jsonify({'success': False, 'message': '数据库未配置'}), 500
+
+        with prediction_db.get_db_connection() as conn:
+            cur = conn.cursor()
+
+            # 构建查询
+            base_cond = "WHERE status IN ('SCHEDULED','TIMED') AND match_time > NOW() AND match_time < NOW() + INTERVAL '%s days'"
+            params = [days]
+            if league:
+                base_cond += " AND league_name = %s"
+                params.append(league)
+
+            # 总数
+            cur.execute(f"SELECT COUNT(*) FROM upcoming_fixtures {base_cond}", params)
+            total = cur.fetchone()[0]
+
+            # 数据
+            params_data = params + [per_page, offset]
+            cur.execute(f"""
+                SELECT uf.fixture_id, uf.league_code, uf.league_name,
+                       uf.home_team, uf.away_team, uf.match_time, uf.matchday,
+                       uf.home_odds, uf.draw_odds, uf.away_odds,
+                       uf.ml_home_prob, uf.ml_draw_prob, uf.ml_away_prob,
+                       uf.ml_recommendation,
+                       mo.open_home_odds, mo.open_draw_odds, mo.open_away_odds
+                FROM upcoming_fixtures uf
+                LEFT JOIN match_odds mo ON (
+                    mo.match_id = uf.fixture_id
+                    OR (mo.home_team = uf.home_team AND mo.away_team = uf.away_team
+                        AND mo.match_date = uf.match_time::date)
+                )
+                {base_cond}
+                ORDER BY uf.match_time ASC
+                LIMIT %s OFFSET %s
+            """, params_data)
+
+            rows = cur.fetchall()
+
+        matches = []
+        for r in rows:
+            (fix_id, lg_code, lg_name, ht, at, mt, matchday,
+             h_odds, d_odds, a_odds,
+             ml_h, ml_d, ml_a, ml_rec,
+             open_h, open_d, open_a) = r
+
+            # 赔率变动计算
+            odds_movement = {}
+            if h_odds and open_h and float(open_h) > 0:
+                odds_movement = {
+                    'home_change':  round(float(h_odds) - float(open_h), 3),
+                    'draw_change':  round(float(d_odds or 0) - float(open_d or 0), 3) if d_odds and open_d else 0,
+                    'away_change':  round(float(a_odds or 0) - float(open_a or 0), 3) if a_odds and open_a else 0,
+                    'signal':       _interpret_odds_signal(float(open_h), float(h_odds))
+                }
+
+            match_info = {
+                'fixture_id':   fix_id,
+                'league':       lg_name,
+                'league_code':  lg_code,
+                'home_team':    ht,
+                'away_team':    at,
+                'match_time':   mt.isoformat() if mt else None,
+                'matchday':     matchday,
+                'current_odds': {
+                    'home': float(h_odds) if h_odds else None,
+                    'draw': float(d_odds) if d_odds else None,
+                    'away': float(a_odds) if a_odds else None,
+                },
+                'open_odds': {
+                    'home': float(open_h) if open_h else None,
+                    'draw': float(open_d) if open_d else None,
+                    'away': float(open_a) if open_a else None,
+                },
+                'odds_movement': odds_movement,
+                'ml_prediction': {
+                    'home_prob':   float(ml_h) if ml_h else None,
+                    'draw_prob':   float(ml_d) if ml_d else None,
+                    'away_prob':   float(ml_a) if ml_a else None,
+                    'recommendation': ml_rec,
+                } if ml_h else None,
+            }
+            matches.append(match_info)
+
+        return jsonify({
+            'success':   True,
+            'total':     total,
+            'page':      page,
+            'per_page':  per_page,
+            'matches':   matches,
+        })
+
+    except Exception as e:
+        app.logger.error(f"获取未开赛比赛失败: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+def _interpret_odds_signal(open_odds: float, current_odds: float) -> str:
+    """解读赔率变动信号"""
+    if open_odds <= 0:
+        return 'neutral'
+    change_pct = (current_odds - open_odds) / open_odds
+    if change_pct <= -0.10:
+        return 'strong_down'   # 赔率大幅下降，大量资金流入，看好该结果
+    elif change_pct <= -0.04:
+        return 'down'
+    elif change_pct >= 0.10:
+        return 'strong_up'     # 赔率大幅上升，资金流出，市场不看好
+    elif change_pct >= 0.04:
+        return 'up'
+    return 'stable'
+
+
+@app.route('/api/smart-predict', methods=['POST'])
+def smart_predict():
+    """
+    单场智能预测：ML 概率 + 赔率变动分析 + (可选) Gemini AI 深度分析。
+    Body JSON:
+      fixture_id  - 赛程ID (必须)
+      with_ai     - 是否调用 Gemini 深度分析（默认 false，消耗积分）
+    """
+    try:
+        current_user = get_current_user()
+        if not current_user:
+            return jsonify({'success': False, 'message': '请先登录'}), 401
+
+        data       = request.get_json() or {}
+        fixture_id = data.get('fixture_id', '').strip()
+        with_ai    = bool(data.get('with_ai', False))
+
+        if not fixture_id:
+            return jsonify({'success': False, 'message': 'fixture_id 不能为空'}), 400
+
+        if not prediction_db:
+            return jsonify({'success': False, 'message': '数据库未配置'}), 500
+
+        # 1. 从数据库拿比赛信息
+        with prediction_db.get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT fixture_id, league_code, league_name,
+                       home_team, away_team, match_time,
+                       home_odds, draw_odds, away_odds,
+                       ml_home_prob, ml_draw_prob, ml_away_prob, ml_recommendation
+                FROM upcoming_fixtures
+                WHERE fixture_id = %s
+            """, (fixture_id,))
+            row = cur.fetchone()
+
+        if not row:
+            return jsonify({'success': False, 'message': '比赛不存在或已开赛'}), 404
+
+        (fix_id, lg_code, lg_name, ht, at, mt,
+         h_odds, d_odds, a_odds,
+         ml_h, ml_d, ml_a, ml_rec) = row
+
+        # 2. 检查积分（AI 分析消耗2积分，ML only 消耗1积分）
+        cost = 2 if with_ai else 1
+        credits = prediction_db.get_user_credits(current_user['id'])
+        if credits < cost:
+            return jsonify({
+                'success':  False,
+                'message':  f'积分不足（需要{cost}积分，当前{credits}积分），请签到获取积分'
+            }), 403
+
+        # 3. 组装响应
+        result = {
+            'fixture_id':  fix_id,
+            'league':      lg_name,
+            'home_team':   ht,
+            'away_team':   at,
+            'match_time':  mt.isoformat() if mt else None,
+            'current_odds': {
+                'home': float(h_odds) if h_odds else None,
+                'draw': float(d_odds) if d_odds else None,
+                'away': float(a_odds) if a_odds else None,
+            },
+            'ml_prediction': {
+                'home_prob':       float(ml_h) if ml_h else None,
+                'draw_prob':       float(ml_d) if ml_d else None,
+                'away_prob':       float(ml_a) if ml_a else None,
+                'recommendation':  ml_rec,
+            } if ml_h else None,
+        }
+
+        # 4. 赔率变动（从 match_odds 取开盘赔率）
+        try:
+            with prediction_db.get_db_connection() as conn:
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT home_odds, draw_odds, away_odds,
+                           open_home_odds, open_draw_odds, open_away_odds
+                    FROM match_odds
+                    WHERE match_id = %s
+                    ORDER BY updated_at DESC LIMIT 1
+                """, (fix_id,))
+                odds_row = cur.fetchone()
+
+            if odds_row:
+                cur_h, cur_d, cur_a, op_h, op_d, op_a = odds_row
+                odds_mv = {}
+                if cur_h and op_h:
+                    odds_mv = {
+                        'home_change': round(float(cur_h) - float(op_h), 3),
+                        'draw_change': round(float(cur_d or 0) - float(op_d or 0), 3),
+                        'away_change': round(float(cur_a or 0) - float(op_a or 0), 3),
+                        'signal':      _interpret_odds_signal(float(op_h), float(cur_h)),
+                    }
+                result['odds_movement'] = odds_mv
+        except Exception:
+            pass
+
+        # 5. Gemini AI 深度分析（可选）
+        ai_analysis = None
+        if with_ai:
+            can_predict = prediction_db.can_user_predict(
+                current_user['id'],
+                current_user['user_type'],
+                current_user['daily_predictions_used']
+            )
+            if not can_predict:
+                return jsonify({'success': False, 'message': '今日预测次数已用完'}), 403
+
+            gemini_key = os.environ.get('GEMINI_API_KEY')
+            if gemini_key and AIFootballPredictor:
+                try:
+                    predictor = AIFootballPredictor(
+                        api_key    = gemini_key,
+                        model_name = os.environ.get('GEMINI_MODEL', 'gemini-2.0-flash-exp')
+                    )
+                    match_input = {
+                        'match_id':    fix_id,
+                        'home_team':   ht,
+                        'away_team':   at,
+                        'league_name': lg_name,
+                        'home_odds':   float(h_odds) if h_odds else 2.0,
+                        'draw_odds':   float(d_odds) if d_odds else 3.2,
+                        'away_odds':   float(a_odds) if a_odds else 2.8,
+                    }
+                    analyses = predictor.analyze_matches([match_input], use_db=True)
+                    if analyses:
+                        ai_analysis = analyses[0].ai_analysis
+                        result['ai_recommendation'] = analyses[0].recommendation
+                except Exception as e:
+                    app.logger.error(f"AI 分析失败: {e}")
+
+            result['ai_analysis'] = ai_analysis
+            prediction_db.increment_user_predictions(current_user['id'])
+
+        # 6. 扣积分
+        try:
+            with prediction_db.get_db_connection() as conn:
+                cur = conn.cursor()
+                cur.execute(
+                    "UPDATE users SET credits = credits - %s WHERE id = %s",
+                    (cost, current_user['id'])
+                )
+                conn.commit()
+        except Exception as e:
+            app.logger.warning(f"扣积分失败: {e}")
+
+        result['credits_used']      = cost
+        result['credits_remaining'] = max(credits - cost, 0)
+        result['success'] = True
+        return jsonify(result)
+
+    except Exception as e:
+        app.logger.error(f"智能预测失败: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/sync-upcoming', methods=['POST'])
+def trigger_sync_upcoming():
+    """管理员接口：手动触发赛程同步（仅 admin 可用）"""
+    try:
+        current_user = get_current_user()
+        if not current_user or current_user.get('user_type') != 'admin':
+            return jsonify({'success': False, 'message': '仅管理员可操作'}), 403
+
+        import subprocess
+        result = subprocess.run(
+            ['python', 'scripts/sync_upcoming.py', '--days', '14'],
+            capture_output=True, text=True, timeout=120,
+            env={**os.environ,
+                 'DB_HOST': os.environ.get('DB_HOST', ''),
+                 'DB_PORT': os.environ.get('DB_PORT', '5432'),
+                 'DB_NAME': os.environ.get('DB_NAME', ''),
+                 'DB_USER': os.environ.get('DB_USER', ''),
+                 'DB_PASS': os.environ.get('DB_PASS', ''),
+            }
+        )
+        return jsonify({
+            'success':   result.returncode == 0,
+            'stdout':    result.stdout[-2000:],
+            'stderr':    result.stderr[-500:] if result.returncode != 0 else '',
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/leagues', methods=['GET'])
+def get_available_leagues():
+    """获取数据库中有未开赛比赛的联赛列表"""
+    try:
+        if not prediction_db:
+            return jsonify({'success': False}), 500
+        with prediction_db.get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT DISTINCT league_name, league_code, COUNT(*) as cnt
+                FROM upcoming_fixtures
+                WHERE status IN ('SCHEDULED','TIMED') AND match_time > NOW()
+                GROUP BY league_name, league_code
+                ORDER BY cnt DESC
+            """)
+            rows = cur.fetchall()
+        leagues = [{'name': r[0], 'code': r[1], 'upcoming_matches': r[2]} for r in rows]
+        return jsonify({'success': True, 'leagues': leagues})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
     # 启动时确保积分字段存在
     if prediction_db:
         try:

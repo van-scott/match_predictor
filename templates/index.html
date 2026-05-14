@@ -37,6 +37,9 @@
     <button id="tab-ai" class="tab-btn" onclick="switchTab('ai')">
       <i class="fas fa-robot"></i> <span>AI 大模型</span>
     </button>
+    <button id="tab-smart" class="tab-btn" onclick="switchTab('smart')">
+      <i class="fas fa-crosshairs"></i> <span>智能选场</span>
+    </button>
     <button id="tab-wc" class="tab-btn" onclick="switchTab('wc')">
       <i class="fas fa-globe"></i> <span>世界杯预测</span>
     </button>
@@ -278,6 +281,76 @@
       </div>
       <div id="wc-bracket" class="wc-bracket hidden"></div>
     </div>
+  </div>
+
+  <!-- ═══ TAB 3: SMART PICK ═══ -->
+  <div id="panel-smart" class="tab-panel hidden">
+
+    <!-- 说明横幅 -->
+    <div class="smart-hero-banner">
+      <div class="smart-hero-inner">
+        <div class="smart-hero-icon"><i class="fas fa-crosshairs"></i></div>
+        <div>
+          <h2 class="smart-hero-title">智能选场 <span class="smart-badge-new">NEW</span></h2>
+          <p class="smart-hero-sub">基于 3500+ 场历史比赛训练的 AI 模型，自动分析五大联赛即将开赛比赛，给出胜平负概率和推荐。选一场感兴趣的，深度分析仅需 2 积分。</p>
+        </div>
+      </div>
+      <!-- 简洁说明指引 -->
+      <div class="smart-guide-row">
+        <div class="smart-guide-step">
+          <div class="smart-guide-num">1</div>
+          <div class="smart-guide-text">选择联赛或日期筛选比赛</div>
+        </div>
+        <div class="smart-guide-arrow"><i class="fas fa-chevron-right"></i></div>
+        <div class="smart-guide-step">
+          <div class="smart-guide-num">2</div>
+          <div class="smart-guide-text">查看 AI 预测概率和推荐</div>
+        </div>
+        <div class="smart-guide-arrow"><i class="fas fa-chevron-right"></i></div>
+        <div class="smart-guide-step">
+          <div class="smart-guide-num">3</div>
+          <div class="smart-guide-text">点击「深度分析」获取完整研报</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 筛选栏 -->
+    <div class="smart-filter-bar">
+      <div class="smart-filter-left">
+        <button class="smart-filter-btn active" onclick="filterSmartLeague('all', this)">🌍 全部</button>
+        <button class="smart-filter-btn" onclick="filterSmartLeague('英超', this)">🏴󠁧󠁢󠁥󠁮󠁧󠁿 英超</button>
+        <button class="smart-filter-btn" onclick="filterSmartLeague('西甲', this)">🇪🇸 西甲</button>
+        <button class="smart-filter-btn" onclick="filterSmartLeague('意甲', this)">🇮🇹 意甲</button>
+        <button class="smart-filter-btn" onclick="filterSmartLeague('德甲', this)">🇩🇪 德甲</button>
+        <button class="smart-filter-btn" onclick="filterSmartLeague('法甲', this)">🇫🇷 法甲</button>
+      </div>
+      <div class="smart-filter-right">
+        <span id="smart-match-count" class="smart-count-badge">加载中...</span>
+      </div>
+    </div>
+
+    <!-- 比赛列表 -->
+    <div id="smart-match-list" class="smart-match-list">
+      <div class="spinner-overlay"><i class="fas fa-spinner fa-spin fa-2x"></i><span>正在加载比赛数据...</span></div>
+    </div>
+
+    <!-- 免责声明 -->
+    <div class="disclaimer" style="max-width:860px;margin:1.5rem auto 0">
+      ⚠️ 预测基于历史数据统计模型，命中率约 60-65%，不构成投注建议。理性娱乐，量力而行。
+    </div>
+
+  </div>
+
+  <!-- 深度分析结果弹窗 -->
+  <div id="smart-detail-overlay" class="modal-overlay hidden" onclick="closeSmartDetail()"></div>
+  <div id="smart-detail-modal" class="smart-detail-modal hidden">
+    <div class="smart-detail-inner" id="smart-detail-inner">
+      <div class="smart-detail-loading">
+        <i class="fas fa-spinner fa-spin fa-2x"></i>
+        <p>AI 正在深度分析，通常需要 10-20 秒...</p>
+      </div>
+    </div>
+    <button class="smart-detail-close" onclick="closeSmartDetail()"><i class="fas fa-times"></i></button>
   </div>
 
 </main>

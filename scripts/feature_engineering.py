@@ -1,191 +1,312 @@
-import pandas as pd
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+数据库驱动的特征工程模块
+从 historical_matches 表拉取数据，计算球队特征，存入 match_features 表
+"""
+import os
+import sys
+import json
+import logging
 import numpy as np
-from datetime import datetime, timedelta
-from config import *
+import pandas as pd
+from datetime import datetime
 
-def create_team_features(matches_df, lookback_matches=10):
-    """为每支球队创建特征"""
-    if matches_df is None or matches_df.empty:
-        print("无效的比赛数据")
-        return None
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+logger = logging.getLogger(__name__)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 从数据库加载历史比赛
+# ─────────────────────────────────────────────────────────────────────────────
+
+def load_historical_matches(db=None) -> pd.DataFrame:
+    """从 historical_matches 表加载所有已完赛比赛"""
+    if db is None:
+        from scripts.database import prediction_db
+        db = prediction_db
+
+    try:
+        with db.get_db_connection() as conn:
+            df = pd.read_sql("""
+                SELECT match_id, season, league_name,
+                       match_datetime, match_date,
+                       home_team, away_team,
+                       full_time_home_goals AS home_score,
+                       full_time_away_goals AS away_score,
+                       full_time_result     AS result,
+                       half_time_home_goals AS ht_home,
+                       half_time_away_goals AS ht_away
+                FROM historical_matches
+                WHERE full_time_result IS NOT NULL
+                  AND full_time_result IN ('H', 'D', 'A')
+                  AND home_team != ''
+                  AND away_team != ''
+                ORDER BY match_datetime ASC
+            """, conn)
+        logger.info(f"✅ 已加载 {len(df)} 场历史比赛用于特征工程")
+        return df
+    except Exception as e:
+        logger.error(f"加载历史比赛失败: {e}", exc_info=True)
+        return pd.DataFrame()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 球队特征计算
+# ─────────────────────────────────────────────────────────────────────────────
+
+def compute_team_stats(df: pd.DataFrame, lookback: int = 10) -> dict:
+    """
+    计算每支球队的近期统计特征。
     
-    # 确保数据按日期排序
-    if 'match_date' in matches_df.columns:
-        matches_df = matches_df.sort_values('match_date')
-    
-    # 只使用已完成的比赛
-    completed_matches = matches_df[matches_df['status'] == 'FINISHED'].copy()
-    
-    # 获取所有球队并转换为列表
-    all_teams = list(set(completed_matches['home_team'].unique()) | set(completed_matches['away_team'].unique()))
-    
-    # 创建特征数据框
-    features = pd.DataFrame(index=all_teams)
-    
-    # 计算每支球队的特征
+    返回: {team_name: {feature_name: value, ...}, ...}
+    特征维度:
+      home_win_rate, home_draw_rate, home_loss_rate
+      away_win_rate, away_draw_rate, away_loss_rate
+      home_goals_scored_avg, home_goals_conceded_avg
+      away_goals_scored_avg, away_goals_conceded_avg
+      overall_win_rate, recent_form (最近5场积分比率)
+      goal_diff_avg (近10场净球)
+    """
+    all_teams = sorted(set(df['home_team'].unique()) | set(df['away_team'].unique()))
+    stats = {}
+
     for team in all_teams:
-        # 获取球队的所有比赛
-        team_home_matches = completed_matches[completed_matches['home_team'] == team].copy()
-        team_away_matches = completed_matches[completed_matches['away_team'] == team].copy()
-        
-        # 最近的比赛
-        recent_home_matches = team_home_matches.tail(lookback_matches)
-        recent_away_matches = team_away_matches.tail(lookback_matches)
-        
-        # 计算主场特征
-        if not recent_home_matches.empty:
-            features.loc[team, 'home_matches_played'] = len(recent_home_matches)
-            features.loc[team, 'home_goals_scored_avg'] = recent_home_matches['home_score'].mean()
-            features.loc[team, 'home_goals_conceded_avg'] = recent_home_matches['away_score'].mean()
-            features.loc[team, 'home_win_rate'] = (recent_home_matches['result'] == 'H').mean()
-            features.loc[team, 'home_draw_rate'] = (recent_home_matches['result'] == 'D').mean()
-            features.loc[team, 'home_loss_rate'] = (recent_home_matches['result'] == 'A').mean()
-        else:
-            features.loc[team, 'home_matches_played'] = 0
-            features.loc[team, 'home_goals_scored_avg'] = 0
-            features.loc[team, 'home_goals_conceded_avg'] = 0
-            features.loc[team, 'home_win_rate'] = 0
-            features.loc[team, 'home_draw_rate'] = 0
-            features.loc[team, 'home_loss_rate'] = 0
-        
-        # 计算客场特征
-        if not recent_away_matches.empty:
-            features.loc[team, 'away_matches_played'] = len(recent_away_matches)
-            features.loc[team, 'away_goals_scored_avg'] = recent_away_matches['away_score'].mean()
-            features.loc[team, 'away_goals_conceded_avg'] = recent_away_matches['home_score'].mean()
-            features.loc[team, 'away_win_rate'] = (recent_away_matches['result'] == 'A').mean()
-            features.loc[team, 'away_draw_rate'] = (recent_away_matches['result'] == 'D').mean()
-            features.loc[team, 'away_loss_rate'] = (recent_away_matches['result'] == 'H').mean()
-        else:
-            features.loc[team, 'away_matches_played'] = 0
-            features.loc[team, 'away_goals_scored_avg'] = 0
-            features.loc[team, 'away_goals_conceded_avg'] = 0
-            features.loc[team, 'away_win_rate'] = 0
-            features.loc[team, 'away_draw_rate'] = 0
-            features.loc[team, 'away_loss_rate'] = 0
-        
-        # 计算总体特征
-        all_team_matches = pd.concat([
-            team_home_matches[['match_date', 'home_score', 'away_score', 'result']].rename(
-                columns={'home_score': 'team_score', 'away_score': 'opponent_score'}
-            ).assign(is_home=True),
-            team_away_matches[['match_date', 'home_score', 'away_score', 'result']].rename(
-                columns={'away_score': 'team_score', 'home_score': 'opponent_score'}
-            ).assign(is_home=False)
-        ]).sort_values('match_date')
-        
-        recent_matches = all_team_matches.tail(lookback_matches)
-        
-        if not recent_matches.empty:
-            # 计算最近的表现
-            features.loc[team, 'total_matches_played'] = len(recent_matches)
-            features.loc[team, 'total_goals_scored_avg'] = recent_matches['team_score'].mean()
-            features.loc[team, 'total_goals_conceded_avg'] = recent_matches['opponent_score'].mean()
-            
-            # 计算胜率
-            home_wins = sum((recent_matches['is_home'] == True) & (recent_matches['result'] == 'H'))
-            away_wins = sum((recent_matches['is_home'] == False) & (recent_matches['result'] == 'A'))
-            total_wins = home_wins + away_wins
-            
-            features.loc[team, 'overall_win_rate'] = total_wins / len(recent_matches)
-            
-            # 计算最近的趋势（最近5场比赛的得分）
-            last_5_matches = recent_matches.tail(5)
-            if len(last_5_matches) > 0:
-                points = 0
-                for _, match in last_5_matches.iterrows():
-                    if (match['is_home'] and match['result'] == 'H') or (not match['is_home'] and match['result'] == 'A'):
-                        points += 3  # 胜
-                    elif match['result'] == 'D':
-                        points += 1  # 平
-                
-                features.loc[team, 'recent_form'] = points / (len(last_5_matches) * 3)  # 归一化为0-1
-            else:
-                features.loc[team, 'recent_form'] = 0
-        else:
-            features.loc[team, 'total_matches_played'] = 0
-            features.loc[team, 'total_goals_scored_avg'] = 0
-            features.loc[team, 'total_goals_conceded_avg'] = 0
-            features.loc[team, 'overall_win_rate'] = 0
-            features.loc[team, 'recent_form'] = 0
-    
-    # 保存特征数据
-    features.to_csv(FEATURES_DATA_FILE)
-    print(f"球队特征数据已保存至 {FEATURES_DATA_FILE}")
-    
-    return features
+        home_m = df[df['home_team'] == team].sort_values('match_datetime').tail(lookback)
+        away_m = df[df['away_team'] == team].sort_values('match_datetime').tail(lookback)
 
-def prepare_match_features(matches_df, features_df):
-    """为每场比赛准备特征"""
-    if matches_df is None or features_df is None:
-        print("无效的数据")
-        return None
-    
-    match_features = []
-    
-    for _, match in matches_df.iterrows():
-        home_team = match['home_team']
-        away_team = match['away_team']
-        
-        # 检查两队是否都有特征数据
-        if home_team not in features_df.index or away_team not in features_df.index:
-            continue
-        
-        # 提取特征
-        match_data = {
-            'match_id': match['match_id'],
-            'home_team': home_team,
-            'away_team': away_team,
-            'match_date': match['match_date'],
-            'status': match['status']
+        # ── 主场特征 ──────────────────────────────────────────────────
+        if not home_m.empty:
+            hwr = (home_m['result'] == 'H').mean()
+            hdr = (home_m['result'] == 'D').mean()
+            hlr = (home_m['result'] == 'A').mean()
+            hgs = home_m['home_score'].mean()
+            hgc = home_m['away_score'].mean()
+        else:
+            hwr = hdr = hlr = hgs = hgc = 0.0
+
+        # ── 客场特征 ──────────────────────────────────────────────────
+        if not away_m.empty:
+            awr = (away_m['result'] == 'A').mean()
+            adr = (away_m['result'] == 'D').mean()
+            alr = (away_m['result'] == 'H').mean()
+            ags = away_m['away_score'].mean()
+            agc = away_m['home_score'].mean()
+        else:
+            awr = adr = alr = ags = agc = 0.0
+
+        # ── 综合近期状态 ──────────────────────────────────────────────
+        # 把主客场合并，按时间取最近10场
+        combined = pd.concat([
+            home_m[['match_datetime', 'home_score', 'away_score', 'result']].assign(
+                is_home=True,
+                team_score=home_m['home_score'],
+                opp_score=home_m['away_score']
+            ),
+            away_m[['match_datetime', 'home_score', 'away_score', 'result']].assign(
+                is_home=False,
+                team_score=away_m['away_score'],
+                opp_score=away_m['home_score']
+            ),
+        ]).sort_values('match_datetime').tail(lookback)
+
+        if not combined.empty:
+            wins = ((combined['is_home']) & (combined['result'] == 'H')) | \
+                   ((~combined['is_home']) & (combined['result'] == 'A'))
+            overall_win_rate = wins.mean()
+            goal_diff_avg = (combined['team_score'] - combined['opp_score']).mean()
+
+            # 近5场积分（胜3分，平1分）
+            last5 = combined.tail(5)
+            pts = 0
+            for _, r in last5.iterrows():
+                if (r['is_home'] and r['result'] == 'H') or (not r['is_home'] and r['result'] == 'A'):
+                    pts += 3
+                elif r['result'] == 'D':
+                    pts += 1
+            recent_form = pts / (len(last5) * 3) if len(last5) > 0 else 0.0
+        else:
+            overall_win_rate = goal_diff_avg = recent_form = 0.0
+
+        stats[team] = {
+            'home_win_rate':         round(hwr, 4),
+            'home_draw_rate':        round(hdr, 4),
+            'home_loss_rate':        round(hlr, 4),
+            'home_goals_scored_avg': round(hgs, 4),
+            'home_goals_conceded_avg': round(hgc, 4),
+            'away_win_rate':         round(awr, 4),
+            'away_draw_rate':        round(adr, 4),
+            'away_loss_rate':        round(alr, 4),
+            'away_goals_scored_avg': round(ags, 4),
+            'away_goals_conceded_avg': round(agc, 4),
+            'overall_win_rate':      round(overall_win_rate, 4),
+            'recent_form':           round(recent_form, 4),
+            'goal_diff_avg':         round(goal_diff_avg, 4),
+            'home_matches_count':    len(home_m),
+            'away_matches_count':    len(away_m),
         }
-        
-        # 添加主队特征
-        for col in features_df.columns:
-            match_data[f'home_{col}'] = features_df.loc[home_team, col]
-        
-        # 添加客队特征
-        for col in features_df.columns:
-            match_data[f'away_{col}'] = features_df.loc[away_team, col]
-        
-        # 如果比赛已完成，添加结果
-        if match['status'] == 'FINISHED':
-            match_data['home_score'] = match['home_score']
-            match_data['away_score'] = match['away_score']
-            match_data['result'] = match['result']
-            if 'half_time_home' in match and 'half_time_away' in match:
-                match_data['half_time_home'] = match['half_time_home']
-                match_data['half_time_away'] = match['half_time_away']
-                if 'half_full_result' in match:
-                    match_data['half_full_result'] = match['half_full_result']
-        
-        match_features.append(match_data)
-    
-    return pd.DataFrame(match_features)
 
-def load_or_create_features(matches_df=None):
-    """加载或创建特征"""
-    if matches_df is not None:
-        # 创建新的特征
-        features_df = create_team_features(matches_df)
-    else:
-        # 尝试从文件加载
-        try:
-            features_df = pd.read_csv(FEATURES_DATA_FILE, index_col=0)
-            print(f"从{FEATURES_DATA_FILE}加载了特征数据")
-        except:
-            print(f"无法加载{FEATURES_DATA_FILE}，请先创建特征")
-            features_df = None
-    
-    return features_df
+    return stats
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# H2H（历史交锋）特征
+# ─────────────────────────────────────────────────────────────────────────────
+
+def compute_h2h(df: pd.DataFrame, home_team: str, away_team: str, n: int = 5) -> dict:
+    """计算两队历史交锋统计（最近 n 次）"""
+    mask = (
+        ((df['home_team'] == home_team) & (df['away_team'] == away_team)) |
+        ((df['home_team'] == away_team) & (df['away_team'] == home_team))
+    )
+    h2h = df[mask].sort_values('match_datetime').tail(n)
+
+    if h2h.empty:
+        return {'h2h_home_wins': 0, 'h2h_draws': 0, 'h2h_away_wins': 0, 'h2h_total': 0}
+
+    home_wins = ((h2h['home_team'] == home_team) & (h2h['result'] == 'H')).sum() + \
+                ((h2h['away_team'] == home_team) & (h2h['result'] == 'A')).sum()
+    draws = (h2h['result'] == 'D').sum()
+    away_wins = len(h2h) - home_wins - draws
+
+    return {
+        'h2h_home_wins': int(home_wins),
+        'h2h_draws':     int(draws),
+        'h2h_away_wins': int(away_wins),
+        'h2h_total':     len(h2h),
+        'h2h_home_win_rate': round(home_wins / len(h2h), 4) if len(h2h) > 0 else 0.0,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 为每场比赛组装特征向量（用于 ML 训练）
+# ─────────────────────────────────────────────────────────────────────────────
+
+def build_match_feature_matrix(df: pd.DataFrame, team_stats: dict) -> pd.DataFrame:
+    """
+    为每场已完赛比赛构建特征矩阵，每行对应一场比赛。
+    特征 = 主队统计 + 客队统计 + H2H 统计
+    标签 = full_time_result (H/D/A)
+    """
+    rows = []
+    feat_cols = [
+        'home_win_rate', 'home_draw_rate', 'home_loss_rate',
+        'home_goals_scored_avg', 'home_goals_conceded_avg',
+        'away_win_rate', 'away_draw_rate', 'away_loss_rate',
+        'away_goals_scored_avg', 'away_goals_conceded_avg',
+        'overall_win_rate', 'recent_form', 'goal_diff_avg',
+    ]
+
+    for _, match in df.iterrows():
+        ht = match['home_team']
+        at = match['away_team']
+
+        if ht not in team_stats or at not in team_stats:
+            continue
+
+        hs = team_stats[ht]
+        as_ = team_stats[at]
+        h2h = compute_h2h(df, ht, at)
+
+        row = {
+            'match_id':   match['match_id'],
+            'match_date': match.get('match_date'),
+            'league':     match.get('league_name', ''),
+            'home_team':  ht,
+            'away_team':  at,
+            'result':     match['result'],
+        }
+
+        # 主队特征（前缀 h_）
+        for col in feat_cols:
+            row[f'h_{col}'] = hs.get(col, 0.0)
+
+        # 客队特征（前缀 a_）
+        for col in feat_cols:
+            row[f'a_{col}'] = as_.get(col, 0.0)
+
+        # 差值特征（主 - 客，量化相对强弱）
+        row['diff_win_rate']         = hs['overall_win_rate'] - as_['overall_win_rate']
+        row['diff_recent_form']      = hs['recent_form']      - as_['recent_form']
+        row['diff_home_scored_avg']  = hs['home_goals_scored_avg']   - as_['away_goals_conceded_avg']
+        row['diff_away_concede_avg'] = as_['away_goals_scored_avg']  - hs['home_goals_conceded_avg']
+
+        # H2H
+        row.update(h2h)
+
+        rows.append(row)
+
+    feature_df = pd.DataFrame(rows)
+    logger.info(f"✅ 构建特征矩阵: {len(feature_df)} 场比赛 × {len(feature_df.columns)} 列")
+    return feature_df
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 将球队近期状态写入 team_ratings 表
+# ─────────────────────────────────────────────────────────────────────────────
+
+def save_team_ratings(team_stats: dict, db=None):
+    """将球队统计写入 team_ratings 表，供 AI Prompt 实时查询"""
+    if db is None:
+        from scripts.database import prediction_db
+        db = prediction_db
+
+    saved = 0
+    try:
+        with db.get_db_connection() as conn:
+            cur = conn.cursor()
+            for team, stats in team_stats.items():
+                cur.execute("""
+                    INSERT INTO team_ratings (team_name, xg_for, xg_against, updated_at)
+                    VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+                    ON CONFLICT (team_name) DO UPDATE SET
+                        xg_for        = EXCLUDED.xg_for,
+                        xg_against    = EXCLUDED.xg_against,
+                        updated_at    = CURRENT_TIMESTAMP
+                """, (
+                    team,
+                    float(stats.get('home_goals_scored_avg', 0.0)),
+                    float(stats.get('home_goals_conceded_avg', 0.0)),
+                ))
+                saved += 1
+            conn.commit()
+        logger.info(f"✅ 已更新 {saved} 支球队的统计数据到 team_ratings")
+    except Exception as e:
+        logger.error(f"写入 team_ratings 失败: {e}", exc_info=True)
+
+    return saved
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 主入口（可单独运行）
+# ─────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    # 测试特征工程功能
-    from data_processing import load_or_process_data
-    
-    processed_data = load_or_process_data()
-    features_df = load_or_create_features(processed_data['matches'])
-    
-    if features_df is not None:
-        print("特征工程完成")
-        print(f"创建了{len(features_df)}支球队的特征")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
+    print("🔧 开始特征工程...")
+    df = load_historical_matches()
+    if df.empty:
+        print("❌ 没有历史数据，请先运行 sync_historical.py")
+        sys.exit(1)
+
+    print(f"📊 加载了 {len(df)} 场比赛，涉及联赛: {df['league_name'].unique().tolist()}")
+
+    print("⚙️  计算球队近期统计...")
+    team_stats = compute_team_stats(df, lookback=10)
+    print(f"   共计算 {len(team_stats)} 支球队")
+
+    print("📐 构建特征矩阵...")
+    feat_df = build_match_feature_matrix(df, team_stats)
+    print(f"   特征矩阵: {feat_df.shape}")
+
+    print("💾 写入球队评分到数据库...")
+    save_team_ratings(team_stats)
+
+    # 保存特征矩阵供模型训练使用
+    import pickle
+    out_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'feature_matrix.pkl')
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    feat_df.to_pickle(out_path)
+    print(f"✅ 特征矩阵已保存: {os.path.abspath(out_path)}")

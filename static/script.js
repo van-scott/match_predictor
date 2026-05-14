@@ -809,3 +809,397 @@ document.addEventListener('DOMContentLoaded', () => {
   initWCTeams();
 });
 
+
+// ═══════════════════════════════════════════════════════════════════════
+// 智能选场 (Smart Pick) 模块
+// ═══════════════════════════════════════════════════════════════════════
+
+let smartMatches = [];         // 全部未开赛比赛缓存
+let smartFilterLeague = 'all'; // 当前联赛筛选
+
+// Tab 切换时加载
+const _origSwitchTab = switchTab;
+function switchTab(tab) {
+  _origSwitchTab(tab);
+  if (tab === 'smart' && smartMatches.length === 0) {
+    loadSmartMatches();
+  }
+}
+
+// ── 加载未开赛比赛 ────────────────────────────────────────────────────
+async function loadSmartMatches() {
+  const listEl = document.getElementById('smart-match-list');
+  const countEl = document.getElementById('smart-match-count');
+  if (!listEl) return;
+
+  listEl.innerHTML = `<div class="spinner-overlay"><i class="fas fa-spinner fa-spin fa-2x"></i><span>正在加载比赛数据...</span></div>`;
+
+  try {
+    const res = await fetch('/api/upcoming-matches?days=14&per_page=50');
+    const data = await res.json();
+    if (data.success && data.matches?.length > 0) {
+      smartMatches = data.matches;
+      if (countEl) countEl.textContent = `共 ${data.total} 场未开赛`;
+      renderSmartMatches();
+    } else {
+      listEl.innerHTML = `<div class="error-msg"><i class="fas fa-info-circle"></i> 暂无未开赛比赛数据，请稍后刷新</div>`;
+    }
+  } catch (e) {
+    listEl.innerHTML = `<div class="error-msg"><i class="fas fa-exclamation-triangle"></i> 加载失败，请检查网络连接</div>`;
+  }
+}
+
+// ── 联赛筛选 ───────────────────────────────────────────────────────────
+function filterSmartLeague(league, btn) {
+  smartFilterLeague = league;
+  document.querySelectorAll('.smart-filter-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderSmartMatches();
+}
+
+// ── 渲染比赛卡片 ───────────────────────────────────────────────────────
+function renderSmartMatches() {
+  const listEl = document.getElementById('smart-match-list');
+  const countEl = document.getElementById('smart-match-count');
+  if (!listEl) return;
+
+  let filtered = smartMatches;
+  if (smartFilterLeague !== 'all') {
+    filtered = smartMatches.filter(m => m.league === smartFilterLeague);
+  }
+
+  if (countEl) countEl.textContent = `${filtered.length} 场比赛`;
+
+  if (filtered.length === 0) {
+    listEl.innerHTML = `<div class="error-msg"><i class="fas fa-search"></i> 该联赛暂无未开赛比赛</div>`;
+    return;
+  }
+
+  listEl.innerHTML = '';
+  filtered.forEach(m => {
+    const card = buildSmartCard(m);
+    listEl.appendChild(card);
+  });
+}
+
+// ── 构建单张比赛卡片 ───────────────────────────────────────────────────
+function buildSmartCard(m) {
+  const card = document.createElement('div');
+  card.className = 'smart-card';
+  card.id = `smart-card-${m.fixture_id}`;
+
+  const ml = m.ml_prediction;
+  const odds = m.current_odds;
+  const mov = m.odds_movement || {};
+
+  // 时间处理
+  const matchTime = m.match_time ? new Date(m.match_time) : null;
+  const timeStr = matchTime ? formatSmartTime(matchTime) : '时间待定';
+  const hoursUntil = matchTime ? (matchTime - Date.now()) / 3600000 : Infinity;
+  const isUrgent = hoursUntil > 0 && hoursUntil < 24;
+  const isPast = hoursUntil <= 0;
+
+  // 联赛 emoji
+  const leagueEmoji = {
+    '英超': '🏴󠁧󠁢󠁥󠁮󠁧󠁿', '西甲': '🇪🇸', '意甲': '🇮🇹', '德甲': '🇩🇪', '法甲': '🇫🇷'
+  }[m.league] || '⚽';
+
+  // 概率块
+  let probHtml = '';
+  if (ml) {
+    const ph = Math.round((ml.home_prob || 0) * 100);
+    const pd = Math.round((ml.draw_prob || 0) * 100);
+    const pa = Math.round((ml.away_prob || 0) * 100);
+    const maxProb = Math.max(ph, pd, pa);
+    probHtml = `
+      <div class="smart-prob-section">
+        <div class="smart-prob-label">
+          <span>主胜 ${ph}%</span>
+          <span style="color:var(--muted)">ML模型预测概率</span>
+          <span>客胜 ${pa}%</span>
+        </div>
+        <div class="smart-prob-bar-wrap" style="grid-template-columns:${ph}fr ${pd}fr ${pa}fr">
+          <div class="smart-prob-seg smart-prob-seg-home${ph===maxProb?' dominant':''}">主${ph}%</div>
+          <div class="smart-prob-seg smart-prob-seg-draw${pd===maxProb?' dominant':''}">平${pd}%</div>
+          <div class="smart-prob-seg smart-prob-seg-away${pa===maxProb?' dominant':''}">客${pa}%</div>
+        </div>
+      </div>`;
+
+    // 推荐标签
+    const rec = ml.recommendation || '';
+    const recClass = rec.includes('强推') ? 'smart-rec-strong' :
+                     rec.includes('偏向') ? 'smart-rec-normal' : 'smart-rec-caution';
+    const recIcon = rec.includes('强推') ? '🔥' : rec.includes('偏向') ? '📊' : '⚖️';
+    probHtml += `
+      <div class="smart-rec-row">
+        <span class="smart-rec-badge ${recClass}">${recIcon} ${rec || 'ML分析中'}</span>
+        <span style="font-size:.68rem;color:var(--muted)">基于3500+场训练</span>
+      </div>`;
+  } else {
+    probHtml = `<div class="smart-no-ml"><i class="fas fa-clock"></i> ML预测计算中，暂无数据</div>`;
+  }
+
+  // 赔率块
+  let oddsHtml = '';
+  if (odds && odds.home) {
+    const homeChange = mov.home_change || 0;
+    const drawChange = mov.draw_change || 0;
+    const awayChange = mov.away_change || 0;
+    const changeStr = (v) => {
+      if (!v || Math.abs(v) < 0.01) return `<span class="smart-change-stable">—</span>`;
+      return v < 0
+        ? `<span class="smart-change-down">↓${Math.abs(v).toFixed(2)}</span>`
+        : `<span class="smart-change-up">↑${v.toFixed(2)}</span>`;
+    };
+    oddsHtml = `
+      <div class="smart-odds-row">
+        <div class="smart-odd-box">
+          <span class="smart-odd-label">主胜赔率</span>
+          <div class="smart-odd-val">${odds.home?.toFixed(2) || '-'}</div>
+          <div class="smart-odd-change">${changeStr(homeChange)}</div>
+        </div>
+        <div class="smart-odd-box">
+          <span class="smart-odd-label">平局赔率</span>
+          <div class="smart-odd-val">${odds.draw?.toFixed(2) || '-'}</div>
+          <div class="smart-odd-change">${changeStr(drawChange)}</div>
+        </div>
+        <div class="smart-odd-box">
+          <span class="smart-odd-label">客胜赔率</span>
+          <div class="smart-odd-val">${odds.away?.toFixed(2) || '-'}</div>
+          <div class="smart-odd-change">${changeStr(awayChange)}</div>
+        </div>
+      </div>`;
+  }
+
+  card.innerHTML = `
+    <div class="smart-card-meta">
+      <span class="smart-league-tag">${leagueEmoji} ${m.league}${m.matchday ? ' 第'+m.matchday+'轮' : ''}</span>
+      <span class="smart-time-tag ${isUrgent ? 'smart-time-urgent' : ''}">
+        <i class="fas fa-clock"></i> ${timeStr}
+        ${isUrgent ? '<span style="margin-left:.3rem">即将开赛</span>' : ''}
+      </span>
+    </div>
+
+    <div class="smart-matchup">
+      <div class="smart-team smart-team-home">
+        <div class="smart-team-name">${m.home_team}</div>
+        <div class="smart-team-form">主场</div>
+      </div>
+      <div class="smart-vs">VS</div>
+      <div class="smart-team smart-team-away">
+        <div class="smart-team-name">${m.away_team}</div>
+        <div class="smart-team-form">客场</div>
+      </div>
+    </div>
+
+    ${probHtml}
+    ${oddsHtml}
+
+    <div class="smart-card-footer">
+      <button class="smart-btn-ml" onclick="showSmartDetail('${m.fixture_id}', false)">
+        <i class="fas fa-chart-bar"></i> 查看数据
+      </button>
+      <button class="smart-btn-ai" onclick="showSmartDetail('${m.fixture_id}', true)">
+        <i class="fas fa-robot"></i> AI 深度分析 <span style="font-size:.65rem;opacity:.8">-2积分</span>
+      </button>
+    </div>
+  `;
+
+  return card;
+}
+
+// ── 时间格式化 ─────────────────────────────────────────────────────────
+function formatSmartTime(d) {
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(now.getDate() + 1);
+  const isTomorrow = d.toDateString() === tomorrow.toDateString();
+
+  const hm = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  if (isToday) return `今天 ${hm}`;
+  if (isTomorrow) return `明天 ${hm}`;
+  return `${d.getMonth()+1}月${d.getDate()}日 ${hm}`;
+}
+
+// ── 深度分析弹窗 ───────────────────────────────────────────────────────
+async function showSmartDetail(fixtureId, withAI) {
+  const overlay = document.getElementById('smart-detail-overlay');
+  const modal   = document.getElementById('smart-detail-modal');
+  const inner   = document.getElementById('smart-detail-inner');
+
+  overlay.classList.remove('hidden');
+  modal.classList.remove('hidden');
+
+  // 先找本地缓存的 ML 数据
+  const match = smartMatches.find(m => m.fixture_id === fixtureId);
+
+  if (!withAI && match) {
+    // 纯 ML 查看，无需 API 调用
+    inner.innerHTML = buildDetailView(match, null);
+    return;
+  }
+
+  // 显示 Loading
+  inner.innerHTML = `
+    <div class="smart-detail-loading">
+      <i class="fas fa-robot fa-spin fa-2x" style="color:var(--orange)"></i>
+      <p>AI 正在深度分析，通常需要 10-20 秒...</p>
+      <small style="color:var(--muted)">正在调用 Gemini 大模型 + 历史数据库</small>
+    </div>`;
+
+  try {
+    const res = await fetch('/api/smart-predict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ fixture_id: fixtureId, with_ai: withAI }),
+    });
+    const data = await res.json();
+
+    if (res.status === 401) {
+      closeSmartDetail();
+      openModal('login');
+      showToast('请先登录后再使用此功能', 'error');
+      return;
+    }
+    if (res.status === 403) {
+      inner.innerHTML = `
+        <div class="smart-detail-loading">
+          <i class="fas fa-coins fa-2x" style="color:var(--amber)"></i>
+          <p>${data.message || '积分不足'}</p>
+          <button class="btn-primary" onclick="closeSmartDetail(); doCheckin()" style="margin-top:1rem">
+            <i class="fas fa-calendar-check"></i> 立即签到获取积分
+          </button>
+        </div>`;
+      return;
+    }
+    if (!data.success) {
+      inner.innerHTML = `<div class="error-msg">❌ ${data.message || '分析失败'}</div>`;
+      return;
+    }
+
+    inner.innerHTML = buildDetailView(data, data.ai_analysis);
+    refreshCredits();
+
+  } catch (e) {
+    inner.innerHTML = `<div class="error-msg">❌ 网络错误，请稍后重试</div>`;
+  }
+}
+
+// ── 构建弹窗内容 ───────────────────────────────────────────────────────
+function buildDetailView(data, aiText) {
+  const ml  = data.ml_prediction || {};
+  const mov = data.odds_movement || {};
+  const odds = data.current_odds || {};
+
+  const ph = Math.round((ml.home_prob || 0) * 100);
+  const pd = Math.round((ml.draw_prob || 0) * 100);
+  const pa = Math.round((ml.away_prob || 0) * 100);
+
+  const rec = ml.recommendation || data.ai_recommendation || '';
+  const recClass = rec.includes('强推') ? 'sdr-rec-strong' :
+                   rec.includes('偏向') ? 'sdr-rec-normal' : 'sdr-rec-caution';
+
+  const matchTime = data.match_time ? new Date(data.match_time) : null;
+
+  // 赔率变动说明
+  const signalMap = {
+    'strong_down': '🔥 赔率大幅下降，市场资金大量涌入看好该方，值得关注',
+    'down':        '📉 赔率略有下降，市场小幅看好',
+    'stable':      '➡️ 赔率稳定，市场分歧均衡',
+    'up':          '📈 赔率略有上升，部分资金流出',
+    'strong_up':   '⚠️ 赔率大幅上升，市场资金撤离，慎重参考',
+  };
+  const signal = mov.signal ? (signalMap[mov.signal] || '') : '';
+
+  // AI 文本格式化
+  const formattedAI = aiText
+    ? aiText
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/###\s*/g, '')
+    : null;
+
+  return `
+    <div class="sdr-header">
+      <div class="sdr-matchup">${data.home_team} <span style="color:var(--orange);font-size:.9rem">vs</span> ${data.away_team}</div>
+      <div class="sdr-league">${data.league || ''} ${matchTime ? '· ' + formatSmartTime(matchTime) : ''}</div>
+    </div>
+
+    ${ml.home_prob ? `
+    <div class="sdr-prob-grid">
+      <div class="sdr-prob-item sdr-prob-home">
+        <div class="sdr-prob-label">主胜概率</div>
+        <div class="sdr-prob-val">${ph}%</div>
+        <div class="sdr-prob-sub">${data.home_team}</div>
+      </div>
+      <div class="sdr-prob-item sdr-prob-draw">
+        <div class="sdr-prob-label">平局概率</div>
+        <div class="sdr-prob-val">${pd}%</div>
+        <div class="sdr-prob-sub">两队互相制约</div>
+      </div>
+      <div class="sdr-prob-item sdr-prob-away">
+        <div class="sdr-prob-label">客胜概率</div>
+        <div class="sdr-prob-val">${pa}%</div>
+        <div class="sdr-prob-sub">${data.away_team}</div>
+      </div>
+    </div>
+    ${rec ? `<div class="sdr-rec-banner ${recClass}"><i class="fas fa-crosshairs"></i> ${rec}</div>` : ''}
+    ` : '<div class="smart-no-ml"><i class="fas fa-clock"></i> 暂无 ML 概率数据（比赛球队在我们数据库中尚无足够历史记录）</div>'}
+
+    ${odds.home ? `
+    <div style="margin-bottom:1rem">
+      <div class="sdr-ai-title"><i class="fas fa-chart-line"></i> 当前赔率</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem">
+        <div style="text-align:center;padding:.6rem;background:rgba(255,255,255,.04);border-radius:10px;border:1px solid var(--border)">
+          <div style="font-size:.62rem;color:var(--muted);margin-bottom:.2rem">主胜</div>
+          <div style="font-size:1.1rem;font-weight:800;color:var(--amber)">${odds.home?.toFixed(2)}</div>
+          ${mov.home_change ? `<div style="font-size:.6rem;color:${mov.home_change < 0 ? 'var(--green)' : 'var(--red)'}">开盘 ${mov.home_change < 0 ? '↓' : '↑'}${Math.abs(mov.home_change).toFixed(2)}</div>` : ''}
+        </div>
+        <div style="text-align:center;padding:.6rem;background:rgba(255,255,255,.04);border-radius:10px;border:1px solid var(--border)">
+          <div style="font-size:.62rem;color:var(--muted);margin-bottom:.2rem">平局</div>
+          <div style="font-size:1.1rem;font-weight:800;color:var(--amber)">${odds.draw?.toFixed(2)}</div>
+        </div>
+        <div style="text-align:center;padding:.6rem;background:rgba(255,255,255,.04);border-radius:10px;border:1px solid var(--border)">
+          <div style="font-size:.62rem;color:var(--muted);margin-bottom:.2rem">客胜</div>
+          <div style="font-size:1.1rem;font-weight:800;color:var(--amber)">${odds.away?.toFixed(2)}</div>
+        </div>
+      </div>
+      ${signal ? `<div style="margin-top:.7rem;font-size:.75rem;color:var(--sub);padding:.5rem .8rem;background:rgba(255,255,255,.03);border-radius:8px">${signal}</div>` : ''}
+    </div>
+    ` : ''}
+
+    ${formattedAI ? `
+    <div class="sdr-ai-title"><i class="fas fa-robot"></i> Gemini AI 深度研报</div>
+    <div class="sdr-ai-text">${formattedAI}</div>
+    <div class="sdr-credits-note">
+      <i class="fas fa-coins" style="color:var(--amber)"></i>
+      本次深度分析已扣除 2 积分。每日签到可补充积分。
+    </div>
+    ` : `
+    <div style="margin-top:1rem;padding:1rem;background:rgba(232,146,74,.06);border:1px solid rgba(232,146,74,.15);border-radius:12px;font-size:.82rem;color:var(--sub)">
+      <i class="fas fa-lightbulb" style="color:var(--orange)"></i>
+      想要 AI 深度分析这场比赛？点击右下角<strong style="color:var(--text)">「AI 深度分析」</strong>按钮，
+      Gemini 将结合历史数据、球队近期状态、赔率变动信号给出完整研报（消耗 2 积分）。
+    </div>
+    `}
+  `;
+}
+
+function closeSmartDetail() {
+  document.getElementById('smart-detail-overlay').classList.add('hidden');
+  document.getElementById('smart-detail-modal').classList.add('hidden');
+}
+
+// ── 初始化 DOMContentLoaded 补充 ─────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  initWCTeams();
+  // 更新 nav credits 显示（若有）
+  const navCredits = document.getElementById('nav-credits');
+  if (navCredits) {
+    fetch('/api/user/credits', { credentials: 'same-origin' })
+      .then(r => r.json())
+      .then(d => { if (d.success) navCredits.textContent = d.credits; })
+      .catch(() => {});
+  }
+});
