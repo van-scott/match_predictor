@@ -15,12 +15,14 @@ except ImportError as e:
     print(f"⚠️ 数据库模块导入失败: {e}")
     prediction_db = None
 
-# 延迟导入，避免在Vercel环境中的问题
 try:
-    from lottery_api import ChinaSportsLotterySpider
-except ImportError as e:
-    print(f"导入彩票API失败: {e}")
-    ChinaSportsLotterySpider = None
+    from scripts.lottery_api import ChinaSportsLotterySpider
+except ImportError:
+    try:
+        from lottery_api import ChinaSportsLotterySpider
+    except ImportError as e:
+        print(f"导入彩票API失败: {e}")
+        ChinaSportsLotterySpider = None
 
 try:
     from scripts.ai_predictor import AIFootballPredictor
@@ -34,16 +36,19 @@ except ImportError:
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-in-production') # 在生产环境中务必设置一个强随机 SECRET_KEY
 # Session/Cookie 配置，确保登录态可用
+# 检测是否为本地开发环境（HTTP）
+_IS_LOCAL = os.environ.get('FLASK_ENV', 'production') == 'development' \
+    or os.environ.get('FLASK_DEBUG', '0') == '1' \
+    or os.environ.get('LOCAL_DEV', '0') == '1'
+
 app.config.update(
     SESSION_COOKIE_NAME='mp_session',
-    # 'None' 是为了支持跨站点请求（例如前端与后端域名不同），但要求 Secure=True (HTTPS)
-    # 如果前端和后端在同一个主域的不同子域（例如 app.example.com 和 api.example.com），
-    # 并且 SESSION_COOKIE_DOMAIN 设置为 '.example.com'，则 Cookie 会在子域间共享。
-    SESSION_COOKIE_SAMESITE=os.environ.get('SESSION_COOKIE_SAMESITE', 'None'),
-    SESSION_COOKIE_SECURE=True, # 必须为 True，因为 SameSite=None
-    # 可选：通过环境变量设置 Cookie 域名（例如 .match-predict.vercel.app，注意开头的点）
-    # 如果不设置，则默认为当前请求的域名。在跨子域共享时才需要设置。
-    SESSION_COOKIE_DOMAIN=os.environ.get('SESSION_COOKIE_DOMAIN'),
+    # 本地 HTTP 开发：SameSite=Lax, Secure=False（浏览器允许 HTTP Cookie）
+    # 生产 HTTPS 环境：SameSite=None, Secure=True（支持跨站请求）
+    SESSION_COOKIE_SAMESITE='Lax' if _IS_LOCAL else os.environ.get('SESSION_COOKIE_SAMESITE', 'Lax'),
+    SESSION_COOKIE_SECURE=False if _IS_LOCAL else True,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_DOMAIN=None if _IS_LOCAL else os.environ.get('SESSION_COOKIE_DOMAIN'),
     PERMANENT_SESSION_LIFETIME=timedelta(days=7)
 )
 
@@ -409,77 +414,165 @@ def get_prediction_stats():
             'message': f'获取统计信息失败: {str(e)}'
         }), 500
 
+# ── 深度权重预测（Tab1: /api/analyze/classic）────────────────────
+@app.route('/api/analyze/classic', methods=['POST'])
+def analyze_classic():
+    """深度权重预测 - 消耗1积分"""
+    import math
+    try:
+        current_user = get_current_user()
+        if not current_user:
+            return jsonify({'success': False, 'message': '请先登录', 'error_code': 'NOT_LOGGED_IN'}), 401
+        if not prediction_db:
+            return jsonify({'success': False, 'message': '数据库服务不可用'}), 500
+        COST = 1
+        credits = prediction_db.get_user_credits(current_user['id'])
+        if credits < COST:
+            return jsonify({'success': False, 'error_code': 'INSUFFICIENT_CREDITS',
+                'message': f'积分不足（需要{COST}积分，当前{credits}积分）',
+                'cost': COST, 'current_credits': credits}), 402
+        data = request.get_json() or {}
+        matches = data.get('matches', [])
+        if not matches:
+            return jsonify({'success': False, 'message': '未提供比赛数据'}), 400
+        prediction_db.deduct_credits(current_user['id'], COST)
+        individual_predictions = []
+        for m in matches:
+            odds = (m.get('odds') or {}).get('hhad', {})
+            ho = float(odds.get('h') or m.get('home_odds') or 2.0)
+            do_ = float(odds.get('d') or m.get('draw_odds') or 3.2)
+            ao = float(odds.get('a') or m.get('away_odds') or 3.5)
+            home = m.get('home_team', '')
+            away = m.get('away_team', '')
+            league = m.get('league_code', '') or m.get('league_name', '')
+            raw_h, raw_d, raw_a = 1/max(ho,1.01), 1/max(do_,1.01), 1/max(ao,1.01)
+            total = raw_h + raw_d + raw_a
+            ph, pd, pa = raw_h/total, raw_d/total, raw_a/total
+            if ph >= pd and ph >= pa: rec = '主胜'
+            elif pd >= ph and pd >= pa: rec = '平局'
+            else: rec = '客胜'
+            lam_h = max(-math.log(max(1-ph, 0.01)) * 1.5, 0.3)
+            lam_a = max(-math.log(max(1-pa, 0.01)) * 1.5, 0.3)
+            score_h = min(round(lam_h), 4)
+            score_a = min(round(lam_a), 4)
+            best_odds = ho if rec=='主胜' else (do_ if rec=='平局' else ao)
+            best_prob = ph if rec=='主胜' else (pd if rec=='平局' else pa)
+            individual_predictions.append({
+                'home_team': home, 'away_team': away, 'league': league, 'mode': 'statistical',
+                'probabilities': {'home': round(ph,4), 'draw': round(pd,4), 'away': round(pa,4)},
+                'recommendation': rec,
+                'score_prediction': f'{score_h}-{score_a}',
+                'halftime_prediction': '主胜' if ph>0.45 else ('平局' if pd>0.35 else '客胜'),
+                'halftime_score': f'{max(score_h-1,0)}-{max(score_a-1,0)}',
+                'ht_ft_combo': f'{"主胜" if ph>0.45 else "平局"}/{"主胜" if ph>0.4 else "平局"}',
+                'top_scores': [
+                    {'score': f'{score_h}-{score_a}', 'prob': round(ph*35,1)},
+                    {'score': f'{score_h+1}-{score_a}', 'prob': round(ph*18,1)},
+                    {'score': f'{score_h}-{score_a+1}', 'prob': round(pa*22,1)},
+                    {'score': '1-1', 'prob': round(pd*30,1)},
+                    {'score': '0-0', 'prob': round(pd*18,1)},
+                ],
+                'expected_values': {'home': round(ph*ho-1,3), 'draw': round(pd*do_-1,3), 'away': round(pa*ao-1,3)},
+                'best_bet': {'label': rec, 'odds': best_odds, 'ev': round(best_prob*best_odds-1, 3)},
+            })
+        credits_after = prediction_db.get_user_credits(current_user['id'])
+        return jsonify({'success': True, 'individual_predictions': individual_predictions, 'credits_remaining': credits_after})
+    except Exception as e:
+        app.logger.error(f'深度权重预测失败: {e}', exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @app.route('/api/ai/predict', methods=['POST'])
 def ai_predict():
-    """AI智能预测接口"""
+    """AI大模型预测 - 鉴权+扣积分，返回 prompt+api_key 供浏览器调用 Gemini（Tab2）"""
     try:
-        data = request.get_json()
+        current_user = get_current_user()
+        if not current_user:
+            return jsonify({'success': False, 'message': '请先登录', 'error_code': 'NOT_LOGGED_IN'}), 401
+        if not prediction_db:
+            return jsonify({'success': False, 'message': '数据库服务不可用'}), 500
+
+        data = request.get_json() or {}
         matches = data.get('matches', [])
-        
         if not matches:
-            return jsonify({
-                'success': False,
-                'error': '没有提供比赛数据'
-            }), 400
-        
-        app.logger.info(f"收到AI预测请求，比赛数量: {len(matches)}")
-        
-        # 确保AI预测器可用
-        current_predictor = ai_predictor
-        if not current_predictor:
-            try:
-                gemini_api_key = os.environ.get('GEMINI_API_KEY')
-                gemini_model = os.environ.get('GEMINI_MODEL', 'gemini-2.5-flash-lite-preview-06-17')
-                
-                if not gemini_api_key:
-                    return jsonify({
-                        'success': False,
-                        'error': 'GEMINI_API_KEY环境变量未设置'
-                    }), 500
-                    
-                current_predictor = AIFootballPredictor(
-                    api_key=gemini_api_key,
-                    model_name=gemini_model
-                )
-                app.logger.info("临时创建AI预测器")
-            except Exception as e:
-                app.logger.error(f"创建AI预测器失败: {e}")
-                return jsonify({
-                    'success': False,
-                    'error': 'AI预测器初始化失败'
-                }), 500
-        
-        # 分析比赛
-        analyses = current_predictor.analyze_matches(matches)
-        
-        # 转换为简单格式返回
-        results = []
-        for analysis in analyses:
-            results.append({
-                'match_id': analysis.match_id,
-                'home_team': analysis.home_team,
-                'away_team': analysis.away_team,
-                'league_name': analysis.league_name,
-                'ai_analysis': analysis.ai_analysis,
-                'odds': {
-                    'home': analysis.home_odds,
-                    'draw': analysis.draw_odds,
-                    'away': analysis.away_odds
-                }
-            })
-        
-        return jsonify({
-            'success': True,
-            'predictions': results,
-            'count': len(results)
-        })
-        
+            return jsonify({'success': False, 'message': '未提供比赛数据'}), 400
+
+        COST_PER_MATCH = 3
+        total_cost = len(matches) * COST_PER_MATCH
+        credits = prediction_db.get_user_credits(current_user['id'])
+        if credits < total_cost:
+            return jsonify({'success': False, 'error_code': 'INSUFFICIENT_CREDITS',
+                'message': f'积分不足（需要{total_cost}积分，当前{credits}积分）',
+                'cost': total_cost, 'current_credits': credits}), 402
+
+        prediction_db.deduct_credits(current_user['id'], total_cost)
+
+        gemini_key = os.environ.get('GEMINI_API_KEY', '')
+        gemini_model = os.environ.get('GEMINI_MODEL', 'gemini-2.0-flash-exp')
+        enriched = []
+        for m in matches:
+            home = m.get('home_team', '') or m.get('home', '')
+            away = m.get('away_team', '') or m.get('away', '')
+            league = m.get('league_name', '') or m.get('league', '')
+            ho = m.get('home_odds') or (m.get('odds') or {}).get('h') or (m.get('odds') or {}).get('hhad', {}).get('h', '-')
+            do_ = m.get('draw_odds') or (m.get('odds') or {}).get('d') or (m.get('odds') or {}).get('hhad', {}).get('d', '-')
+            ao = m.get('away_odds') or (m.get('odds') or {}).get('a') or (m.get('odds') or {}).get('hhad', {}).get('a', '-')
+            t = m.get('match_time', '') or m.get('match_date', '')
+            prompt = f"""请对以下足球比赛进行深度分析预测（中文，800字以内）：
+
+**比赛信息**
+联赛：{league} | 比赛时间：{t}
+主队：{home}  vs  客队：{away}
+当前赔率：主胜 {ho} / 平局 {do_} / 客胜 {ao}
+
+**分析维度**
+1. 赔率解读：从赔率反推隐含概率，判断市场倾向
+2. 球队分析：近期状态、主客场表现、历史交锋记录
+3. 关键因素：伤病/停赛、积分压力、赛季阶段
+4. 预测结论：明确推荐主胜/平局/客胜，并给出理由
+5. 风险提示：指出不确定性因素
+
+用清晰段落结构回答。"""
+            enriched.append({**m, 'home_team': home, 'away_team': away, 'league_name': league,
+                'home_odds': ho, 'draw_odds': do_, 'away_odds': ao, 'prompt': prompt, 'from_cache': False})
+
+        return jsonify({'success': True, 'api_key': gemini_key, 'model': gemini_model,
+            'matches': enriched, 'credits_deducted': total_cost})
+
     except Exception as e:
-        app.logger.error(f"AI预测失败: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+        app.logger.error(f'AI预测初始化失败: {e}', exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+
+@app.route('/api/ai/save', methods=['POST'])
+def ai_save():
+    """保存 AI 分析结果（fire-and-forget，不影响主流程）"""
+    try:
+        current_user = get_current_user()
+        data = request.get_json() or {}
+        results = data.get('results', [])
+        if not results or not prediction_db or not current_user:
+            return jsonify({'success': True, 'saved': 0})
+        saved = 0
+        for r in results:
+            try:
+                if hasattr(prediction_db, 'save_prediction'):
+                    prediction_db.save_prediction(
+                        user_id=current_user['id'],
+                        home_team=r.get('home_team', ''),
+                        away_team=r.get('away_team', ''),
+                        league=r.get('league_name', ''),
+                        match_time=r.get('match_time', ''),
+                        prediction_type='ai',
+                        result=r.get('ai_analysis', ''),
+                    )
+                saved += 1
+            except Exception:
+                pass
+        return jsonify({'success': True, 'saved': saved})
+    except Exception:
+        return jsonify({'success': True, 'saved': 0})
 
 @app.route('/api/predict', methods=['POST'])
 def predict():
@@ -659,6 +752,37 @@ def test():
         'timestamp': datetime.now().isoformat()
     })
 
+@app.route('/api/sync/status')
+def sync_status():
+    """赛程同步状态 - 返回最后一次同步时间"""
+    try:
+        last_sync = None
+        if prediction_db:
+            with prediction_db.get_db_connection() as conn:
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT MAX(updated_at) FROM upcoming_fixtures
+                """)
+                row = cur.fetchone()
+                if row and row[0]:
+                    # 格式化为北京时间
+                    import pytz
+                    cst = pytz.timezone('Asia/Shanghai')
+                    dt = row[0]
+                    if dt.tzinfo is None:
+                        import pytz as _tz
+                        dt = _tz.utc.localize(dt)
+                    dt_cst = dt.astimezone(cst)
+                    last_sync = dt_cst.strftime('%m-%d %H:%M')
+        return jsonify({
+            'success': True,
+            'last_sync_time': last_sync,
+            'message': f'上次同步: {last_sync}' if last_sync else '暂无同步记录'
+        })
+    except Exception as e:
+        return jsonify({'success': True, 'last_sync_time': None, 'message': '状态获取失败'})
+
+
 @app.route('/health')
 def health():
     """健康检查"""
@@ -756,33 +880,15 @@ def login():
             session.permanent = True
             
             app.logger.info(f"用户登录成功，设置会话: {username}")
-            resp = jsonify({
+            return jsonify({
                 'success': True,
                 'message': '登录成功',
                 'user': {
                     'username': user['username'],
                     'user_type': user['user_type'],
-                    'daily_predictions_used': user['daily_predictions_used'],
-                    'total_predictions': user['total_predictions']
+                    'credits': user.get('credits', 0),
                 }
             })
-            # 显式设置 Flask session cookie 值，确保 Set-Cookie 在响应头中可见
-            try:
-                serializer = app.session_interface.get_signing_serializer(app)
-                if serializer:
-                    session_cookie_val = serializer.dumps(dict(session))
-                    resp.set_cookie(app.config.get('SESSION_COOKIE_NAME', 'mp_session'),
-                                    session_cookie_val,
-                                    samesite=os.environ.get('SESSION_COOKIE_SAMESITE', 'None'),
-                                    secure=True,
-                                    httponly=True,
-                                    domain=app.config.get('SESSION_COOKIE_DOMAIN'))
-                # 额外设置一个非 HttpOnly 的测试 Cookie 便于调试（可见于 DevTools -> Cookies）
-                pass # 移除调试Cookie设置
-            except Exception as e:
-                app.logger.warning(f"设置Cookie失败: {e}", exc_info=True)
-                pass
-            return resp
         else:
             app.logger.warning(f"用户登录失败: 用户名或密码错误 - {username}")
             return jsonify({'success': False, 'message': '用户名或密码错误'}), 401
@@ -1485,10 +1591,17 @@ def get_available_leagues():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+# ── 应用入口 ──────────────────────────────────────────────────────────────
+if __name__ == '__main__':
     # 启动时确保积分字段存在
     if prediction_db:
         try:
             prediction_db.ensure_credits_columns()
         except Exception as e:
             app.logger.warning(f"积分字段初始化跳过: {e}")
-    app.run(debug=True, host='0.0.0.0', port=8000)
+
+    port = int(os.environ.get('PORT', 8000))
+    debug = os.environ.get('FLASK_DEBUG', '0') == '1'
+    app.logger.info(f"🚀 MatchPredict 启动 → http://0.0.0.0:{port}")
+    # use_reloader=False: 避免 debug 模式下 APScheduler 启动两次
+    app.run(debug=debug, host='0.0.0.0', port=port, use_reloader=False)

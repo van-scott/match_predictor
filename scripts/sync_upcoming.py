@@ -21,18 +21,7 @@ import requests
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-# 加载 .env 文件（确保直接运行脚本时也能读取环境变量）
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-_env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
-if os.path.exists(_env_path):
-    with open(_env_path) as f:
-        for line in f:
-            line = line.strip()
-            if line and not line.startswith('#') and '=' in line:
-                key, val = line.split('=', 1)
-                key, val = key.strip(), val.strip()
-                if key and key not in os.environ:
-                    os.environ[key] = val
 
 logging.basicConfig(
     level=logging.INFO,
@@ -53,15 +42,9 @@ LEAGUE_NAMES = {
     "FL1": "法甲",
     "CL":  "欧冠",
     "EL":  "欧联",
-    "ELC": "英冠",
-    "DED": "荷甲",
-    "PPL": "葡超",
-    "BSA": "巴甲",
-    "CLI": "解放者杯",
 }
 
-# 按优先级排序：欧洲五大联赛 → 欧洲杯赛 → 其他欧洲联赛 → 南美（全年保底）
-DEFAULT_LEAGUES = ["PL", "PD", "SA", "BL1", "FL1", "CL", "ELC", "DED", "PPL", "BSA", "CLI"]
+DEFAULT_LEAGUES = ["PL", "PD", "SA", "BL1", "FL1"]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -86,10 +69,6 @@ def fetch_upcoming(league_id: str, days_ahead: int = 14) -> list:
             logger.warning("限速，等待60秒...")
             time.sleep(60)
             return fetch_upcoming(league_id, days_ahead)
-        elif resp.status_code in (403, 404):
-            # 免费套餐不含该联赛或赛季未开始，静默跳过
-            logger.debug(f"{league_id} 不可用（HTTP {resp.status_code}），跳过")
-            return []
         else:
             logger.warning(f"{league_id} HTTP {resp.status_code}")
             return []
@@ -159,10 +138,7 @@ def upsert_fixtures(fixtures: list, db) -> int:
                         CURRENT_TIMESTAMP
                     )
                     ON CONFLICT (fixture_id) DO UPDATE SET
-                        status      = CASE
-                                        WHEN upcoming_fixtures.status = 'FINISHED' THEN upcoming_fixtures.status
-                                        ELSE EXCLUDED.status
-                                      END,
+                        status      = EXCLUDED.status,
                         home_odds   = COALESCE(EXCLUDED.home_odds, upcoming_fixtures.home_odds),
                         draw_odds   = COALESCE(EXCLUDED.draw_odds, upcoming_fixtures.draw_odds),
                         away_odds   = COALESCE(EXCLUDED.away_odds, upcoming_fixtures.away_odds),
@@ -219,10 +195,7 @@ def batch_ml_predict(db) -> int:
 
             for fixture_id, home_team, away_team, home_odds, draw_odds, away_odds in rows:
                 proba = predict_probabilities(
-                    home_team, away_team, team_stats, df, model_pkg,
-                    home_odds=float(home_odds) if home_odds else None,
-                    draw_odds=float(draw_odds) if draw_odds else None,
-                    away_odds=float(away_odds) if away_odds else None,
+                    home_team, away_team, team_stats, df, model_pkg
                 )
                 if not proba:
                     continue
@@ -260,39 +233,21 @@ def _kelly_recommend(proba: dict, home_odds: Optional[float],
     label_map = {'H': '主胜', 'D': '平局', 'A': '客胜'}
     if not proba:
         return "数据不足"
-    
-    # 过滤掉非概率键（如 confidence）
-    prob_only = {k: v for k, v in proba.items() if k in ('H', 'D', 'A')}
-    if not prob_only:
-        return "数据不足"
-    
-    best = max(prob_only, key=prob_only.get)
-    best_prob = float(prob_only[best])
-    
-    # 置信度过滤
-    confidence = proba.get('confidence', 'medium')
-    if confidence == 'low':
-        return f"低置信度/{label_map[best]}（{best_prob*100:.1f}%，不推荐）"
+    best = max(proba, key=proba.get)
+    best_prob = proba[best]
 
     if home_odds and draw_odds and away_odds:
-        ho, do, ao = float(home_odds), float(draw_odds), float(away_odds)
-        total = 1/ho + 1/do + 1/ao
-        impl = {'H': 1/ho/total, 'D': 1/do/total, 'A': 1/ao/total}
+        total = 1/home_odds + 1/draw_odds + 1/away_odds
+        impl = {'H': 1/home_odds/total, 'D': 1/draw_odds/total, 'A': 1/away_odds/total}
         edge = best_prob - impl.get(best, 0)
-        
-        confidence_tag = "⭐" if confidence == 'high' else ""
-        
         if edge >= 0.07:
-            return f"强推{label_map[best]}（优势{edge*100:.1f}%）{confidence_tag}"
+            return f"强推{label_map[best]}（优势{edge*100:.1f}%）"
         elif edge >= 0.04:
-            return f"偏向{label_map[best]}（优势{edge*100:.1f}%）{confidence_tag}"
+            return f"偏向{label_map[best]}（优势{edge*100:.1f}%）"
         else:
             return f"谨慎/{label_map[best]}（优势<4%）"
     else:
-        if confidence == 'high':
-            return f"ML强推{label_map[best]}（{best_prob*100:.1f}%）⭐"
-        else:
-            return f"ML倾向{label_map[best]}（{best_prob*100:.1f}%）"
+        return f"ML倾向{label_map[best]}（{best_prob*100:.1f}%）"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -347,175 +302,6 @@ def sync_odds_movement(fixtures: list, db) -> int:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 5. 从 the-odds-api.com 获取赔率
-# ─────────────────────────────────────────────────────────────────────────────
-
-ODDS_API_KEY = os.getenv("ODDS_API_KEY", "bacff6d40e0464574885dcc2bdcb9833")
-ODDS_API_URL = "https://api.the-odds-api.com/v4/sports"
-
-# 去除音调、常见前后缀，用于球队名模糊匹配
-import unicodedata, re as _re
-
-_TEAM_PREFIXES = _re.compile(
-    r'^(CA|CD|SC|CR|SE|EC|CS|CDP|CAR|CF|RC|FC|AC|AS|SS|OGC|UD|RCD|SV|VfB|VfL|1\.|AFC|RB|SL)\s+',
-    _re.IGNORECASE
-)
-_TEAM_SUFFIXES = _re.compile(
-    r'\s+(FC|SC|AC|BC|CF|de\s+\w+|FBPA|\d{4}|-[A-Z]{2,})$',
-    _re.IGNORECASE
-)
-
-def _norm_team(name: str) -> str:
-    """规范化球队名：去音调、去常见前后缀、小写化，用于模糊匹配。"""
-    s = unicodedata.normalize('NFKD', name)
-    s = ''.join(c for c in s if not unicodedata.combining(c))  # 去掉音调
-    s = _TEAM_PREFIXES.sub('', s.strip())
-    s = _TEAM_SUFFIXES.sub('', s.strip())
-    s = _re.sub(r'[-_].*$', '', s)  # 去掉 -RJ / -SP 等城市后缀
-    return s.strip().lower()
-
-# the-odds-api 的 sport key 与我们的联赛代码映射
-ODDS_SPORT_MAP = {
-    "PL":  "soccer_epl",
-    "PD":  "soccer_spain_la_liga",
-    "SA":  "soccer_italy_serie_a",
-    "BL1": "soccer_germany_bundesliga",
-    "FL1": "soccer_france_ligue_one",
-    "CL":  "soccer_uefa_champs_league",
-    "BSA": "soccer_brazil_campeonato",
-    "CLI": "soccer_conmebol_copa_libertadores",
-    "ELC": "soccer_england_league1",   # 英冠（Championship）
-    "DED": "soccer_netherlands_eredivisie",
-    "PPL": "soccer_portugal_primeira_liga",
-}
-
-
-def sync_odds_from_api(db) -> int:
-    """
-    从 the-odds-api.com 获取五大联赛赔率，写入 upcoming_fixtures.home_odds/draw_odds/away_odds。
-    通过球队名模糊匹配关联。
-    """
-    if not ODDS_API_KEY:
-        logger.warning("ODDS_API_KEY 未设置，跳过赔率同步")
-        return 0
-
-    updated = 0
-    from difflib import get_close_matches
-
-    try:
-        with db.get_db_connection() as conn:
-            cur = conn.cursor()
-
-            # 预加载 DB 中所有待赔率的比赛，用于 Python 侧模糊匹配
-            cur.execute("""
-                SELECT fixture_id, league_code, home_team, away_team
-                FROM upcoming_fixtures
-                WHERE status IN ('SCHEDULED', 'TIMED') AND match_time > NOW()
-            """)
-            db_fixtures = cur.fetchall()  # [(fixture_id, league_code, home_team, away_team), ...]
-
-            # 构建 {league_code: [(fixture_id, norm_home, norm_away, orig_home, orig_away), ...]}
-            db_by_league: dict = {}
-            for fid, lc, ht, at in db_fixtures:
-                db_by_league.setdefault(lc, []).append(
-                    (fid, _norm_team(ht), _norm_team(at), ht, at)
-                )
-
-            for league_code, sport_key in ODDS_SPORT_MAP.items():
-                if league_code not in db_by_league:
-                    continue  # 该联赛本次无待同步比赛
-                try:
-                    resp = requests.get(
-                        f"{ODDS_API_URL}/{sport_key}/odds",
-                        params={
-                            'apiKey': ODDS_API_KEY,
-                            'regions': 'eu',
-                            'markets': 'h2h',
-                            'oddsFormat': 'decimal',
-                        },
-                        timeout=15
-                    )
-                    if resp.status_code == 404:
-                        logger.debug(f"  {league_code} 赔率暂不可用（赛季外），跳过")
-                        continue
-                    if resp.status_code != 200:
-                        logger.warning(f"  {league_code} 赔率获取失败: HTTP {resp.status_code}")
-                        continue
-
-                    api_matches = resp.json()
-                    if not api_matches:
-                        continue
-
-                    league_fixtures = db_by_league[league_code]
-                    # 建立规范化主队名 → fixture 的索引，用于快速查找
-                    norm_home_idx = {row[1]: row for row in league_fixtures}
-                    norm_away_idx = {row[2]: row for row in league_fixtures}
-
-                    for m in api_matches:
-                        api_home = m.get('home_team', '')
-                        api_away = m.get('away_team', '')
-                        bookmakers = m.get('bookmakers', [])
-                        if not bookmakers:
-                            continue
-
-                        # 取最多博彩公司数量的那家（数据最全）
-                        outcomes = {}
-                        best_bk = max(bookmakers, key=lambda b: len(b.get('markets', [])), default=None)
-                        if best_bk:
-                            for mkt in best_bk.get('markets', []):
-                                if mkt.get('key') == 'h2h':
-                                    for o in mkt.get('outcomes', []):
-                                        outcomes[o['name']] = o['price']
-                                    break
-
-                        h_odds = outcomes.get(api_home)
-                        a_odds = outcomes.get(api_away)
-                        d_odds = outcomes.get('Draw')
-                        if not h_odds or not a_odds:
-                            continue
-
-                        # 规范化 API 球队名，然后在 DB 索引中模糊匹配
-                        norm_h = _norm_team(api_home)
-                        norm_a = _norm_team(api_away)
-
-                        # 先尝试精确规范化匹配，再用 difflib 模糊匹配
-                        row = norm_home_idx.get(norm_h) or norm_away_idx.get(norm_a)
-                        if not row:
-                            all_norm_homes = list(norm_home_idx.keys())
-                            best = get_close_matches(norm_h, all_norm_homes, n=1, cutoff=0.6)
-                            if best:
-                                row = norm_home_idx[best[0]]
-
-                        if not row:
-                            logger.debug(f"  ⚠️  未能匹配: {api_home} vs {api_away}")
-                            continue
-
-                        fixture_id = row[0]
-                        orig_home, orig_away = row[3], row[4]
-
-                        cur.execute("""
-                            UPDATE upcoming_fixtures
-                            SET home_odds = %s, draw_odds = %s, away_odds = %s,
-                                updated_at = CURRENT_TIMESTAMP
-                            WHERE fixture_id = %s
-                        """, (h_odds, d_odds, a_odds, fixture_id))
-                        if cur.rowcount > 0:
-                            updated += 1
-                            logger.info(f"  💰 {orig_home} vs {orig_away}: {h_odds}/{d_odds}/{a_odds}")
-
-                    time.sleep(1)  # 避免限速
-
-                except Exception as e:
-                    logger.error(f"  {league_code} 赔率同步异常: {e}")
-
-            conn.commit()
-    except Exception as e:
-        logger.error(f"赔率同步失败: {e}", exc_info=True)
-
-    return updated
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 # 主流程
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -524,7 +310,6 @@ def main():
     parser.add_argument("--leagues", default=",".join(DEFAULT_LEAGUES))
     parser.add_argument("--days",    type=int, default=14, help="未来N天")
     parser.add_argument("--no-ml",   action="store_true", help="跳过 ML 预测步骤")
-    parser.add_argument("--no-odds", action="store_true", help="跳过赔率同步（节省 API 配额）")
     args = parser.parse_args()
 
     from scripts.database import prediction_db as db
@@ -554,14 +339,6 @@ def main():
         time.sleep(7)  # 免费版限速
 
     print(f"\n📊 共同步 {len(all_fixtures)} 场未开赛比赛")
-
-    # 从 the-odds-api.com 获取赔率并写入 upcoming_fixtures
-    if not args.no_odds:
-        print("\n💰 同步赔率数据（the-odds-api.com）...")
-        odds_updated = sync_odds_from_api(db)
-        print(f"   ✅ {odds_updated} 场比赛已更新赔率")
-    else:
-        print("\n⏭️  跳过赔率同步（--no-odds）")
 
     # 批量 ML 预测
     if not args.no_ml:

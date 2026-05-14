@@ -23,6 +23,10 @@ function switchTab(tab) {
   if (tab === 'ai' && lotteryMatches.length === 0) {
     loadLotteryMatches();
   }
+  // 智能选场：首次进入时加载比赛
+  if (tab === 'smart' && smartMatches.length === 0) {
+    loadSmartMatches();
+  }
 }
 
 // ── TEAMS ─────────────────────────────────────────────────────────────────
@@ -817,14 +821,7 @@ document.addEventListener('DOMContentLoaded', () => {
 let smartMatches = [];         // 全部未开赛比赛缓存
 let smartFilterLeague = 'all'; // 当前联赛筛选
 
-// Tab 切换时加载
-const _origSwitchTab = switchTab;
-function switchTab(tab) {
-  _origSwitchTab(tab);
-  if (tab === 'smart' && smartMatches.length === 0) {
-    loadSmartMatches();
-  }
-}
+// Tab 切换逻辑已合并到顶部 switchTab 函数中
 
 // ── 加载未开赛比赛 ────────────────────────────────────────────────────
 async function loadSmartMatches() {

@@ -1,1 +1,23 @@
+# 环境变量（含密钥，绝不提交）
+.env
 config.py
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# 数据和模型
+data/*.csv
+data/*.pkl
+models/*.pkl
+
+# 系统
+.DS_Store
+*.log
