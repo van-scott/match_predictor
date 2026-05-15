@@ -2658,3 +2658,391 @@ footer {
     transform: none;
 }
 
+
+/* ============== Prediction Record (.pr-*) ============== */
+
+/* Hero 区 */
+.pr-hero {
+    text-align: center;
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+}
+
+.pr-hero-icon {
+    font-size: 2.5rem;
+    color: var(--primary-color);
+    margin-bottom: 0.5rem;
+}
+
+.pr-hero-title {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: 0.3rem;
+}
+
+.pr-hero-subtitle {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+/* 状态区 */
+.pr-status {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 200px;
+}
+
+.pr-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    color: var(--text-secondary);
+}
+
+.pr-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.8rem;
+    color: var(--danger-color);
+}
+
+.pr-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.pr-empty i {
+    font-size: 2.5rem;
+    color: var(--text-light);
+}
+
+.pr-empty p {
+    font-size: 0.9rem;
+    text-align: center;
+    max-width: 320px;
+}
+
+/* 内容区 */
+.pr-content {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 1rem;
+}
+
+/* 统计卡 */
+.pr-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.pr-stat-card {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 1.2rem;
+    text-align: center;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-light);
+}
+
+.pr-stat-value {
+    font-size: 1.8rem;
+    font-weight: 900;
+    color: var(--primary-color);
+}
+
+.pr-stat-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 0.3rem;
+}
+
+/* 分联赛区 */
+.pr-leagues {
+    background: var(--card-bg);
+    padding: 1.2rem;
+    border-radius: 12px;
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-light);
+}
+
+.pr-leagues h3 {
+    font-size: 1rem;
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+}
+
+.pr-league-row {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    margin-bottom: 0.6rem;
+}
+
+.pr-league-name {
+    min-width: 60px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.pr-league-bar-bg {
+    flex: 1;
+    height: 8px;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.pr-league-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: var(--gradient-primary);
+}
+
+.pr-league-pct {
+    font-size: 0.75rem;
+    font-weight: 700;
+    min-width: 45px;
+    text-align: right;
+    color: var(--text-primary);
+}
+
+/* 趋势区 */
+.pr-trend {
+    background: var(--card-bg);
+    padding: 1.2rem;
+    border-radius: 12px;
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-light);
+}
+
+.pr-trend h3 {
+    font-size: 1rem;
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+}
+
+.pr-trend-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 80px;
+}
+
+.pr-trend-bar {
+    flex: 1;
+    border-radius: 3px 3px 0 0;
+    background: var(--primary-color);
+    min-width: 12px;
+    position: relative;
+}
+
+.pr-trend-label {
+    position: absolute;
+    bottom: -18px;
+    font-size: 0.6rem;
+    color: var(--text-light);
+    white-space: nowrap;
+}
+
+/* 筛选条 */
+.pr-filter {
+    display: flex;
+    gap: 0.8rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.pr-filter select {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    color: var(--text-primary);
+    font-size: 0.82rem;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.pr-filter select:focus {
+    border-color: var(--primary-color);
+}
+
+/* 比赛对比卡片 */
+.pr-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.pr-match-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: var(--shadow-light);
+}
+
+.pr-match-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.8rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.8rem;
+}
+
+.pr-league {
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+.pr-teams {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+}
+
+.pr-teams em {
+    font-style: normal;
+    color: var(--text-light);
+    margin: 0 0.3rem;
+}
+
+.pr-time {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+}
+
+/* 三维度对比区 */
+.pr-cmp {
+    padding: 1rem;
+}
+
+.pr-cmp-row {
+    display: grid;
+    grid-template-columns: 80px 1fr auto 1fr;
+    align-items: center;
+    gap: 12px;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--bg-secondary);
+}
+
+.pr-cmp-row:last-child {
+    border-bottom: none;
+}
+
+.pr-cmp-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+.pr-cmp-pred {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+.pr-cmp-actual {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--success-color);
+}
+
+.pr-hit-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 60px;
+    padding: 0.2rem 0.5rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.pr-hit-ok {
+    background: rgba(5, 150, 105, 0.15);
+    color: var(--success-color);
+}
+
+.pr-hit-no {
+    background: rgba(220, 38, 38, 0.15);
+    color: var(--danger-color);
+}
+
+.pr-hit-diff {
+    background: var(--bg-secondary);
+    color: var(--text-light);
+}
+
+/* 卡片底部 */
+.pr-match-foot {
+    padding: 0.6rem 1rem;
+    border-top: 1px solid var(--border-color);
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    display: flex;
+    gap: 1rem;
+}
+
+/* 分页器 */
+.pr-pagination {
+    display: flex;
+    justify-content: center;
+    gap: 0.4rem;
+    margin-top: 1.5rem;
+}
+
+.pr-page-btn {
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: transparent;
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.pr-page-btn:hover {
+    background: var(--bg-secondary);
+}
+
+.pr-page-btn.active {
+    background: var(--primary-color);
+    color: #ffffff;
+    border-color: var(--primary-color);
+}
+
+.pr-page-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* 响应式 */
+@media (max-width: 640px) {
+    .pr-cmp-row {
+        grid-template-columns: 1fr;
+        gap: 4px;
+    }
+    .pr-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .pr-match-head {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.3rem;
+    }
+}

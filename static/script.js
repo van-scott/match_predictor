@@ -5,6 +5,11 @@ let currentTab = 'classic';
 let teamsData = {};
 let lotteryMatches = [];
 let aiCart = [];
+let recordState = {
+  page: 1, perPage: 20, league: '', result: '',
+  loading: false, loaded: false,
+  summary: null, matchesPayload: null,
+};
 
 // ── INIT ──────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -27,6 +32,7 @@ function switchTab(tab) {
   if (tab === 'smart' && smartMatches.length === 0) {
     loadSmartMatches();
   }
+  if (tab === 'record') ensureRecordLoaded();
 }
 
 // ── TEAMS ─────────────────────────────────────────────────────────────────
@@ -1208,3 +1214,317 @@ document.addEventListener('DOMContentLoaded', () => {
       .catch(() => {});
   }
 });
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// 预测战绩 (Prediction Record) 模块
+// ═══════════════════════════════════════════════════════════════════════
+
+// ── Task 3.3: ensureRecordLoaded ──────────────────────────────────────
+function ensureRecordLoaded() {
+  if (recordState.loaded || recordState.loading) return;
+  // 一次性绑定筛选事件
+  const leagueFilter = document.getElementById('pr-filter-league');
+  const resultFilter = document.getElementById('pr-filter-result');
+  if (leagueFilter) {
+    leagueFilter.addEventListener('change', () => {
+      recordState.league = leagueFilter.value;
+      recordState.page = 1;
+      loadRecordMatches();
+    });
+  }
+  if (resultFilter) {
+    resultFilter.addEventListener('change', () => {
+      recordState.result = resultFilter.value;
+      recordState.page = 1;
+      loadRecordMatches();
+    });
+  }
+  loadRecord();
+}
+
+// ── Task 3.4: loadRecord + loadRecordSummary + loadRecordMatches ──────
+async function loadRecord() {
+  recordState.loading = true;
+  const statusEl = document.getElementById('pr-status');
+  const contentEl = document.getElementById('pr-content');
+  if (statusEl) statusEl.innerHTML = '<div class="pr-loading"><i class="fas fa-spinner fa-spin fa-2x"></i><span>加载中…</span></div>';
+  if (contentEl) contentEl.hidden = true;
+
+  try {
+    const [summaryData, matchesData] = await Promise.all([
+      loadRecordSummary(),
+      loadRecordMatchesInternal()
+    ]);
+    recordState.summary = summaryData;
+    recordState.matchesPayload = matchesData;
+    renderRecord(summaryData, matchesData);
+  } catch (err) {
+    renderRecordError(err.message || '加载失败');
+  } finally {
+    recordState.loading = false;
+    recordState.loaded = true;
+  }
+}
+
+async function loadRecordSummary() {
+  const res = await fetch('/api/accuracy/summary');
+  if (!res.ok) throw new Error(`服务器错误 (${res.status})`);
+  const data = await res.json();
+  if (!data.success) throw new Error(data.message || '获取统计失败');
+  return data;
+}
+
+async function loadRecordMatchesInternal() {
+  const params = new URLSearchParams();
+  params.set('page', recordState.page);
+  params.set('per_page', recordState.perPage);
+  if (recordState.league) params.set('league', recordState.league);
+  if (recordState.result) params.set('result', recordState.result);
+
+  const res = await fetch(`/api/accuracy/matches?${params.toString()}`);
+  if (!res.ok) throw new Error(`服务器错误 (${res.status})`);
+  const data = await res.json();
+  if (!data.success) throw new Error(data.message || '获取比赛列表失败');
+  return data;
+}
+
+async function loadRecordMatches() {
+  try {
+    const data = await loadRecordMatchesInternal();
+    recordState.matchesPayload = data;
+    renderRecordList(data.matches);
+    renderRecordPagination(data.total, data.page, data.per_page);
+  } catch (err) {
+    renderRecordError(err.message || '加载失败');
+  }
+}
+window.loadRecordMatches = loadRecordMatches;
+
+// ── Task 3.5: renderRecord + renderRecordEmpty + renderRecordError ─────
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderRecord(summaryData, matchesData) {
+  const statusEl = document.getElementById('pr-status');
+  const contentEl = document.getElementById('pr-content');
+  const summary = summaryData.summary || {};
+
+  if (!summary.total_predicted || summary.total_predicted === 0) {
+    renderRecordEmpty();
+    return;
+  }
+
+  // 有数据：隐藏状态区，显示内容区
+  if (statusEl) statusEl.innerHTML = '';
+  if (statusEl) statusEl.style.display = 'none';
+  if (contentEl) contentEl.hidden = false;
+
+  renderRecordStats(summary);
+  renderRecordLeagues(summaryData.league_stats || []);
+  renderRecordTrend(summaryData.trend || []);
+  renderRecordList(matchesData.matches || []);
+  renderRecordPagination(matchesData.total || 0, matchesData.page || 1, matchesData.per_page || 20);
+}
+
+function renderRecordEmpty() {
+  const statusEl = document.getElementById('pr-status');
+  const contentEl = document.getElementById('pr-content');
+  if (statusEl) {
+    statusEl.style.display = '';
+    statusEl.innerHTML = `<div class="pr-empty"><i class="fas fa-inbox fa-3x"></i><p>暂无已结束的比赛数据，比赛结束后会自动同步并生成对比</p></div>`;
+  }
+  if (contentEl) contentEl.hidden = true;
+}
+
+function renderRecordError(message) {
+  const statusEl = document.getElementById('pr-status');
+  const contentEl = document.getElementById('pr-content');
+  if (statusEl) {
+    statusEl.style.display = '';
+    statusEl.innerHTML = `<div class="pr-error"><i class="fas fa-exclamation-circle fa-2x"></i><p>${escapeHtml(message)}</p></div>`;
+  }
+  if (contentEl) contentEl.hidden = true;
+  console.error('[record]', message);
+}
+
+// ── Task 3.6: renderRecordStats / renderRecordLeagues / renderRecordTrend
+function renderRecordStats(summary) {
+  const el = document.getElementById('pr-stats');
+  if (!el) return;
+  const scoreHitRate = summary.total_predicted > 0
+    ? (summary.score_hit / summary.total_predicted * 100).toFixed(1)
+    : '0';
+  el.innerHTML = `
+    <div class="pr-stat-card">
+      <div class="pr-stat-value">${summary.total_predicted ?? '-'}</div>
+      <div class="pr-stat-label">已对比场次</div>
+    </div>
+    <div class="pr-stat-card">
+      <div class="pr-stat-value">${summary.accuracy != null ? summary.accuracy + '%' : '-'}</div>
+      <div class="pr-stat-label">胜平负命中率</div>
+    </div>
+    <div class="pr-stat-card">
+      <div class="pr-stat-value">${scoreHitRate}%</div>
+      <div class="pr-stat-label">比分精确命中率</div>
+    </div>
+    <div class="pr-stat-card">
+      <div class="pr-stat-value">${summary.avg_goal_error != null ? summary.avg_goal_error : '-'}</div>
+      <div class="pr-stat-label">平均进球数偏差</div>
+    </div>
+  `;
+}
+
+function renderRecordLeagues(leagueStats) {
+  const el = document.getElementById('pr-leagues');
+  if (!el) return;
+  if (!leagueStats || leagueStats.length === 0) {
+    el.hidden = true;
+    return;
+  }
+  el.hidden = false;
+  el.innerHTML = `<h3><i class="fas fa-flag"></i> 分联赛准确率</h3>` +
+    leagueStats.map(lg => `
+      <div class="pr-league-row">
+        <span class="pr-league-name">${escapeHtml(lg.league)}</span>
+        <div class="pr-league-bar-bg">
+          <div class="pr-league-bar-fill" style="width:${lg.accuracy || 0}%"></div>
+        </div>
+        <span class="pr-league-pct">${lg.correct || 0}/${lg.total || 0} (${lg.accuracy || 0}%)</span>
+      </div>
+    `).join('');
+}
+
+function renderRecordTrend(trend) {
+  const el = document.getElementById('pr-trend');
+  if (!el) return;
+  if (!trend || trend.length === 0) {
+    el.hidden = true;
+    return;
+  }
+  el.hidden = false;
+  const maxTotal = Math.max(...trend.map(t => t.total || 1));
+  // 按日期升序
+  const sorted = [...trend].sort((a, b) => a.date.localeCompare(b.date));
+  el.innerHTML = `<h3><i class="fas fa-chart-area"></i> 近期命中趋势</h3>
+    <div class="pr-trend-bars">
+      ${sorted.map(t => {
+        const h = Math.max(((t.correct || 0) / maxTotal) * 100, 5);
+        const dateShort = t.date ? t.date.slice(5) : '';
+        return `<div class="pr-trend-bar" style="height:${h}%" title="${t.date}: ${t.correct}/${t.total} (${t.accuracy}%)"><span class="pr-trend-label">${dateShort}</span></div>`;
+      }).join('')}
+    </div>`;
+}
+
+// ── Task 3.7: renderRecordMatchCard ───────────────────────────────────
+function renderRecordMatchCard(m) {
+  const predTotal = (m.predicted_home_goals != null && m.predicted_away_goals != null)
+    ? m.predicted_home_goals + m.predicted_away_goals : null;
+  const realTotal = (m.actual_home_goals != null && m.actual_away_goals != null)
+    ? m.actual_home_goals + m.actual_away_goals : null;
+
+  const resultMark = m.result_correct === true ? '✅' : (m.result_correct === false ? '❌' : '-');
+  const resultClass = m.result_correct === true ? 'pr-hit-ok' : (m.result_correct === false ? 'pr-hit-no' : 'pr-hit-diff');
+
+  const scoreMark = m.score_correct === true ? '✅' : (m.score_correct === false ? '❌' : '-');
+  const scoreClass = m.score_correct === true ? 'pr-hit-ok' : (m.score_correct === false ? 'pr-hit-no' : 'pr-hit-diff');
+
+  const goalErr = m.goal_diff_error != null ? `差 ${m.goal_diff_error} 球` : '-';
+
+  const timeStr = m.match_time ? formatTime(m.match_time) : '-';
+
+  let footer = '';
+  if (m.ml_probs) {
+    const probs = m.ml_probs;
+    footer = `<footer class="pr-match-foot">
+      <span>预测概率: 主${Math.round((probs.home || 0) * 100)}% 平${Math.round((probs.draw || 0) * 100)}% 客${Math.round((probs.away || 0) * 100)}%</span>
+      ${m.odds ? `<span>赔率: ${m.odds.home || '-'}/${m.odds.draw || '-'}/${m.odds.away || '-'}</span>` : ''}
+    </footer>`;
+  }
+
+  return `<article class="pr-match-card" data-fixture-id="${m.fixture_id || ''}">
+    <header class="pr-match-head">
+      <span class="pr-league">${escapeHtml(m.league || '')}</span>
+      <span class="pr-teams">${escapeHtml(m.home_team_cn || m.home_team || '-')} <em>vs</em> ${escapeHtml(m.away_team_cn || m.away_team || '-')}</span>
+      <span class="pr-time">${escapeHtml(timeStr)}</span>
+    </header>
+    <div class="pr-cmp">
+      <div class="pr-cmp-row" data-dim="result">
+        <span class="pr-cmp-label">胜平负</span>
+        <span class="pr-cmp-pred">${escapeHtml(m.predicted_result || '-')}</span>
+        <span class="pr-hit-mark ${resultClass}">${resultMark}</span>
+        <span class="pr-cmp-actual">${escapeHtml(m.actual_result || '-')}</span>
+      </div>
+      <div class="pr-cmp-row" data-dim="score">
+        <span class="pr-cmp-label">比分</span>
+        <span class="pr-cmp-pred">${escapeHtml(m.predicted_score || '-')}</span>
+        <span class="pr-hit-mark ${scoreClass}">${scoreMark}</span>
+        <span class="pr-cmp-actual">${escapeHtml(m.actual_score || '-')}</span>
+      </div>
+      <div class="pr-cmp-row" data-dim="goals">
+        <span class="pr-cmp-label">总进球</span>
+        <span class="pr-cmp-pred">${predTotal != null ? predTotal : '-'}</span>
+        <span class="pr-hit-mark pr-hit-diff">${goalErr}</span>
+        <span class="pr-cmp-actual">${realTotal != null ? realTotal : '-'}</span>
+      </div>
+    </div>
+    ${footer}
+  </article>`;
+}
+
+// ── Task 3.8: renderRecordList / renderRecordPagination ───────────────
+function renderRecordList(matches) {
+  const el = document.getElementById('pr-list');
+  if (!el) return;
+  if (!Array.isArray(matches) || matches.length === 0) {
+    el.innerHTML = '<div class="pr-empty" style="padding:2rem"><p>当前筛选下无匹配比赛</p></div>';
+    return;
+  }
+  el.innerHTML = matches.map(renderRecordMatchCard).join('');
+}
+
+function renderRecordPagination(total, page, perPage) {
+  const el = document.getElementById('pr-pagination');
+  if (!el) return;
+  if (total <= perPage) {
+    el.innerHTML = '';
+    return;
+  }
+  const totalPages = Math.ceil(total / perPage);
+  let html = '';
+
+  // 上一页
+  html += `<button class="pr-page-btn" ${page <= 1 ? 'disabled' : ''} onclick="recordGoPage(${page - 1})">‹</button>`;
+
+  // 页码（最多 7 个）
+  let start = Math.max(1, page - 3);
+  let end = Math.min(totalPages, start + 6);
+  if (end - start < 6) start = Math.max(1, end - 6);
+
+  if (start > 1) {
+    html += `<button class="pr-page-btn" onclick="recordGoPage(1)">1</button>`;
+    if (start > 2) html += `<span style="color:var(--text-light);padding:0 0.3rem">…</span>`;
+  }
+
+  for (let i = start; i <= end; i++) {
+    html += `<button class="pr-page-btn ${i === page ? 'active' : ''}" onclick="recordGoPage(${i})">${i}</button>`;
+  }
+
+  if (end < totalPages) {
+    if (end < totalPages - 1) html += `<span style="color:var(--text-light);padding:0 0.3rem">…</span>`;
+    html += `<button class="pr-page-btn" onclick="recordGoPage(${totalPages})">${totalPages}</button>`;
+  }
+
+  // 下一页
+  html += `<button class="pr-page-btn" ${page >= totalPages ? 'disabled' : ''} onclick="recordGoPage(${page + 1})">›</button>`;
+
+  el.innerHTML = html;
+}
+
+function recordGoPage(p) {
+  recordState.page = p;
+  loadRecordMatches();
+}
+window.recordGoPage = recordGoPage;

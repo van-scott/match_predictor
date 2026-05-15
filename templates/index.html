@@ -202,78 +202,47 @@
 
   <!-- ═══ TAB 5: 预测战绩 ═══ -->
   <div id="panel-record" class="tab-panel hidden">
-    <!-- 总览卡片 -->
-    <div class="record-summary" id="record-summary">
-      <div class="record-hero">
-        <div class="record-hero-icon"><i class="fas fa-chart-pie"></i></div>
-        <h2>预测战绩</h2>
-        <p class="record-subtitle">ML 模型预测 vs 真实比赛结果</p>
+    <!-- Hero：始终可见 -->
+    <header class="pr-hero">
+      <div class="pr-hero-icon"><i class="fas fa-chart-pie"></i></div>
+      <h2 class="pr-hero-title">预测战绩</h2>
+      <p class="pr-hero-subtitle">ML 模型预测 vs 真实比赛结果，逐场对照</p>
+    </header>
+
+    <!-- 状态区：loading / error / empty（与 content 互斥） -->
+    <div id="pr-status" class="pr-status">
+      <div class="pr-loading"><i class="fas fa-spinner fa-spin fa-2x"></i><span>加载中…</span></div>
+    </div>
+
+    <!-- 内容区：仅在 total_predicted > 0 时由 JS 显示 -->
+    <section id="pr-content" class="pr-content" hidden>
+      <!-- 4 统计卡 -->
+      <div id="pr-stats" class="pr-stats"></div>
+      <!-- 分联赛准确率（条件展示） -->
+      <div id="pr-leagues" class="pr-leagues" hidden></div>
+      <!-- 14 天趋势（条件展示） -->
+      <div id="pr-trend" class="pr-trend" hidden></div>
+      <!-- 筛选条 -->
+      <div id="pr-filter" class="pr-filter">
+        <select id="pr-filter-league">
+          <option value="">全部联赛</option>
+          <option value="英超">🏴󠁧󠁢󠁥󠁮󠁧󠁿 英超</option>
+          <option value="西甲">🇪🇸 西甲</option>
+          <option value="意甲">🇮🇹 意甲</option>
+          <option value="德甲">🇩🇪 德甲</option>
+          <option value="法甲">🇫🇷 法甲</option>
+        </select>
+        <select id="pr-filter-result">
+          <option value="">全部结果</option>
+          <option value="correct">✅ 命中</option>
+          <option value="wrong">❌ 未命中</option>
+        </select>
       </div>
-
-      <div class="record-stats-grid" id="record-stats-grid">
-        <div class="record-stat-card" id="rsc-total">
-          <div class="rsc-val">--</div>
-          <div class="rsc-label">已验证场次</div>
-        </div>
-        <div class="record-stat-card record-stat-highlight" id="rsc-accuracy">
-          <div class="rsc-val">--%</div>
-          <div class="rsc-label">胜平负命中率</div>
-        </div>
-        <div class="record-stat-card" id="rsc-score">
-          <div class="rsc-val">--</div>
-          <div class="rsc-label">比分精确命中</div>
-        </div>
-        <div class="record-stat-card" id="rsc-error">
-          <div class="rsc-val">--</div>
-          <div class="rsc-label">平均进球偏差</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 分联赛统计 -->
-    <div class="record-league-stats" id="record-league-stats">
-      <h3><i class="fas fa-flag"></i> 分联赛准确率</h3>
-      <div class="record-league-bars" id="record-league-bars"></div>
-    </div>
-
-    <!-- 趋势图 -->
-    <div class="record-trend" id="record-trend">
-      <h3><i class="fas fa-chart-area"></i> 近期命中趋势</h3>
-      <div class="record-trend-chart" id="record-trend-chart"></div>
-    </div>
-
-    <!-- 筛选条 -->
-    <div class="record-filter-bar">
-      <select id="record-filter-league" onchange="loadRecordMatches()">
-        <option value="">全部联赛</option>
-        <option value="英超">🏴󠁧󠁢󠁥󠁮󠁧󠁿 英超</option>
-        <option value="西甲">🇪🇸 西甲</option>
-        <option value="意甲">🇮🇹 意甲</option>
-        <option value="德甲">🇩🇪 德甲</option>
-        <option value="法甲">🇫🇷 法甲</option>
-      </select>
-      <select id="record-filter-result" onchange="loadRecordMatches()">
-        <option value="">全部结果</option>
-        <option value="correct">✅ 命中</option>
-        <option value="wrong">❌ 未命中</option>
-      </select>
-    </div>
-
-    <!-- 历史对比列表 -->
-    <div class="record-match-list" id="record-match-list">
-      <div class="spinner-overlay"><i class="fas fa-spinner fa-spin fa-2x"></i><span>加载中...</span></div>
-    </div>
-
-    <!-- 分页 -->
-    <div class="record-pagination" id="record-pagination"></div>
-
-    <!-- 空状态 -->
-    <div class="record-empty" id="record-empty" style="display:none">
-      <i class="fas fa-clock fa-3x" style="color:var(--muted);margin-bottom:1rem"></i>
-      <p>暂无已结束的比赛数据</p>
-      <p style="font-size:.8rem;color:var(--muted)">当比赛结束后，系统会自动同步真实比分并计算预测准确率</p>
-      <p style="font-size:.75rem;color:var(--muted);margin-top:.5rem">运行 <code>make sync-results</code> 立即同步</p>
-    </div>
+      <!-- 比赛对比卡片列表 -->
+      <div id="pr-list" class="pr-list"></div>
+      <!-- 分页器 -->
+      <div id="pr-pagination" class="pr-pagination"></div>
+    </section>
   </div>
 
   <!-- ═══ TAB 3: WORLD CUP ═══ -->
