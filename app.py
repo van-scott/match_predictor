@@ -1662,6 +1662,194 @@ def trigger_sync_upcoming():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 预测战绩对比 API
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.route('/api/accuracy/summary', methods=['GET'])
+def accuracy_summary():
+    """预测准确率总览统计"""
+    try:
+        if not prediction_db:
+            return jsonify({'success': False}), 500
+
+        with prediction_db.get_db_connection() as conn:
+            cur = conn.cursor()
+
+            # 总体统计
+            cur.execute("""
+                SELECT
+                    COUNT(*) FILTER (WHERE actual_result IS NOT NULL) AS total_finished,
+                    COUNT(*) FILTER (WHERE result_correct IS NOT NULL) AS total_predicted,
+                    COUNT(*) FILTER (WHERE result_correct = true) AS correct,
+                    COUNT(*) FILTER (WHERE score_correct = true) AS score_hit,
+                    ROUND(AVG(goal_diff_error) FILTER (WHERE goal_diff_error IS NOT NULL), 2) AS avg_goal_err
+                FROM upcoming_fixtures
+            """)
+            r = cur.fetchone()
+            total_fin, total_pred, correct, score_hit, avg_err = r
+
+            accuracy = round(correct / total_pred * 100, 1) if total_pred > 0 else 0
+
+            # 分联赛统计
+            cur.execute("""
+                SELECT league_name,
+                    COUNT(*) FILTER (WHERE result_correct IS NOT NULL) AS predicted,
+                    COUNT(*) FILTER (WHERE result_correct = true) AS correct,
+                    COUNT(*) FILTER (WHERE score_correct = true) AS score_hit
+                FROM upcoming_fixtures
+                WHERE actual_result IS NOT NULL
+                GROUP BY league_name ORDER BY league_name
+            """)
+            league_rows = cur.fetchall()
+            league_stats = []
+            for lg, pred, corr, sh in league_rows:
+                if pred > 0:
+                    league_stats.append({
+                        'league': lg,
+                        'total': pred,
+                        'correct': corr,
+                        'score_hit': sh or 0,
+                        'accuracy': round(corr / pred * 100, 1),
+                    })
+
+            # 最近趋势（按天聚合）
+            cur.execute("""
+                SELECT DATE(finished_at) AS day,
+                    COUNT(*) AS total,
+                    COUNT(*) FILTER (WHERE result_correct = true) AS correct
+                FROM upcoming_fixtures
+                WHERE actual_result IS NOT NULL AND finished_at IS NOT NULL
+                GROUP BY DATE(finished_at)
+                ORDER BY day DESC LIMIT 14
+            """)
+            trend = [{'date': str(r[0]), 'total': r[1], 'correct': r[2],
+                       'accuracy': round(r[2]/r[1]*100, 1) if r[1] > 0 else 0}
+                      for r in cur.fetchall()]
+
+        return jsonify({
+            'success': True,
+            'summary': {
+                'total_finished': total_fin or 0,
+                'total_predicted': total_pred or 0,
+                'correct': correct or 0,
+                'score_hit': score_hit or 0,
+                'accuracy': accuracy,
+                'avg_goal_error': float(avg_err) if avg_err else None,
+            },
+            'league_stats': league_stats,
+            'trend': trend,
+        })
+    except Exception as e:
+        app.logger.error(f"准确率统计失败: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/accuracy/matches', methods=['GET'])
+def accuracy_matches():
+    """已结束比赛的预测 vs 实际对比列表"""
+    try:
+        if not prediction_db:
+            return jsonify({'success': False}), 500
+
+        league = request.args.get('league')
+        result_filter = request.args.get('result')  # correct / wrong / all
+        page = max(int(request.args.get('page', 1)), 1)
+        per_page = min(int(request.args.get('per_page', 20)), 50)
+        offset = (page - 1) * per_page
+
+        with prediction_db.get_db_connection() as conn:
+            cur = conn.cursor()
+
+            conds = ["actual_result IS NOT NULL"]
+            params = []
+            if league:
+                conds.append("league_name = %s")
+                params.append(league)
+            if result_filter == 'correct':
+                conds.append("result_correct = true")
+            elif result_filter == 'wrong':
+                conds.append("result_correct = false")
+
+            where = " AND ".join(conds)
+
+            # 总数
+            cur.execute(f"SELECT COUNT(*) FROM upcoming_fixtures WHERE {where}", params)
+            total = cur.fetchone()[0]
+
+            # 数据
+            cur.execute(f"""
+                SELECT fixture_id, league_name, league_code,
+                       home_team, away_team, match_time,
+                       actual_home_goals, actual_away_goals, actual_result,
+                       ml_home_prob, ml_draw_prob, ml_away_prob,
+                       ml_predicted_result, ml_recommendation,
+                       predicted_home_goals, predicted_away_goals,
+                       result_correct, score_correct, goal_diff_error,
+                       home_odds, draw_odds, away_odds
+                FROM upcoming_fixtures
+                WHERE {where}
+                ORDER BY match_time DESC
+                LIMIT %s OFFSET %s
+            """, params + [per_page, offset])
+            rows = cur.fetchall()
+
+        result_label = {'H': '主胜', 'D': '平局', 'A': '客胜'}
+        matches = []
+        for r in rows:
+            (fid, lg, lc, ht, at, mt,
+             ahg, aag, ar,
+             mlh, mld, mla,
+             mlpr, mlrec,
+             phg, pag,
+             rc, sc, gde,
+             ho, do_, ao) = r
+
+            ht_cn = TEAM_NAME_CN.get(ht, '')
+            at_cn = TEAM_NAME_CN.get(at, '')
+
+            matches.append({
+                'fixture_id': fid,
+                'league': lg, 'league_code': lc,
+                'home_team': ht, 'away_team': at,
+                'home_team_cn': ht_cn or ht,
+                'away_team_cn': at_cn or at,
+                'match_time': mt.isoformat() if mt else None,
+                'actual_score': f'{ahg}-{aag}' if ahg is not None else None,
+                'actual_result': result_label.get(ar, ar),
+                'actual_result_code': ar,
+                'predicted_score': f'{phg}-{pag}' if phg is not None else None,
+                'predicted_result': result_label.get(mlpr, mlpr) if mlpr else None,
+                'predicted_result_code': mlpr,
+                'ml_recommendation': mlrec,
+                'ml_probs': {
+                    'home': round(float(mlh), 4) if mlh else None,
+                    'draw': round(float(mld), 4) if mld else None,
+                    'away': round(float(mla), 4) if mla else None,
+                } if mlh else None,
+                'result_correct': rc,
+                'score_correct': sc,
+                'goal_diff_error': gde,
+                'odds': {
+                    'home': float(ho) if ho else None,
+                    'draw': float(do_) if do_ else None,
+                    'away': float(ao) if ao else None,
+                },
+            })
+
+        return jsonify({
+            'success': True,
+            'total': total,
+            'page': page,
+            'per_page': per_page,
+            'matches': matches,
+        })
+    except Exception as e:
+        app.logger.error(f"预测对比列表失败: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @app.route('/api/leagues', methods=['GET'])
 def get_available_leagues():
     """获取数据库中有未开赛比赛的联赛列表"""
