@@ -122,7 +122,12 @@ train: ## 训练 ML 预测模型（需先完成 sync-history）
 	@$(VENV_PYTHON) scripts/train_model.py
 	@echo "✅ 模型训练完成"
 
-sync-all: sync-history train sync-upcoming ## 全量同步：历史数据 → 训练 → 未来赛程
+sync-results: ## 同步已结束比赛真实比分 + 计算预测准确率
+	@echo "📊 同步已结束比赛结果..."
+	@$(VENV_PYTHON) scripts/sync_results.py --days 14
+	@echo "✅ 比赛结果同步完成"
+
+sync-all: sync-history train sync-upcoming sync-results ## 全量同步：历史数据 → 训练 → 未来赛程 → 结果回填
 	@echo "🎉 全量同步完成"
 
 # ── 清理 ──────────────────────────────────────────────────────────────────
