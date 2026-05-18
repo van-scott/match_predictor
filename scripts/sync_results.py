@@ -71,9 +71,10 @@ def fetch_finished_matches(league_id: str, days_back: int = 7) -> list:
 def backfill_results(matches: list, league_code: str, db) -> dict:
     """
     将真实比分回填到 upcoming_fixtures，并计算 ML 预测准确性。
-    返回统计 {'updated': N, 'correct': N, 'score_hit': N}
+    如果 fixture_id 不在数据库中，则插入一条已结束的记录（无 ML 预测对比，但有真实比分）。
+    返回统计 {'updated': N, 'inserted': N, 'correct': N, 'score_hit': N}
     """
-    stats = {'updated': 0, 'correct': 0, 'score_hit': 0, 'total_checked': 0}
+    stats = {'updated': 0, 'inserted': 0, 'correct': 0, 'score_hit': 0, 'total_checked': 0}
 
     try:
         with db.get_db_connection() as conn:
@@ -97,6 +98,17 @@ def backfill_results(matches: list, league_code: str, db) -> dict:
                 else:
                     actual_result = 'A'
 
+                home_team = m.get("homeTeam", {}).get("name", "?")
+                away_team = m.get("awayTeam", {}).get("name", "?")
+                utc_date = m.get("utcDate", "")
+                match_time = None
+                if utc_date:
+                    try:
+                        match_time = datetime.fromisoformat(utc_date.replace("Z", "+00:00"))
+                    except Exception:
+                        pass
+                matchday = m.get("matchday")
+
                 # 先查出该比赛的 ML 预测
                 cur.execute("""
                     SELECT ml_home_prob, ml_draw_prob, ml_away_prob,
@@ -115,6 +127,13 @@ def backfill_results(matches: list, league_code: str, db) -> dict:
                     ml_h, ml_d, ml_a = float(row[0]), float(row[1]), float(row[2])
                     pred_hg = row[3]
                     pred_ag = row[4]
+
+                    # 如果没有预测比分，用泊松模型从概率推算
+                    if pred_hg is None or pred_ag is None:
+                        lam_h = max(-math.log(max(1 - ml_h, 0.01)) * 1.5, 0.3)
+                        lam_a = max(-math.log(max(1 - ml_a, 0.01)) * 1.5, 0.3)
+                        pred_hg = min(round(lam_h), 5)
+                        pred_ag = min(round(lam_a), 5)
 
                     # ML 预测的胜平负
                     if ml_h >= ml_d and ml_h >= ml_a:
@@ -136,36 +155,59 @@ def backfill_results(matches: list, league_code: str, db) -> dict:
                             stats['score_hit'] += 1
                         goal_diff_error = abs((pred_hg + pred_ag) - (home_goals + away_goals))
 
-                # 更新数据库
-                cur.execute("""
-                    UPDATE upcoming_fixtures SET
-                        status = 'FINISHED',
-                        actual_home_goals = %s,
-                        actual_away_goals = %s,
-                        actual_result = %s,
-                        finished_at = CURRENT_TIMESTAMP,
-                        ml_predicted_result = %s,
-                        result_correct = %s,
-                        score_correct = %s,
-                        goal_diff_error = %s,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE fixture_id = %s
-                """, (
-                    home_goals, away_goals, actual_result,
-                    ml_predicted_result, result_correct,
-                    score_correct_val, goal_diff_error,
-                    fixture_id,
-                ))
-
-                if cur.rowcount > 0:
-                    stats['updated'] += 1
-                    home_team = m.get("homeTeam", {}).get("name", "?")
-                    away_team = m.get("awayTeam", {}).get("name", "?")
-                    check = '✅' if result_correct else ('❌' if result_correct is False else '⚪')
-                    logger.info(
-                        f"  {check} {home_team} {home_goals}-{away_goals} {away_team}"
-                        f"  ML预测={ml_predicted_result or '无'}  实际={actual_result}"
-                    )
+                if row is not None:
+                    # fixture_id 已存在 → UPDATE
+                    cur.execute("""
+                        UPDATE upcoming_fixtures SET
+                            status = 'FINISHED',
+                            actual_home_goals = %s,
+                            actual_away_goals = %s,
+                            actual_result = %s,
+                            finished_at = CURRENT_TIMESTAMP,
+                            ml_predicted_result = %s,
+                            predicted_home_goals = COALESCE(predicted_home_goals, %s),
+                            predicted_away_goals = COALESCE(predicted_away_goals, %s),
+                            result_correct = %s,
+                            score_correct = %s,
+                            goal_diff_error = %s,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE fixture_id = %s
+                    """, (
+                        home_goals, away_goals, actual_result,
+                        ml_predicted_result,
+                        pred_hg, pred_ag,
+                        result_correct,
+                        score_correct_val, goal_diff_error,
+                        fixture_id,
+                    ))
+                    if cur.rowcount > 0:
+                        stats['updated'] += 1
+                        check = '✅' if result_correct else ('❌' if result_correct is False else '⚪')
+                        logger.info(
+                            f"  {check} {home_team} {home_goals}-{away_goals} {away_team}"
+                            f"  ML预测={ml_predicted_result or '无'}  实际={actual_result}"
+                        )
+                else:
+                    # fixture_id 不存在 → INSERT（无 ML 预测，但有真实比分）
+                    cur.execute("""
+                        INSERT INTO upcoming_fixtures (
+                            fixture_id, league_code, league_name,
+                            home_team, away_team, match_time, matchday,
+                            status, actual_home_goals, actual_away_goals, actual_result,
+                            finished_at, synced_at
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, 'FINISHED', %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                        ON CONFLICT (fixture_id) DO NOTHING
+                    """, (
+                        fixture_id, league_code, LEAGUE_NAMES.get(league_code, league_code),
+                        home_team, away_team, match_time, matchday,
+                        home_goals, away_goals, actual_result,
+                    ))
+                    if cur.rowcount > 0:
+                        stats['inserted'] += 1
+                        logger.info(
+                            f"  🆕 {home_team} {home_goals}-{away_goals} {away_team}"
+                            f"  (新插入，无ML预测对比)"
+                        )
 
             conn.commit()
     except Exception as e:
@@ -282,7 +324,7 @@ def main():
     # 先生成预测比分
     generate_predicted_scores(db)
 
-    total_stats = {'updated': 0, 'correct': 0, 'score_hit': 0, 'total_checked': 0}
+    total_stats = {'updated': 0, 'inserted': 0, 'correct': 0, 'score_hit': 0, 'total_checked': 0}
 
     for league_id in leagues:
         logger.info(f"📥 {LEAGUE_NAMES.get(league_id, league_id)} ({league_id})")
@@ -293,7 +335,7 @@ def main():
                 total_stats[k] += s[k]
         time.sleep(7)  # 免费版限速
 
-    print(f"\n✅ 同步完成: 更新 {total_stats['updated']} 场")
+    print(f"\n✅ 同步完成: 更新 {total_stats['updated']} 场, 新插入 {total_stats['inserted']} 场")
     if total_stats['total_checked'] > 0:
         acc = total_stats['correct'] / total_stats['total_checked'] * 100
         print(f"   本次命中率: {total_stats['correct']}/{total_stats['total_checked']} = {acc:.1f}%")

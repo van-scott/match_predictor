@@ -214,11 +214,9 @@ function renderLotteryList() {
   const listEl = document.getElementById('lottery-list');
   listEl.innerHTML = '';
 
-  // 只展示有赔率 且 未开赛 的比赛
+  // 展示未开赛的比赛（不再强制要求有赔率）
   const now = Date.now();
-  const withOdds = lotteryMatches.filter(m => {
-    const o = m.odds?.hhad || {};
-    if (!o.h || !o.d || !o.a) return false;
+  const upcoming = lotteryMatches.filter(m => {
     const t = m.match_time || m.match_date;
     if (t) {
       const ts = new Date(t.replace(' ', 'T')).getTime();
@@ -227,14 +225,15 @@ function renderLotteryList() {
     return true;
   });
 
-  if (withOdds.length === 0) {
-    listEl.innerHTML = `<div class="error-msg"><p>ℹ️ 暂无含赔率的赛事</p><p style="font-size:.8rem;color:var(--c-muted);margin-top:.5rem">赔率数据每日自动同步，请稍后再试</p></div>`;
+  if (upcoming.length === 0) {
+    listEl.innerHTML = `<div class="error-msg"><p>ℹ️ 暂无未开赛的比赛</p><p style="font-size:.8rem;color:var(--c-muted);margin-top:.5rem">赛事数据每日自动同步，请稍后再试</p></div>`;
     return;
   }
 
-  withOdds.forEach(m => {
+  upcoming.forEach(m => {
     const inCart = aiCart.some(c => c.match_id === m.match_id);
     const odds = m.odds?.hhad || {};
+    const mlProbs = m.ml_probs || {};
     const card = document.createElement('div');
     card.className = `lotto-card ${inCart ? 'selected' : ''}`;
     card.id = `lotto-${m.match_id}`;
@@ -245,14 +244,14 @@ function renderLotteryList() {
         <span>${m.match_num || ''} · ${formatTime(m.match_time)}</span>
       </div>
       <div class="lotto-teams">
-        <span>${m.home_team}</span>
+        <span>${m.home_team_cn || m.home_team}</span>
         <span style="font-size:0.7rem;color:var(--c-muted)">VS</span>
-        <span>${m.away_team}</span>
+        <span>${m.away_team_cn || m.away_team}</span>
       </div>
       <div class="lotto-odds">
-        <div class="lotto-odd-box"><span class="lotto-odd-label">主胜</span><span class="lotto-odd-val">${odds.h || '-'}</span></div>
-        <div class="lotto-odd-box"><span class="lotto-odd-label">平局</span><span class="lotto-odd-val">${odds.d || '-'}</span></div>
-        <div class="lotto-odd-box"><span class="lotto-odd-label">客胜</span><span class="lotto-odd-val">${odds.a || '-'}</span></div>
+        <div class="lotto-odd-box"><span class="lotto-odd-label">主胜</span><span class="lotto-odd-val">${odds.h || (mlProbs.home ? (mlProbs.home * 100).toFixed(0) + '%' : '-')}</span></div>
+        <div class="lotto-odd-box"><span class="lotto-odd-label">平局</span><span class="lotto-odd-val">${odds.d || (mlProbs.draw ? (mlProbs.draw * 100).toFixed(0) + '%' : '-')}</span></div>
+        <div class="lotto-odd-box"><span class="lotto-odd-label">客胜</span><span class="lotto-odd-val">${odds.a || (mlProbs.away ? (mlProbs.away * 100).toFixed(0) + '%' : '-')}</span></div>
       </div>`;
     listEl.appendChild(card);
   });
@@ -1453,21 +1452,21 @@ function renderRecordMatchCard(m) {
     <div class="pr-cmp">
       <div class="pr-cmp-row" data-dim="result">
         <span class="pr-cmp-label">胜平负</span>
-        <span class="pr-cmp-pred">${escapeHtml(m.predicted_result || '-')}</span>
+        <span class="pr-cmp-pred">预测: ${escapeHtml(m.predicted_result || '-')}</span>
         <span class="pr-hit-mark ${resultClass}">${resultMark}</span>
-        <span class="pr-cmp-actual">${escapeHtml(m.actual_result || '-')}</span>
+        <span class="pr-cmp-actual">实际: ${escapeHtml(m.actual_result || '-')}</span>
       </div>
       <div class="pr-cmp-row" data-dim="score">
         <span class="pr-cmp-label">比分</span>
-        <span class="pr-cmp-pred">${escapeHtml(m.predicted_score || '-')}</span>
+        <span class="pr-cmp-pred">预测: ${escapeHtml(m.predicted_score || '-')}</span>
         <span class="pr-hit-mark ${scoreClass}">${scoreMark}</span>
-        <span class="pr-cmp-actual">${escapeHtml(m.actual_score || '-')}</span>
+        <span class="pr-cmp-actual">实际: ${escapeHtml(m.actual_score || '-')}</span>
       </div>
       <div class="pr-cmp-row" data-dim="goals">
         <span class="pr-cmp-label">总进球</span>
-        <span class="pr-cmp-pred">${predTotal != null ? predTotal : '-'}</span>
+        <span class="pr-cmp-pred">预测: ${predTotal != null ? predTotal : '-'}</span>
         <span class="pr-hit-mark pr-hit-diff">${goalErr}</span>
-        <span class="pr-cmp-actual">${realTotal != null ? realTotal : '-'}</span>
+        <span class="pr-cmp-actual">实际: ${realTotal != null ? realTotal : '-'}</span>
       </div>
     </div>
     ${footer}

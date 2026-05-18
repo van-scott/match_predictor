@@ -1677,10 +1677,10 @@ def accuracy_summary():
         with prediction_db.get_db_connection() as conn:
             cur = conn.cursor()
 
-            # 总体统计
+            # 总体统计（只统计有ML预测的已结束比赛）
             cur.execute("""
                 SELECT
-                    COUNT(*) FILTER (WHERE actual_result IS NOT NULL) AS total_finished,
+                    COUNT(*) FILTER (WHERE actual_result IS NOT NULL AND ml_predicted_result IS NOT NULL) AS total_finished,
                     COUNT(*) FILTER (WHERE result_correct IS NOT NULL) AS total_predicted,
                     COUNT(*) FILTER (WHERE result_correct = true) AS correct,
                     COUNT(*) FILTER (WHERE score_correct = true) AS score_hit,
@@ -1692,14 +1692,14 @@ def accuracy_summary():
 
             accuracy = round(correct / total_pred * 100, 1) if total_pred > 0 else 0
 
-            # 分联赛统计
+            # 分联赛统计（只统计有ML预测的）
             cur.execute("""
                 SELECT league_name,
                     COUNT(*) FILTER (WHERE result_correct IS NOT NULL) AS predicted,
                     COUNT(*) FILTER (WHERE result_correct = true) AS correct,
                     COUNT(*) FILTER (WHERE score_correct = true) AS score_hit
                 FROM upcoming_fixtures
-                WHERE actual_result IS NOT NULL
+                WHERE actual_result IS NOT NULL AND ml_predicted_result IS NOT NULL
                 GROUP BY league_name ORDER BY league_name
             """)
             league_rows = cur.fetchall()
@@ -1720,7 +1720,7 @@ def accuracy_summary():
                     COUNT(*) AS total,
                     COUNT(*) FILTER (WHERE result_correct = true) AS correct
                 FROM upcoming_fixtures
-                WHERE actual_result IS NOT NULL AND finished_at IS NOT NULL
+                WHERE actual_result IS NOT NULL AND ml_predicted_result IS NOT NULL AND finished_at IS NOT NULL
                 GROUP BY DATE(finished_at)
                 ORDER BY day DESC LIMIT 14
             """)
@@ -1762,7 +1762,7 @@ def accuracy_matches():
         with prediction_db.get_db_connection() as conn:
             cur = conn.cursor()
 
-            conds = ["actual_result IS NOT NULL"]
+            conds = ["actual_result IS NOT NULL", "ml_predicted_result IS NOT NULL"]
             params = []
             if league:
                 conds.append("league_name = %s")
