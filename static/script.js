@@ -230,30 +230,70 @@ function renderLotteryList() {
     return;
   }
 
+  // 按日期分组
+  const weekDays = ['周日','周一','周二','周三','周四','周五','周六'];
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowKey = tomorrow.toISOString().slice(0, 10);
+
+  const groups = {};
   upcoming.forEach(m => {
-    const inCart = aiCart.some(c => c.match_id === m.match_id);
-    const odds = m.odds?.hhad || {};
-    const mlProbs = m.ml_probs || {};
-    const card = document.createElement('div');
-    card.className = `lotto-card ${inCart ? 'selected' : ''}`;
-    card.id = `lotto-${m.match_id}`;
-    card.onclick = () => toggleAiCart(m);
-    card.innerHTML = `
-      <div class="lotto-top">
-        <span>${m.league_name}</span>
-        <span>${m.match_num || ''} · ${formatTime(m.match_time)}</span>
+    const t = m.match_time || m.match_date;
+    const d = t ? new Date(t.replace(' ', 'T')) : null;
+    const key = d ? d.toISOString().slice(0, 10) : 'unknown';
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(m);
+  });
+
+  const sortedKeys = Object.keys(groups).sort();
+  const firstKey = sortedKeys.length > 0 ? sortedKeys[0] : '';
+
+  sortedKeys.forEach(key => {
+    let label;
+    if (key === todayKey) label = `今天（${weekDays[new Date().getDay()]}）`;
+    else if (key === tomorrowKey) label = `明天（${weekDays[tomorrow.getDay()]}）`;
+    else {
+      const d = new Date(key + 'T00:00:00');
+      label = `${d.getMonth()+1}月${d.getDate()}日（${weekDays[d.getDay()]}）`;
+    }
+    const isExpanded = key === firstKey;
+    const section = document.createElement('div');
+    section.className = 'pr-day-group';
+    section.innerHTML = `
+      <div class="pr-day-header ${isExpanded ? 'expanded' : ''}" onclick="this.classList.toggle('expanded'); this.nextElementSibling.classList.toggle('hidden')">
+        <span class="pr-day-label">${label}</span>
+        <span class="pr-day-count">${groups[key].length} 场</span>
+        <i class="fas fa-chevron-down pr-day-arrow"></i>
       </div>
-      <div class="lotto-teams">
-        <span>${m.home_team_cn || m.home_team}</span>
-        <span style="font-size:0.7rem;color:var(--c-muted)">VS</span>
-        <span>${m.away_team_cn || m.away_team}</span>
-      </div>
-      <div class="lotto-odds">
-        <div class="lotto-odd-box"><span class="lotto-odd-label">主胜</span><span class="lotto-odd-val">${odds.h || (mlProbs.home ? (mlProbs.home * 100).toFixed(0) + '%' : '-')}</span></div>
-        <div class="lotto-odd-box"><span class="lotto-odd-label">平局</span><span class="lotto-odd-val">${odds.d || (mlProbs.draw ? (mlProbs.draw * 100).toFixed(0) + '%' : '-')}</span></div>
-        <div class="lotto-odd-box"><span class="lotto-odd-label">客胜</span><span class="lotto-odd-val">${odds.a || (mlProbs.away ? (mlProbs.away * 100).toFixed(0) + '%' : '-')}</span></div>
+      <div class="pr-day-body ${isExpanded ? '' : 'hidden'}">
       </div>`;
-    listEl.appendChild(card);
+    const body = section.querySelector('.pr-day-body');
+    groups[key].forEach(m => {
+      const inCart = aiCart.some(c => c.match_id === m.match_id);
+      const odds = m.odds?.hhad || {};
+      const mlProbs = m.ml_probs || {};
+      const card = document.createElement('div');
+      card.className = `lotto-card ${inCart ? 'selected' : ''}`;
+      card.id = `lotto-${m.match_id}`;
+      card.onclick = () => toggleAiCart(m);
+      card.innerHTML = `
+        <div class="lotto-top">
+          <span>${m.league_name}</span>
+          <span>${formatTime(m.match_time)}</span>
+        </div>
+        <div class="lotto-teams">
+          <span>${m.home_team_cn || m.home_team}</span>
+          <span style="font-size:0.7rem;color:var(--c-muted)">VS</span>
+          <span>${m.away_team_cn || m.away_team}</span>
+        </div>
+        <div class="lotto-odds">
+          <div class="lotto-odd-box"><span class="lotto-odd-label">主胜</span><span class="lotto-odd-val">${odds.h || (mlProbs.home ? (mlProbs.home * 100).toFixed(0) + '%' : '-')}</span></div>
+          <div class="lotto-odd-box"><span class="lotto-odd-label">平局</span><span class="lotto-odd-val">${odds.d || (mlProbs.draw ? (mlProbs.draw * 100).toFixed(0) + '%' : '-')}</span></div>
+          <div class="lotto-odd-box"><span class="lotto-odd-label">客胜</span><span class="lotto-odd-val">${odds.a || (mlProbs.away ? (mlProbs.away * 100).toFixed(0) + '%' : '-')}</span></div>
+        </div>`;
+      body.appendChild(card);
+    });
+    listEl.appendChild(section);
   });
 }
 
@@ -859,7 +899,7 @@ function filterSmartLeague(league, btn) {
   renderSmartMatches();
 }
 
-// ── 渲染比赛卡片 ───────────────────────────────────────────────────────
+// ── 渲染比赛卡片（按天分组，可折叠） ────────────────────────────────────
 function renderSmartMatches() {
   const listEl = document.getElementById('smart-match-list');
   const countEl = document.getElementById('smart-match-count');
@@ -877,10 +917,54 @@ function renderSmartMatches() {
     return;
   }
 
+  // 按日期分组
+  const groups = groupMatchesByDate(filtered);
+  // 默认展开最近一天的比赛（第一个分组）
+  const firstDateKey = groups.length > 0 ? groups[0].dateKey : '';
+
   listEl.innerHTML = '';
-  filtered.forEach(m => {
-    const card = buildSmartCard(m);
-    listEl.appendChild(card);
+  groups.forEach(({ dateKey, label, matches }) => {
+    const isExpanded = dateKey === firstDateKey;
+    const section = document.createElement('div');
+    section.className = 'pr-day-group';
+    section.innerHTML = `
+      <div class="pr-day-header ${isExpanded ? 'expanded' : ''}" onclick="this.classList.toggle('expanded'); this.nextElementSibling.classList.toggle('hidden')">
+        <span class="pr-day-label">${label}</span>
+        <span class="pr-day-count">${matches.length} 场</span>
+        <i class="fas fa-chevron-down pr-day-arrow"></i>
+      </div>
+      <div class="pr-day-body ${isExpanded ? '' : 'hidden'}"></div>
+    `;
+    const body = section.querySelector('.pr-day-body');
+    matches.forEach(m => body.appendChild(buildSmartCard(m)));
+    listEl.appendChild(section);
+  });
+}
+
+function groupMatchesByDate(matches) {
+  const weekDays = ['周日','周一','周二','周三','周四','周五','周六'];
+  const now = new Date();
+  const todayKey = now.toISOString().slice(0, 10);
+  const tomorrow = new Date(now); tomorrow.setDate(now.getDate() + 1);
+  const tomorrowKey = tomorrow.toISOString().slice(0, 10);
+
+  const map = {};
+  matches.forEach(m => {
+    const t = m.match_time ? new Date(m.match_time) : null;
+    const key = t ? t.toISOString().slice(0, 10) : 'unknown';
+    if (!map[key]) map[key] = [];
+    map[key].push(m);
+  });
+
+  return Object.keys(map).sort().map(key => {
+    let label;
+    if (key === todayKey) label = `今天（${weekDays[now.getDay()]}）`;
+    else if (key === tomorrowKey) label = `明天（${weekDays[tomorrow.getDay()]}）`;
+    else {
+      const d = new Date(key + 'T00:00:00');
+      label = `${d.getMonth()+1}月${d.getDate()}日（${weekDays[d.getDay()]}）`;
+    }
+    return { dateKey: key, label, matches: map[key] };
   });
 }
 
@@ -994,7 +1078,7 @@ function buildSmartCard(m) {
         <div class="smart-team-form" style="font-size:.6rem;opacity:.6">${m.home_team_cn ? m.home_team : ''}</div>
         <div class="smart-team-form">主场</div>
       </div>
-      <div class="smart-vs">VS</div>
+      <div class="smart-vs">${m.predicted_home_goals != null && m.predicted_away_goals != null ? `<div style="font-size:1.4rem;font-weight:900;color:var(--orange)">${m.predicted_home_goals} - ${m.predicted_away_goals}</div><div style="font-size:.6rem;color:var(--muted)">预测比分</div>` : 'VS'}</div>
       <div class="smart-team smart-team-away">
         <div class="smart-team-name">${m.away_team_cn || m.away_team}</div>
         <div class="smart-team-form" style="font-size:.6rem;opacity:.6">${m.away_team_cn ? m.away_team : ''}</div>
@@ -1219,10 +1303,9 @@ document.addEventListener('DOMContentLoaded', () => {
 // 预测战绩 (Prediction Record) 模块
 // ═══════════════════════════════════════════════════════════════════════
 
-// ── Task 3.3: ensureRecordLoaded ──────────────────────────────────────
+// ── 预测战绩：加载与渲染 ──────────────────────────────────────────────────
 function ensureRecordLoaded() {
   if (recordState.loaded || recordState.loading) return;
-  // 一次性绑定筛选事件
   const leagueFilter = document.getElementById('pr-filter-league');
   const resultFilter = document.getElementById('pr-filter-result');
   if (leagueFilter) {
@@ -1242,7 +1325,6 @@ function ensureRecordLoaded() {
   loadRecord();
 }
 
-// ── Task 3.4: loadRecord + loadRecordSummary + loadRecordMatches ──────
 async function loadRecord() {
   recordState.loading = true;
   const statusEl = document.getElementById('pr-status');
@@ -1280,7 +1362,6 @@ async function loadRecordMatchesInternal() {
   params.set('per_page', recordState.perPage);
   if (recordState.league) params.set('league', recordState.league);
   if (recordState.result) params.set('result', recordState.result);
-
   const res = await fetch(`/api/accuracy/matches?${params.toString()}`);
   if (!res.ok) throw new Error(`服务器错误 (${res.status})`);
   const data = await res.json();
@@ -1300,7 +1381,6 @@ async function loadRecordMatches() {
 }
 window.loadRecordMatches = loadRecordMatches;
 
-// ── Task 3.5: renderRecord + renderRecordEmpty + renderRecordError ─────
 function escapeHtml(str) {
   if (!str) return '';
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -1316,9 +1396,7 @@ function renderRecord(summaryData, matchesData) {
     return;
   }
 
-  // 有数据：隐藏状态区，显示内容区
-  if (statusEl) statusEl.innerHTML = '';
-  if (statusEl) statusEl.style.display = 'none';
+  if (statusEl) { statusEl.innerHTML = ''; statusEl.style.display = 'none'; }
   if (contentEl) contentEl.hidden = false;
 
   renderRecordStats(summary);
@@ -1333,7 +1411,7 @@ function renderRecordEmpty() {
   const contentEl = document.getElementById('pr-content');
   if (statusEl) {
     statusEl.style.display = '';
-    statusEl.innerHTML = `<div class="pr-empty"><i class="fas fa-inbox fa-3x"></i><p>暂无已结束的比赛数据，比赛结束后会自动同步并生成对比</p></div>`;
+    statusEl.innerHTML = '<div class="pr-empty"><i class="fas fa-inbox fa-3x"></i><p>暂无已结束的比赛数据，比赛结束后会自动同步并生成对比</p></div>';
   }
   if (contentEl) contentEl.hidden = true;
 }
@@ -1349,98 +1427,105 @@ function renderRecordError(message) {
   console.error('[record]', message);
 }
 
-// ── Task 3.6: renderRecordStats / renderRecordLeagues / renderRecordTrend
 function renderRecordStats(summary) {
   const el = document.getElementById('pr-stats');
   if (!el) return;
   const scoreHitRate = summary.total_predicted > 0
-    ? (summary.score_hit / summary.total_predicted * 100).toFixed(1)
-    : '0';
+    ? (summary.score_hit / summary.total_predicted * 100).toFixed(1) : '0';
   el.innerHTML = `
-    <div class="pr-stat-card">
-      <div class="pr-stat-value">${summary.total_predicted ?? '-'}</div>
-      <div class="pr-stat-label">已对比场次</div>
-    </div>
-    <div class="pr-stat-card">
-      <div class="pr-stat-value">${summary.accuracy != null ? summary.accuracy + '%' : '-'}</div>
-      <div class="pr-stat-label">胜平负命中率</div>
-    </div>
-    <div class="pr-stat-card">
-      <div class="pr-stat-value">${scoreHitRate}%</div>
-      <div class="pr-stat-label">比分精确命中率</div>
-    </div>
-    <div class="pr-stat-card">
-      <div class="pr-stat-value">${summary.avg_goal_error != null ? summary.avg_goal_error : '-'}</div>
-      <div class="pr-stat-label">平均进球数偏差</div>
-    </div>
-  `;
+    <div class="pr-stat-card"><div class="pr-stat-value">${summary.total_predicted ?? '-'}</div><div class="pr-stat-label">已对比场次</div></div>
+    <div class="pr-stat-card"><div class="pr-stat-value">${summary.accuracy != null ? summary.accuracy + '%' : '-'}</div><div class="pr-stat-label">胜平负命中率</div></div>
+    <div class="pr-stat-card"><div class="pr-stat-value">${scoreHitRate}%</div><div class="pr-stat-label">比分精确命中率</div></div>
+    <div class="pr-stat-card"><div class="pr-stat-value">${summary.avg_goal_error != null ? summary.avg_goal_error : '-'}</div><div class="pr-stat-label">平均进球偏差</div></div>`;
 }
 
 function renderRecordLeagues(leagueStats) {
   const el = document.getElementById('pr-leagues');
   if (!el) return;
-  if (!leagueStats || leagueStats.length === 0) {
-    el.hidden = true;
-    return;
-  }
+  if (!leagueStats || leagueStats.length === 0) { el.hidden = true; return; }
   el.hidden = false;
-  el.innerHTML = `<h3><i class="fas fa-flag"></i> 分联赛准确率</h3>` +
-    leagueStats.map(lg => `
-      <div class="pr-league-row">
-        <span class="pr-league-name">${escapeHtml(lg.league)}</span>
-        <div class="pr-league-bar-bg">
-          <div class="pr-league-bar-fill" style="width:${lg.accuracy || 0}%"></div>
-        </div>
-        <span class="pr-league-pct">${lg.correct || 0}/${lg.total || 0} (${lg.accuracy || 0}%)</span>
-      </div>
-    `).join('');
+  el.innerHTML = '<h3><i class="fas fa-flag"></i> 分联赛准确率</h3>' +
+    leagueStats.map(lg => `<div class="pr-league-row"><span class="pr-league-name">${escapeHtml(lg.league)}</span><div class="pr-league-bar-bg"><div class="pr-league-bar-fill" style="width:${lg.accuracy||0}%"></div></div><span class="pr-league-pct">${lg.correct||0}/${lg.total||0} (${lg.accuracy||0}%)</span></div>`).join('');
 }
 
 function renderRecordTrend(trend) {
   const el = document.getElementById('pr-trend');
   if (!el) return;
-  if (!trend || trend.length === 0) {
-    el.hidden = true;
-    return;
-  }
+  if (!trend || trend.length === 0) { el.hidden = true; return; }
   el.hidden = false;
   const maxTotal = Math.max(...trend.map(t => t.total || 1));
-  // 按日期升序
   const sorted = [...trend].sort((a, b) => a.date.localeCompare(b.date));
-  el.innerHTML = `<h3><i class="fas fa-chart-area"></i> 近期命中趋势</h3>
-    <div class="pr-trend-bars">
-      ${sorted.map(t => {
-        const h = Math.max(((t.correct || 0) / maxTotal) * 100, 5);
-        const dateShort = t.date ? t.date.slice(5) : '';
-        return `<div class="pr-trend-bar" style="height:${h}%" title="${t.date}: ${t.correct}/${t.total} (${t.accuracy}%)"><span class="pr-trend-label">${dateShort}</span></div>`;
-      }).join('')}
-    </div>`;
+  el.innerHTML = '<h3><i class="fas fa-chart-area"></i> 近期命中趋势</h3><div class="pr-trend-bars">' +
+    sorted.map(t => {
+      const h = Math.max(((t.correct||0)/maxTotal)*100, 5);
+      return `<div class="pr-trend-bar" style="height:${h}%" title="${t.date}: ${t.correct}/${t.total} (${t.accuracy}%)"><span class="pr-trend-label">${t.date?t.date.slice(5):''}</span></div>`;
+    }).join('') + '</div>';
 }
 
-// ── Task 3.7: renderRecordMatchCard ───────────────────────────────────
+// ── 核心：比赛对比卡片（表格式布局，表头为"实际比分"和"预测比分"）──
 function renderRecordMatchCard(m) {
-  const predTotal = (m.predicted_home_goals != null && m.predicted_away_goals != null)
-    ? m.predicted_home_goals + m.predicted_away_goals : null;
-  const realTotal = (m.actual_home_goals != null && m.actual_away_goals != null)
-    ? m.actual_home_goals + m.actual_away_goals : null;
+  // 实际总进球：优先用独立字段，fallback 从 actual_score 解析
+  let realTotal = null;
+  if (m.actual_home_goals != null && m.actual_away_goals != null) {
+    realTotal = m.actual_home_goals + m.actual_away_goals;
+  } else if (m.actual_score && m.actual_score.includes('-')) {
+    const parts = m.actual_score.split('-');
+    realTotal = parseInt(parts[0]) + parseInt(parts[1]);
+  }
 
-  const resultMark = m.result_correct === true ? '✅' : (m.result_correct === false ? '❌' : '-');
-  const resultClass = m.result_correct === true ? 'pr-hit-ok' : (m.result_correct === false ? 'pr-hit-no' : 'pr-hit-diff');
+  // 预测总进球：优先用独立字段，fallback 从 predicted_score 解析，再 fallback 从 ML 概率推算
+  let predTotal = null;
+  let predScore = m.predicted_score || null;
+  if (m.predicted_home_goals != null && m.predicted_away_goals != null) {
+    predTotal = m.predicted_home_goals + m.predicted_away_goals;
+    if (!predScore) predScore = m.predicted_home_goals + '-' + m.predicted_away_goals;
+  } else if (m.predicted_score && m.predicted_score.includes('-')) {
+    const parts = m.predicted_score.split('-');
+    predTotal = parseInt(parts[0]) + parseInt(parts[1]);
+  } else if (m.ml_probs && m.ml_probs.home != null && m.ml_probs.away != null) {
+    // 从 ML 概率用泊松模型推算预测比分（与后端 generate_predicted_scores 同算法）
+    const ph = m.ml_probs.home, pa = m.ml_probs.away;
+    const lamH = Math.max(-Math.log(Math.max(1 - ph, 0.01)) * 1.5, 0.3);
+    const lamA = Math.max(-Math.log(Math.max(1 - pa, 0.01)) * 1.5, 0.3);
+    const predH = Math.min(Math.round(lamH), 5);
+    const predA = Math.min(Math.round(lamA), 5);
+    predScore = predH + '-' + predA;
+    predTotal = predH + predA;
+  }
 
-  const scoreMark = m.score_correct === true ? '✅' : (m.score_correct === false ? '❌' : '-');
-  const scoreClass = m.score_correct === true ? 'pr-hit-ok' : (m.score_correct === false ? 'pr-hit-no' : 'pr-hit-diff');
+  // 预测比分显示
+  const predScoreDisplay = predScore || '-';
+  const actualScoreDisplay = m.actual_score || '-';
 
-  const goalErr = m.goal_diff_error != null ? `差 ${m.goal_diff_error} 球` : '-';
+  const resultHit = m.result_correct === true;
+  // 比分命中：后端有就用，没有就前端算
+  let scoreHit = m.score_correct;
+  if (scoreHit == null && predScore && m.actual_score) {
+    scoreHit = (predScore === m.actual_score);
+  }
+  // 总进球误差
+  let goalErr = m.goal_diff_error;
+  if (goalErr == null && realTotal != null && predTotal != null) {
+    goalErr = Math.abs(realTotal - predTotal);
+  }
 
   const timeStr = m.match_time ? formatTime(m.match_time) : '-';
 
-  let footer = '';
-  if (m.ml_probs) {
-    const probs = m.ml_probs;
-    footer = `<footer class="pr-match-foot">
-      <span>预测概率: 主${Math.round((probs.home || 0) * 100)}% 平${Math.round((probs.draw || 0) * 100)}% 客${Math.round((probs.away || 0) * 100)}%</span>
-      ${m.odds ? `<span>赔率: ${m.odds.home || '-'}/${m.odds.draw || '-'}/${m.odds.away || '-'}</span>` : ''}
-    </footer>`;
+  // 总进球命中显示
+  let goalHitDisplay = '-', goalHitClass = 'pr-hit-diff';
+  if (goalErr != null) {
+    if (goalErr === 0) { goalHitDisplay = '✅ 准确'; goalHitClass = 'pr-hit-ok'; }
+    else { goalHitDisplay = '差' + goalErr + '球'; }
+  }
+
+  // 比分命中显示
+  let scoreHitDisplay, scoreHitClass;
+  if (predScore) {
+    scoreHitDisplay = scoreHit ? '✅' : '❌';
+    scoreHitClass = scoreHit ? 'pr-hit-ok' : 'pr-hit-no';
+  } else {
+    scoreHitDisplay = '-';
+    scoreHitClass = 'pr-hit-diff';
   }
 
   return `<article class="pr-match-card" data-fixture-id="${m.fixture_id || ''}">
@@ -1449,31 +1534,39 @@ function renderRecordMatchCard(m) {
       <span class="pr-teams">${escapeHtml(m.home_team_cn || m.home_team || '-')} <em>vs</em> ${escapeHtml(m.away_team_cn || m.away_team || '-')}</span>
       <span class="pr-time">${escapeHtml(timeStr)}</span>
     </header>
-    <div class="pr-cmp">
-      <div class="pr-cmp-row" data-dim="result">
-        <span class="pr-cmp-label">胜平负</span>
-        <span class="pr-cmp-pred">预测: ${escapeHtml(m.predicted_result || '-')}</span>
-        <span class="pr-hit-mark ${resultClass}">${resultMark}</span>
-        <span class="pr-cmp-actual">实际: ${escapeHtml(m.actual_result || '-')}</span>
-      </div>
-      <div class="pr-cmp-row" data-dim="score">
-        <span class="pr-cmp-label">比分</span>
-        <span class="pr-cmp-pred">预测: ${escapeHtml(m.predicted_score || '-')}</span>
-        <span class="pr-hit-mark ${scoreClass}">${scoreMark}</span>
-        <span class="pr-cmp-actual">实际: ${escapeHtml(m.actual_score || '-')}</span>
-      </div>
-      <div class="pr-cmp-row" data-dim="goals">
-        <span class="pr-cmp-label">总进球</span>
-        <span class="pr-cmp-pred">预测: ${predTotal != null ? predTotal : '-'}</span>
-        <span class="pr-hit-mark pr-hit-diff">${goalErr}</span>
-        <span class="pr-cmp-actual">实际: ${realTotal != null ? realTotal : '-'}</span>
-      </div>
-    </div>
-    ${footer}
+    <table class="pr-table">
+      <thead>
+        <tr>
+          <th></th>
+          <th class="pr-th-actual">实际结果</th>
+          <th class="pr-th-pred">预测结果</th>
+          <th>命中</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="pr-td-label">胜平负</td>
+          <td class="pr-td-actual">${escapeHtml(m.actual_result || '-')}</td>
+          <td class="pr-td-pred">${escapeHtml(m.predicted_result || '-')}</td>
+          <td class="pr-td-hit"><span class="pr-hit-mark ${resultHit ? 'pr-hit-ok' : 'pr-hit-no'}">${resultHit ? '✅' : '❌'}</span></td>
+        </tr>
+        <tr>
+          <td class="pr-td-label">比分</td>
+          <td class="pr-td-actual">${escapeHtml(actualScoreDisplay)}</td>
+          <td class="pr-td-pred">${escapeHtml(predScoreDisplay)}</td>
+          <td class="pr-td-hit"><span class="pr-hit-mark ${scoreHitClass}">${scoreHitDisplay}</span></td>
+        </tr>
+        <tr>
+          <td class="pr-td-label">总进球</td>
+          <td class="pr-td-actual">${realTotal != null ? realTotal : '-'}</td>
+          <td class="pr-td-pred">${predTotal != null ? predTotal : '暂无'}</td>
+          <td class="pr-td-hit"><span class="pr-hit-mark ${goalHitClass}">${goalHitDisplay}</span></td>
+        </tr>
+      </tbody>
+    </table>
   </article>`;
 }
 
-// ── Task 3.8: renderRecordList / renderRecordPagination ───────────────
 function renderRecordList(matches) {
   const el = document.getElementById('pr-list');
   if (!el) return;
@@ -1487,43 +1580,18 @@ function renderRecordList(matches) {
 function renderRecordPagination(total, page, perPage) {
   const el = document.getElementById('pr-pagination');
   if (!el) return;
-  if (total <= perPage) {
-    el.innerHTML = '';
-    return;
-  }
+  if (total <= perPage) { el.innerHTML = ''; return; }
   const totalPages = Math.ceil(total / perPage);
-  let html = '';
-
-  // 上一页
-  html += `<button class="pr-page-btn" ${page <= 1 ? 'disabled' : ''} onclick="recordGoPage(${page - 1})">‹</button>`;
-
-  // 页码（最多 7 个）
+  let html = `<button class="pr-page-btn" ${page<=1?'disabled':''} onclick="recordGoPage(${page-1})">‹</button>`;
   let start = Math.max(1, page - 3);
   let end = Math.min(totalPages, start + 6);
   if (end - start < 6) start = Math.max(1, end - 6);
-
-  if (start > 1) {
-    html += `<button class="pr-page-btn" onclick="recordGoPage(1)">1</button>`;
-    if (start > 2) html += `<span style="color:var(--text-light);padding:0 0.3rem">…</span>`;
-  }
-
-  for (let i = start; i <= end; i++) {
-    html += `<button class="pr-page-btn ${i === page ? 'active' : ''}" onclick="recordGoPage(${i})">${i}</button>`;
-  }
-
-  if (end < totalPages) {
-    if (end < totalPages - 1) html += `<span style="color:var(--text-light);padding:0 0.3rem">…</span>`;
-    html += `<button class="pr-page-btn" onclick="recordGoPage(${totalPages})">${totalPages}</button>`;
-  }
-
-  // 下一页
-  html += `<button class="pr-page-btn" ${page >= totalPages ? 'disabled' : ''} onclick="recordGoPage(${page + 1})">›</button>`;
-
+  if (start > 1) { html += `<button class="pr-page-btn" onclick="recordGoPage(1)">1</button>`; if (start > 2) html += '<span style="color:var(--sub);padding:0 .3rem">…</span>'; }
+  for (let i = start; i <= end; i++) html += `<button class="pr-page-btn ${i===page?'active':''}" onclick="recordGoPage(${i})">${i}</button>`;
+  if (end < totalPages) { if (end < totalPages-1) html += '<span style="color:var(--sub);padding:0 .3rem">…</span>'; html += `<button class="pr-page-btn" onclick="recordGoPage(${totalPages})">${totalPages}</button>`; }
+  html += `<button class="pr-page-btn" ${page>=totalPages?'disabled':''} onclick="recordGoPage(${page+1})">›</button>`;
   el.innerHTML = html;
 }
 
-function recordGoPage(p) {
-  recordState.page = p;
-  loadRecordMatches();
-}
+function recordGoPage(p) { recordState.page = p; loadRecordMatches(); }
 window.recordGoPage = recordGoPage;

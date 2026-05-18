@@ -21,7 +21,18 @@ import requests
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
+# 加载 .env 文件（确保直接运行脚本时也能读取环境变量）
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
+if os.path.exists(_env_path):
+    with open(_env_path) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith('#') and '=' in line:
+                key, val = line.split('=', 1)
+                key, val = key.strip(), val.strip()
+                if key and key not in os.environ:
+                    os.environ[key] = val
 
 logging.basicConfig(
     level=logging.INFO,

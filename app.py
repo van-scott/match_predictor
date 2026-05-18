@@ -1362,7 +1362,8 @@ def get_upcoming_matches():
                        uf.home_odds, uf.draw_odds, uf.away_odds,
                        uf.ml_home_prob, uf.ml_draw_prob, uf.ml_away_prob,
                        uf.ml_recommendation,
-                       mo.open_home_odds, mo.open_draw_odds, mo.open_away_odds
+                       mo.open_home_odds, mo.open_draw_odds, mo.open_away_odds,
+                       uf.predicted_home_goals, uf.predicted_away_goals
                 FROM upcoming_fixtures uf
                 LEFT JOIN match_odds mo ON (
                     mo.match_id = uf.fixture_id
@@ -1381,7 +1382,8 @@ def get_upcoming_matches():
             (fix_id, lg_code, lg_name, ht, at, mt, matchday,
              h_odds, d_odds, a_odds,
              ml_h, ml_d, ml_a, ml_rec,
-             open_h, open_d, open_a) = r
+             open_h, open_d, open_a,
+             pred_hg, pred_ag) = r
 
             # 赔率变动
             odds_movement = {}
@@ -1431,6 +1433,8 @@ def get_upcoming_matches():
                 'away_team_display': f"{at_cn}({at})" if at_cn else at,
                 'match_time':        mt.isoformat() if mt else None,
                 'matchday':          matchday,
+                'predicted_home_goals': int(pred_hg) if pred_hg is not None else None,
+                'predicted_away_goals': int(pred_ag) if pred_ag is not None else None,
                 'current_odds': {
                     'home': float(h_odds) if h_odds else None,
                     'draw': float(d_odds) if d_odds else None,
@@ -1817,9 +1821,13 @@ def accuracy_matches():
                 'away_team_cn': at_cn or at,
                 'match_time': mt.isoformat() if mt else None,
                 'actual_score': f'{ahg}-{aag}' if ahg is not None else None,
+                'actual_home_goals': ahg,
+                'actual_away_goals': aag,
                 'actual_result': result_label.get(ar, ar),
                 'actual_result_code': ar,
                 'predicted_score': f'{phg}-{pag}' if phg is not None else None,
+                'predicted_home_goals': phg,
+                'predicted_away_goals': pag,
                 'predicted_result': result_label.get(mlpr, mlpr) if mlpr else None,
                 'predicted_result_code': mlpr,
                 'ml_recommendation': mlrec,

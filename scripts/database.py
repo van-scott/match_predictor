@@ -23,12 +23,13 @@ class PredictionDatabase:
     def __init__(self):
         logger.info("正在初始化数据库连接参数...")
         self.connection_params = {
-            "host": os.getenv("DB_HOST", "dbprovider.ap-southeast-1.clawcloudrun.com"),
-            "port": int(os.getenv("DB_PORT", "49674")),
+            "host": os.getenv("DB_HOST", "10.43.104.94"),
+            "port": int(os.getenv("DB_PORT", "5432")),
             "database": os.getenv("DB_NAME", "postgres"),
-            "user": os.getenv("DB_USER", "postgres"),
-            "password": os.getenv("DB_PASS", "sbdx497p"), # 请务必在线上环境中设置此环境变量
-            "sslmode": "prefer"
+            "user": os.getenv("DB_USER", "app"),
+            "password": os.getenv("DB_PASS", "so123!"),
+            "sslmode": "prefer",
+            "connect_timeout": 10
         }
         # self.init_tables() # 移除此行，数据库表的初始化应手动触发
     
