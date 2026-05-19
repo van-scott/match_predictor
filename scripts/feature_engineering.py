@@ -8,9 +8,13 @@ import os
 import sys
 import json
 import logging
+import warnings
 import numpy as np
 import pandas as pd
 from datetime import datetime
+
+# 抑制 pandas 对 psycopg2 连接的 UserWarning（功能正常，只是不推荐）
+warnings.filterwarnings('ignore', message='.*pandas only supports SQLAlchemy.*')
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

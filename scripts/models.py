@@ -8,21 +8,27 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 from sklearn.preprocessing import StandardScaler
 from config import *
 
+MODEL_SAVE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'models', 'match_predictor_all.pkl')
+
 def prepare_training_data(match_features_df):
     """准备训练数据"""
     if match_features_df is None or match_features_df.empty:
         print("无效的比赛特征数据")
         return None, None
     
-    # 只使用已完成的比赛
-    completed_matches = match_features_df[match_features_df['status'] == 'FINISHED'].copy()
+    # 使用所有有结果的比赛（从 historical_matches 加载的数据本身就是已完赛的）
+    if 'status' in match_features_df.columns:
+        completed_matches = match_features_df[match_features_df['status'] == 'FINISHED'].copy()
+    else:
+        completed_matches = match_features_df.copy()
     
     if completed_matches.empty:
         print("没有已完成的比赛数据")
         return None, None
     
-    # 选择特征列
-    feature_cols = [col for col in completed_matches.columns if col.startswith('home_') or col.startswith('away_')]
+    # 选择特征列（h_ 开头为主队特征，a_ 开头为客队特征）
+    feature_cols = [col for col in completed_matches.columns 
+                    if col.startswith('h_') or col.startswith('a_') or col.startswith('home_') or col.startswith('away_')]
     feature_cols = [col for col in feature_cols if col not in ['home_team', 'away_team', 'home_score', 'away_score']]
     
     # 准备特征和目标变量
@@ -151,13 +157,20 @@ def predict_match(model_data, match_features):
 
 if __name__ == "__main__":
     # 测试模型训练功能
-    from data_processing import load_or_process_data
-    from models.feature_engineering import load_or_create_features, prepare_match_features
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from feature_engineering import load_historical_matches, compute_team_stats, build_match_feature_matrix
     
-    processed_data = load_or_process_data()
-    features_df = load_or_create_features(processed_data['matches'])
-    
-    if features_df is not None:
-        match_features_df = prepare_match_features(processed_data['matches'], features_df)
-        model_data = train_match_result_model(match_features_df)
-        print("模型训练完成")
+    print("📥 加载历史比赛数据...")
+    matches_df = load_historical_matches()
+    if matches_df is not None and not matches_df.empty:
+        print(f"   {len(matches_df)} 场比赛已加载")
+        team_stats = compute_team_stats(matches_df)
+        match_features_df = build_match_feature_matrix(matches_df, team_stats)
+        if match_features_df is not None and not match_features_df.empty:
+            model_data = train_match_result_model(match_features_df)
+            print("✅ 模型训练完成")
+        else:
+            print("❌ 特征矩阵为空，无法训练")
+    else:
+        print("❌ 无法加载历史比赛数据")
