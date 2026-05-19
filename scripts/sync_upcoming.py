@@ -206,7 +206,10 @@ def batch_ml_predict(db) -> int:
 
             for fixture_id, home_team, away_team, home_odds, draw_odds, away_odds in rows:
                 proba = predict_probabilities(
-                    home_team, away_team, team_stats, df, model_pkg
+                    home_team, away_team, team_stats, df, model_pkg,
+                    home_odds=float(home_odds) if home_odds else None,
+                    draw_odds=float(draw_odds) if draw_odds else None,
+                    away_odds=float(away_odds) if away_odds else None,
                 )
                 if not proba:
                     continue
@@ -245,11 +248,12 @@ def _kelly_recommend(proba: dict, home_odds: Optional[float],
     if not proba:
         return "数据不足"
     best = max(proba, key=proba.get)
-    best_prob = proba[best]
+    best_prob = float(proba[best])
 
     if home_odds and draw_odds and away_odds:
-        total = 1/home_odds + 1/draw_odds + 1/away_odds
-        impl = {'H': 1/home_odds/total, 'D': 1/draw_odds/total, 'A': 1/away_odds/total}
+        ho, do, ao = float(home_odds), float(draw_odds), float(away_odds)
+        total = 1/ho + 1/do + 1/ao
+        impl = {'H': 1/ho/total, 'D': 1/do/total, 'A': 1/ao/total}
         edge = best_prob - impl.get(best, 0)
         if edge >= 0.07:
             return f"强推{label_map[best]}（优势{edge*100:.1f}%）"
@@ -313,6 +317,114 @@ def sync_odds_movement(fixtures: list, db) -> int:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 5. 从 the-odds-api.com 获取赔率
+# ─────────────────────────────────────────────────────────────────────────────
+
+ODDS_API_KEY = os.getenv("ODDS_API_KEY", "bacff6d40e0464574885dcc2bdcb9833")
+ODDS_API_URL = "https://api.the-odds-api.com/v4/sports"
+
+# the-odds-api 的 sport key 与我们的联赛代码映射
+ODDS_SPORT_MAP = {
+    "PL":  "soccer_epl",
+    "PD":  "soccer_spain_la_liga",
+    "SA":  "soccer_italy_serie_a",
+    "BL1": "soccer_germany_bundesliga",
+    "FL1": "soccer_france_ligue_one",
+}
+
+
+def sync_odds_from_api(db) -> int:
+    """
+    从 the-odds-api.com 获取五大联赛赔率，写入 upcoming_fixtures.home_odds/draw_odds/away_odds。
+    通过球队名模糊匹配关联。
+    """
+    if not ODDS_API_KEY:
+        logger.warning("ODDS_API_KEY 未设置，跳过赔率同步")
+        return 0
+
+    updated = 0
+    try:
+        with db.get_db_connection() as conn:
+            cur = conn.cursor()
+
+            for league_code, sport_key in ODDS_SPORT_MAP.items():
+                try:
+                    resp = requests.get(
+                        f"{ODDS_API_URL}/{sport_key}/odds",
+                        params={
+                            'apiKey': ODDS_API_KEY,
+                            'regions': 'eu',
+                            'markets': 'h2h',
+                            'oddsFormat': 'decimal',
+                        },
+                        timeout=15
+                    )
+                    if resp.status_code != 200:
+                        logger.warning(f"  {league_code} 赔率获取失败: HTTP {resp.status_code}")
+                        continue
+
+                    matches = resp.json()
+                    if not matches:
+                        continue
+
+                    for m in matches:
+                        home = m.get('home_team', '')
+                        away = m.get('away_team', '')
+                        bookmakers = m.get('bookmakers', [])
+                        if not bookmakers:
+                            continue
+
+                        # 取第一个博彩公司的 h2h 赔率
+                        outcomes = {}
+                        for bk in bookmakers:
+                            markets = bk.get('markets', [])
+                            for mkt in markets:
+                                if mkt.get('key') == 'h2h':
+                                    for o in mkt.get('outcomes', []):
+                                        outcomes[o['name']] = o['price']
+                                    break
+                            if outcomes:
+                                break
+
+                        h_odds = outcomes.get(home)
+                        a_odds = outcomes.get(away)
+                        d_odds = outcomes.get('Draw')
+
+                        if not h_odds or not a_odds:
+                            continue
+
+                        # 通过球队名匹配 upcoming_fixtures（模糊匹配：包含关系）
+                        cur.execute("""
+                            UPDATE upcoming_fixtures
+                            SET home_odds = %s, draw_odds = %s, away_odds = %s, updated_at = CURRENT_TIMESTAMP
+                            WHERE league_code = %s
+                              AND status IN ('SCHEDULED', 'TIMED')
+                              AND (home_team ILIKE %s OR home_team ILIKE %s)
+                              AND (away_team ILIKE %s OR away_team ILIKE %s)
+                              AND home_odds IS NULL
+                        """, (
+                            h_odds, d_odds, a_odds,
+                            league_code,
+                            f'%{home}%', f'{home}%',
+                            f'%{away}%', f'{away}%',
+                        ))
+                        if cur.rowcount > 0:
+                            updated += cur.rowcount
+                            logger.info(f"  💰 {home} vs {away}: {h_odds}/{d_odds}/{a_odds}")
+
+                    time.sleep(1)  # 避免限速
+
+                except Exception as e:
+                    logger.error(f"  {league_code} 赔率同步异常: {e}")
+
+            conn.commit()
+    except Exception as e:
+        logger.error(f"赔率同步失败: {e}", exc_info=True)
+
+    return updated
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 主流程
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -350,6 +462,11 @@ def main():
         time.sleep(7)  # 免费版限速
 
     print(f"\n📊 共同步 {len(all_fixtures)} 场未开赛比赛")
+
+    # 从 the-odds-api.com 获取赔率并写入 upcoming_fixtures
+    print("\n💰 同步赔率数据（the-odds-api.com）...")
+    odds_updated = sync_odds_from_api(db)
+    print(f"   ✅ {odds_updated} 场比赛已更新赔率")
 
     # 批量 ML 预测
     if not args.no_ml:

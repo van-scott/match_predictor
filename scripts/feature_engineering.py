@@ -187,11 +187,16 @@ def compute_h2h(df: pd.DataFrame, home_team: str, away_team: str, n: int = 5) ->
 # 为每场比赛组装特征向量（用于 ML 训练）
 # ─────────────────────────────────────────────────────────────────────────────
 
-def build_match_feature_matrix(df: pd.DataFrame, team_stats: dict) -> pd.DataFrame:
+def build_match_feature_matrix(df: pd.DataFrame, team_stats: dict, odds_df: pd.DataFrame = None) -> pd.DataFrame:
     """
     为每场已完赛比赛构建特征矩阵，每行对应一场比赛。
-    特征 = 主队统计 + 客队统计 + H2H 统计
+    特征 = 主队统计 + 客队统计 + H2H 统计 + 赔率隐含概率（如有）
     标签 = full_time_result (H/D/A)
+    
+    Args:
+        df: 历史比赛 DataFrame
+        team_stats: compute_team_stats 返回的球队统计字典
+        odds_df: 可选，赔率 DataFrame（含 home_team, away_team, match_date, home_odds, draw_odds, away_odds）
     """
     rows = []
     feat_cols = [
@@ -201,6 +206,13 @@ def build_match_feature_matrix(df: pd.DataFrame, team_stats: dict) -> pd.DataFra
         'away_goals_scored_avg', 'away_goals_conceded_avg',
         'overall_win_rate', 'recent_form', 'goal_diff_avg',
     ]
+
+    # 构建赔率查找表（如果有赔率数据）
+    odds_lookup = {}
+    if odds_df is not None and not odds_df.empty:
+        for _, o in odds_df.iterrows():
+            key = (str(o.get('home_team', '')), str(o.get('away_team', '')), str(o.get('match_date', '')))
+            odds_lookup[key] = (o.get('home_odds'), o.get('draw_odds'), o.get('away_odds'))
 
     for _, match in df.iterrows():
         ht = match['home_team']
@@ -238,6 +250,32 @@ def build_match_feature_matrix(df: pd.DataFrame, team_stats: dict) -> pd.DataFra
 
         # H2H
         row.update(h2h)
+
+        # 赔率隐含概率特征（如果有赔率数据）
+        match_date_str = str(match.get('match_date', ''))
+        odds_key = (ht, at, match_date_str)
+        if odds_key in odds_lookup:
+            ho, do, ao = odds_lookup[odds_key]
+            if ho and do and ao:
+                ho, do, ao = float(ho), float(do), float(ao)
+                total = 1/ho + 1/do + 1/ao
+                row['odds_home_prob'] = round((1/ho) / total, 4)
+                row['odds_draw_prob'] = round((1/do) / total, 4)
+                row['odds_away_prob'] = round((1/ao) / total, 4)
+                row['odds_overround']  = round(total - 1, 4)  # 博彩公司利润率
+                row['has_odds'] = 1
+            else:
+                row['odds_home_prob'] = 0.0
+                row['odds_draw_prob'] = 0.0
+                row['odds_away_prob'] = 0.0
+                row['odds_overround'] = 0.0
+                row['has_odds'] = 0
+        else:
+            row['odds_home_prob'] = 0.0
+            row['odds_draw_prob'] = 0.0
+            row['odds_away_prob'] = 0.0
+            row['odds_overround'] = 0.0
+            row['has_odds'] = 0
 
         rows.append(row)
 
