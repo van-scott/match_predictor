@@ -1,7 +1,9 @@
-import pandas as pd
-import numpy as np
+"""
+⚠️ [备用] 老版模型训练模块
+主训练入口已迁移到 train_model.py（更完整的管道：CV + 校准 + 评估）。
+本文件可独立运行 `python scripts/models.py` 进行快速训练测试。
+"""
 import pickle
-import os
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix

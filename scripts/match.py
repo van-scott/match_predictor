@@ -1,12 +1,18 @@
+"""
+⚠️ [已废弃] 独立 CLI 比赛预测工具
+功能已集成到 app.py 的 /api/analyze/classic 接口。
+保留仅供参考。
+"""
 import pandas as pd
 import numpy as np
 from scipy.stats import poisson
 import argparse
 
+
 def predict_match(home_team, away_team, home_odds, draw_odds, away_odds):
     """
     预测两支球队之间的比赛结果
-    
+
     参数:
         home_team: 主队名称
         away_team: 客队名称

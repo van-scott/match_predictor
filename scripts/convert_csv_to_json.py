@@ -1,10 +1,13 @@
+"""
+⚠️ [已废弃] 一次性 CSV→JSON 转换工具
+data/ 目录下的 CSV 文件已不再使用（数据改为从数据库读取）。
+保留仅供参考。
+"""
 import pandas as pd
 import json
 import os
-
 # 联赛代码
 leagues = ["PL", "PD", "SA", "BL1", "FL1"]
-
 for league in leagues:
     csv_file = f"data/features_{league}2024.csv"
     json_file = f"data/features_{league}2024.json"
