@@ -1,3 +1,8 @@
+"""
+⚠️ [已废弃] 老版数据处理脚本
+功能已被 feature_engineering.py（从数据库加载+计算特征）取代。
+保留仅供参考。
+"""
 import pandas as pd
 import numpy as np
 import os

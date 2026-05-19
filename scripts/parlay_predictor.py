@@ -1,3 +1,8 @@
+"""
+⚠️ [已废弃] 独立串关预测工具
+基于本地 CSV 文件的老版实现，已被数据库驱动的 ML 预测取代。
+保留仅供参考。
+"""
 import pandas as pd
 import numpy as np
 from scipy.stats import poisson
@@ -6,9 +11,10 @@ import os
 import json
 from itertools import product
 
+
 class ParlayPredictor:
     """足球比赛串关预测器"""
-    
+
     def __init__(self):
         """初始化预测器"""
         self.leagues = {

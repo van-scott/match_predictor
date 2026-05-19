@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-每日比赛数据同步脚本
-自动从体彩官网获取最新比赛数据并保存到数据库
+⚠️ [已废弃] 每日比赛数据同步脚本
+已被 sync_upcoming.py + sync_results.py 取代。
+保留仅供参考，不再被任何活跃代码调用。
 """
 
 import sys

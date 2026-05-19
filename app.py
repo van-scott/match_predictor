@@ -1898,37 +1898,47 @@ def _setup_scheduler():
 
         scheduler = BackgroundScheduler()
 
+        # 使用当前运行的 Python 解释器（确保用 venv 的 Python）
+        import sys
+        PYTHON_BIN = sys.executable
+
         def job_sync_results():
             """每10分钟检查比赛结果是否出来，同步到数据库"""
             try:
-                app.logger.info("⏰ [定时] 检查比赛结果...")
                 import subprocess
                 result = subprocess.run(
-                    ['python3', 'scripts/sync_results.py', '--days', '3'],
+                    [PYTHON_BIN, 'scripts/sync_results.py', '--days', '3'],
                     capture_output=True, text=True, timeout=300
                 )
                 if result.returncode == 0:
-                    # 只在有更新时打印
-                    if '更新 0 场' not in result.stdout:
+                    if '更新 0 场' not in result.stdout and '新插入 0 场' not in result.stdout:
                         app.logger.info(f"✅ [定时] 比赛结果已同步")
                 else:
-                    app.logger.error(f"❌ [定时] 同步失败: {result.stderr[:200]}")
+                    # 只在真正出错时打印，忽略"无新数据"的情况
+                    stderr = result.stderr.strip()
+                    if stderr and 'No matches' not in stderr:
+                        app.logger.error(f"❌ [定时] 同步失败: {stderr[:200]}")
+            except subprocess.TimeoutExpired:
+                pass  # 超时静默跳过
             except Exception as e:
                 app.logger.error(f"❌ [定时] 同步异常: {e}")
 
         def job_sync_upcoming():
             """每4小时同步未来赛程 + ML 预测"""
             try:
-                app.logger.info("⏰ [定时] 同步未来赛程...")
                 import subprocess
                 result = subprocess.run(
-                    ['python3', 'scripts/sync_upcoming.py', '--days', '14'],
+                    [PYTHON_BIN, 'scripts/sync_upcoming.py', '--days', '14'],
                     capture_output=True, text=True, timeout=300
                 )
                 if result.returncode == 0:
                     app.logger.info("✅ [定时] 赛程同步完成")
                 else:
-                    app.logger.error(f"❌ [定时] 赛程同步失败: {result.stderr[:200]}")
+                    stderr = result.stderr.strip()
+                    if stderr:
+                        app.logger.error(f"❌ [定时] 赛程同步失败: {stderr[:200]}")
+            except subprocess.TimeoutExpired:
+                pass
             except Exception as e:
                 app.logger.error(f"❌ [定时] 赛程同步异常: {e}")
 
@@ -1942,7 +1952,7 @@ def _setup_scheduler():
 
         scheduler.start()
         app.logger.info("📅 定时任务已启动:")
-        app.logger.info("   • 每 10 分钟检查比赛结果并同步")
+        app.logger.info(f"   • 每 10 分钟检查比赛结果（使用 {PYTHON_BIN}）")
         app.logger.info("   • 每 4 小时同步未来赛程 + ML 预测")
 
         # 注册 Flask 退出时关闭 scheduler

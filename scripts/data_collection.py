@@ -1,3 +1,9 @@
+"""
+⚠️ [已废弃] 老版数据采集脚本
+fetch_odds_data 的赔率采集功能已迁移到 sync_upcoming.py 的 sync_odds_from_api()。
+fetch_matches_data 已被 sync_historical.py / sync_upcoming.py 取代。
+保留仅供参考。
+"""
 import os
 import requests
 import json

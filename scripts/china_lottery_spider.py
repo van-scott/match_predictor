@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-中国体育彩票足球胜平负爬虫
-使用官方API获取真实比赛数据
+⚠️ [已废弃] 中国体育彩票足球胜平负爬虫
+已被 sync_upcoming.py（football-data.org API）取代。
+保留仅供参考，不再被任何活跃代码调用。
 """
 
 import requests
