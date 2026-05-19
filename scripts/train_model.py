@@ -198,9 +198,11 @@ def load_model(suffix: str = 'all', model_dir: str = None) -> dict:
 
 def predict_probabilities(home_team: str, away_team: str,
                            team_stats: dict, df_hist: pd.DataFrame,
-                           model_pkg: dict) -> dict:
+                           model_pkg: dict,
+                           home_odds: float = None, draw_odds: float = None, away_odds: float = None) -> dict:
     """
     根据球队名和统计数据预测胜平负概率。
+    如果提供了赔率，会加入赔率隐含概率特征以提高准确率。
     返回: {'H': 0.45, 'D': 0.28, 'A': 0.27}
     """
     from scripts.feature_engineering import compute_h2h
@@ -231,6 +233,21 @@ def predict_probabilities(home_team: str, away_team: str,
     feat_map['diff_home_scored_avg']  = hs['home_goals_scored_avg']   - as_['away_goals_conceded_avg']
     feat_map['diff_away_concede_avg'] = as_['away_goals_scored_avg']  - hs['home_goals_conceded_avg']
     feat_map.update(h2h)
+
+    # 赔率隐含概率特征
+    if home_odds and draw_odds and away_odds:
+        total = 1/home_odds + 1/draw_odds + 1/away_odds
+        feat_map['odds_home_prob'] = round((1/home_odds) / total, 4)
+        feat_map['odds_draw_prob'] = round((1/draw_odds) / total, 4)
+        feat_map['odds_away_prob'] = round((1/away_odds) / total, 4)
+        feat_map['odds_overround'] = round(total - 1, 4)
+        feat_map['has_odds'] = 1
+    else:
+        feat_map['odds_home_prob'] = 0.0
+        feat_map['odds_draw_prob'] = 0.0
+        feat_map['odds_away_prob'] = 0.0
+        feat_map['odds_overround'] = 0.0
+        feat_map['has_odds'] = 0
 
     X = np.array([[feat_map.get(c, 0.0) for c in feat_cols]])
     model = model_pkg['model']
@@ -268,9 +285,22 @@ def main():
     team_stats = compute_team_stats(df, lookback=args.lookback)
     print(f"   共 {len(team_stats)} 支球队")
 
-    # Step 3: 构建特征矩阵
+    # Step 3: 构建特征矩阵（含赔率隐含概率）
     print("\n📐 Step 3: 构建特征矩阵...")
-    feat_df = build_match_feature_matrix(df, team_stats)
+    # 尝试加载赔率数据
+    odds_df = None
+    try:
+        from scripts.database import prediction_db
+        with prediction_db.get_db_connection() as conn:
+            odds_df = pd.read_sql("SELECT home_team, away_team, match_date, home_odds, draw_odds, away_odds FROM match_odds WHERE home_odds IS NOT NULL", conn)
+        if odds_df is not None and not odds_df.empty:
+            print(f"   💰 加载了 {len(odds_df)} 条赔率数据")
+        else:
+            print("   ⚠️ 无历史赔率数据（赔率特征将为 0，不影响训练）")
+    except Exception as e:
+        print(f"   ⚠️ 赔率数据加载失败: {e}")
+
+    feat_df = build_match_feature_matrix(df, team_stats, odds_df=odds_df)
     print(f"   特征矩阵: {feat_df.shape[0]} 场 × {feat_df.shape[1]} 列")
 
     # Step 4: 训练模型
