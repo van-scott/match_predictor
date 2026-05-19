@@ -933,3 +933,8 @@ body::after {
 @media (max-width: 860px) {
   .pr-day-body { grid-template-columns: 1fr; }
 }
+
+/* 赛事广场（AI大模型tab）的日期分组内：一行一个（因为左侧半屏） */
+#lottery-list .pr-day-body {
+  grid-template-columns: 1fr;
+}
