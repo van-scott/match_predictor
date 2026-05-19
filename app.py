@@ -1888,22 +1888,38 @@ def _setup_scheduler():
     在 Flask 进程内启动 APScheduler，定时执行数据同步任务。
     所有任务都在同一个进程中以后台线程方式运行，无需额外 cron 或独立服务。
 
-    调度计划（北京时间）：
-      - sync_upcoming: 每天 06:00 / 14:00 / 22:00 同步未来赛程 + ML 预测
-      - sync_results:  每天 08:00 / 12:00 / 20:00 / 00:00 回填已结束比赛真实比分
+    调度计划：
+      - sync_results:  每 10 分钟检查一次已结束比赛，有新结果就同步
+      - sync_upcoming: 每 4 小时同步一次未来赛程 + ML 预测
     """
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
-        from apscheduler.triggers.cron import CronTrigger
-        import pytz
+        from apscheduler.triggers.interval import IntervalTrigger
 
-        cst = pytz.timezone('Asia/Shanghai')
-        scheduler = BackgroundScheduler(timezone=cst)
+        scheduler = BackgroundScheduler()
+
+        def job_sync_results():
+            """每10分钟检查比赛结果是否出来，同步到数据库"""
+            try:
+                app.logger.info("⏰ [定时] 检查比赛结果...")
+                import subprocess
+                result = subprocess.run(
+                    ['python3', 'scripts/sync_results.py', '--days', '3'],
+                    capture_output=True, text=True, timeout=300
+                )
+                if result.returncode == 0:
+                    # 只在有更新时打印
+                    if '更新 0 场' not in result.stdout:
+                        app.logger.info(f"✅ [定时] 比赛结果已同步")
+                else:
+                    app.logger.error(f"❌ [定时] 同步失败: {result.stderr[:200]}")
+            except Exception as e:
+                app.logger.error(f"❌ [定时] 同步异常: {e}")
 
         def job_sync_upcoming():
-            """定时同步未来赛程 + ML 预测"""
+            """每4小时同步未来赛程 + ML 预测"""
             try:
-                app.logger.info("⏰ [定时] 开始同步未来赛程...")
+                app.logger.info("⏰ [定时] 同步未来赛程...")
                 import subprocess
                 result = subprocess.run(
                     ['python3', 'scripts/sync_upcoming.py', '--days', '14'],
@@ -1912,45 +1928,29 @@ def _setup_scheduler():
                 if result.returncode == 0:
                     app.logger.info("✅ [定时] 赛程同步完成")
                 else:
-                    app.logger.error(f"❌ [定时] 赛程同步失败: {result.stderr[:500]}")
+                    app.logger.error(f"❌ [定时] 赛程同步失败: {result.stderr[:200]}")
             except Exception as e:
                 app.logger.error(f"❌ [定时] 赛程同步异常: {e}")
 
-        def job_sync_results():
-            """定时回填已结束比赛真实比分 + 计算预测准确率"""
-            try:
-                app.logger.info("⏰ [定时] 开始同步比赛结果...")
-                import subprocess
-                result = subprocess.run(
-                    ['python3', 'scripts/sync_results.py', '--days', '7'],
-                    capture_output=True, text=True, timeout=300
-                )
-                if result.returncode == 0:
-                    app.logger.info("✅ [定时] 比赛结果同步完成")
-                else:
-                    app.logger.error(f"❌ [定时] 比赛结果同步失败: {result.stderr[:500]}")
-            except Exception as e:
-                app.logger.error(f"❌ [定时] 比赛结果同步异常: {e}")
-
-        # 同步未来赛程：每天 06:00 / 14:00 / 22:00（北京时间）
-        scheduler.add_job(job_sync_upcoming, CronTrigger(hour='6,14,22', minute=0, timezone=cst),
-                          id='sync_upcoming', replace_existing=True)
-
-        # 同步比赛结果：每天 08:00 / 12:00 / 20:00 / 00:00（北京时间）
-        scheduler.add_job(job_sync_results, CronTrigger(hour='0,8,12,20', minute=0, timezone=cst),
+        # 每 10 分钟检查比赛结果
+        scheduler.add_job(job_sync_results, IntervalTrigger(minutes=10),
                           id='sync_results', replace_existing=True)
+
+        # 每 4 小时同步未来赛程
+        scheduler.add_job(job_sync_upcoming, IntervalTrigger(hours=4),
+                          id='sync_upcoming', replace_existing=True)
 
         scheduler.start()
         app.logger.info("📅 定时任务已启动:")
-        app.logger.info("   • sync_upcoming: 每天 06:00/14:00/22:00 同步赛程+ML预测")
-        app.logger.info("   • sync_results:  每天 00:00/08:00/12:00/20:00 回填真实比分")
+        app.logger.info("   • 每 10 分钟检查比赛结果并同步")
+        app.logger.info("   • 每 4 小时同步未来赛程 + ML 预测")
 
         # 注册 Flask 退出时关闭 scheduler
         import atexit
         atexit.register(lambda: scheduler.shutdown(wait=False))
 
     except ImportError:
-        app.logger.warning("⚠️ APScheduler 未安装，定时任务不可用。请运行: pip install APScheduler pytz")
+        app.logger.warning("⚠️ APScheduler 未安装，定时任务不可用。请运行: pip install APScheduler")
     except Exception as e:
         app.logger.error(f"⚠️ 定时任务启动失败: {e}")
 
@@ -1966,25 +1966,9 @@ if __name__ == '__main__':
     # 启动定时任务调度器
     _setup_scheduler()
 
-    # 启动时立即跑一次 sync_results（确保"预测战绩"有数据）
-    import threading
-    def _initial_sync():
-        import time
-        time.sleep(3)  # 等 Flask 完全启动
-        app.logger.info("🔄 [启动] 首次同步比赛结果...")
-        try:
-            import subprocess
-            subprocess.run(
-                ['python3', 'scripts/sync_results.py', '--days', '14'],
-                capture_output=True, text=True, timeout=300
-            )
-            app.logger.info("✅ [启动] 首次同步完成")
-        except Exception as e:
-            app.logger.error(f"⚠️ [启动] 首次同步失败: {e}")
-    threading.Thread(target=_initial_sync, daemon=True).start()
-
     port = int(os.environ.get('PORT', 8000))
     debug = os.environ.get('FLASK_DEBUG', '0') == '1'
     app.logger.info(f"🚀 MatchPredict 启动 → http://0.0.0.0:{port}")
+    app.logger.info("   每 10 分钟自动检查比赛结果")
     # use_reloader=False: 避免 debug 模式下 APScheduler 启动两次
     app.run(debug=debug, host='0.0.0.0', port=port, use_reloader=False)
