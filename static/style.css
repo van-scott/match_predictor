@@ -938,3 +938,7 @@ body::after {
 #lottery-list .pr-day-body {
   grid-template-columns: 1fr;
 }
+/* 预测战绩的日期分组内：一行一个 */
+#pr-list .pr-day-body {
+  grid-template-columns: 1fr;
+}

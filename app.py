@@ -241,6 +241,180 @@ def index():
         app.logger.error(f"渲染主页失败: {e}")
         return f"页面加载错误: {str(e)}", 500
 
+
+@app.route('/profile')
+def profile():
+    """个人中心页面"""
+    current_user = get_current_user()
+    if not current_user:
+        return '<script>location.href="/"</script>', 302
+    
+    credits = 0
+    total_predictions = 0
+    history_count = 0
+    history_html = ''
+    already_checked = False
+
+    if prediction_db:
+        try:
+            credits = prediction_db.get_user_credits(current_user['id'])
+            total_predictions = current_user.get('total_predictions', 0)
+            
+            # 检查今日是否已签到
+            from datetime import date
+            already_checked = (current_user.get('last_checkin_date') == date.today())
+
+            # 获取用户 AI 预测历史（只显示 AI 模式的）
+            with prediction_db.get_db_connection() as conn:
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT home_team, away_team, league_name, match_time,
+                           home_odds, draw_odds, away_odds, prediction_mode, created_at, ai_analysis
+                    FROM match_predictions
+                    WHERE user_id = %s
+                    ORDER BY created_at DESC LIMIT 50
+                """, (current_user['id'],))
+                rows = cur.fetchall()
+                history_count = len(rows)
+
+                for r in rows:
+                    ht, at, league, mt, ho, do_, ao, mode, created, analysis = r
+                    ht_cn = TEAM_NAME_CN.get(ht, ht) if ht else '-'
+                    at_cn = TEAM_NAME_CN.get(at, at) if at else '-'
+                    time_str = created.strftime('%Y-%m-%d %H:%M') if created else '-'
+                    mode_badge = '<span style="background:var(--orange);color:#fff;padding:2px 8px;border-radius:4px;font-size:.7rem">AI</span>' if mode == 'ai' else f'<span style="background:var(--blue);color:#fff;padding:2px 8px;border-radius:4px;font-size:.7rem">{mode or "?"}</span>'
+                    odds_html = ''
+                    if ho and do_ and ao:
+                        odds_html = f'<span style="color:var(--green);font-weight:700">{float(ho):.2f}</span> <span style="color:var(--muted);font-weight:700">{float(do_):.2f}</span> <span style="color:var(--blue);font-weight:700">{float(ao):.2f}</span>'
+                    else:
+                        odds_html = '<span style="color:var(--muted)">-</span>'
+                    history_html += f'''<tr>
+                        <td style="color:var(--muted);font-size:.8rem;white-space:nowrap">{time_str}</td>
+                        <td>{mode_badge}</td>
+                        <td><strong>{ht_cn}</strong> <span style="color:var(--muted)">vs</span> <strong>{at_cn}</strong></td>
+                        <td style="font-size:.8rem">{league or "-"}</td>
+                        <td style="font-size:.8rem">{odds_html}</td>
+                    </tr>'''
+        except Exception as e:
+            app.logger.error(f"获取用户历史失败: {e}")
+
+    checkin_btn = '✅ 今日已签到' if already_checked else '<i class="fas fa-calendar-check"></i> 每日签到 +6积分'
+    checkin_disabled = 'opacity:.5;pointer-events:none;cursor:default' if already_checked else ''
+    first_char = current_user['username'][0] if current_user['username'] else '?'
+
+    return f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>个人中心 - MatchPredict Pro</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<link rel="stylesheet" href="/static/style.css">
+<style>
+body {{ background: var(--bg); color: var(--cream); font-family: 'Inter', sans-serif; padding: 1.5rem; min-height: 100vh; }}
+.pf-wrap {{ max-width: 900px; margin: 0 auto; }}
+.pf-card {{ background: var(--card); border-radius: 16px; padding: 1.5rem; border: 1px solid var(--border); margin-bottom: 1.2rem; }}
+.pf-header {{ display: flex; align-items: center; gap: 1.2rem; }}
+.pf-avatar {{ width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, var(--orange), var(--amber)); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 900; color: #fff; flex-shrink: 0; }}
+.pf-name {{ font-size: 1.3rem; font-weight: 800; }}
+.pf-type {{ display: inline-block; margin-top: .3rem; font-size: .7rem; padding: 2px 10px; border-radius: 20px; background: rgba(74,222,128,.12); color: var(--green); border: 1px solid rgba(74,222,128,.2); }}
+.pf-stats {{ display: flex; gap: 2rem; margin-top: .8rem; }}
+.pf-stat-num {{ font-size: 1.6rem; font-weight: 900; color: var(--cream); }}
+.pf-stat-label {{ font-size: .7rem; color: var(--muted); }}
+.pf-checkin {{ display: flex; align-items: center; justify-content: space-between; }}
+.pf-checkin-info {{ display: flex; align-items: center; gap: .8rem; }}
+.pf-checkin-icon {{ font-size: 1.5rem; }}
+.pf-checkin-text h4 {{ margin: 0; font-size: .95rem; }}
+.pf-checkin-text p {{ margin: .2rem 0 0; font-size: .78rem; color: var(--muted); }}
+.pf-checkin-btn {{ padding: .6rem 1.2rem; border-radius: 20px; border: none; background: var(--orange); color: #fff; font-weight: 700; font-size: .82rem; cursor: pointer; {checkin_disabled} }}
+.pf-history-header {{ display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }}
+.pf-history-header h3 {{ margin: 0; font-size: 1rem; }}
+.pf-history-header small {{ color: var(--muted); font-size: .78rem; }}
+.pf-refresh {{ padding: .4rem .8rem; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--cream); cursor: pointer; font-size: .8rem; }}
+.pf-table {{ width: 100%; border-collapse: collapse; font-size: .85rem; }}
+.pf-table th {{ text-align: left; padding: .6rem .5rem; color: var(--muted); font-size: .72rem; font-weight: 600; border-bottom: 1px solid var(--border); }}
+.pf-table td {{ padding: .7rem .5rem; border-bottom: 1px solid rgba(255,255,255,.03); }}
+.back-link {{ display: block; text-align: center; margin-top: 1.5rem; color: var(--muted); text-decoration: none; font-size: .85rem; }}
+.back-link:hover {{ color: var(--orange); }}
+</style>
+</head>
+<body>
+<div class="pf-wrap">
+  <!-- 用户信息卡 -->
+  <div class="pf-card">
+    <div class="pf-header">
+      <div class="pf-avatar">{first_char}</div>
+      <div>
+        <div class="pf-name">{current_user['username']}</div>
+        <span class="pf-type">👑 {current_user.get('user_type', 'FREE').upper()}</span>
+        <div class="pf-stats">
+          <div><div class="pf-stat-num">{credits}</div><div class="pf-stat-label">当前积分</div></div>
+          <div><div class="pf-stat-num">{total_predictions}</div><div class="pf-stat-label">累计预测</div></div>
+          <div><div class="pf-stat-num">{history_count}</div><div class="pf-stat-label">历史记录</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 签到卡 -->
+  <div class="pf-card">
+    <div class="pf-checkin">
+      <div class="pf-checkin-info">
+        <div class="pf-checkin-icon">📅</div>
+        <div class="pf-checkin-text">
+          <h4>每日签到</h4>
+          <p>每天签到可获得 <strong style="color:var(--orange)">+6 积分</strong>。积分用于预测消耗。</p>
+        </div>
+      </div>
+      <button class="pf-checkin-btn" onclick="doCheckin()">{checkin_btn}</button>
+    </div>
+  </div>
+
+  <!-- 预测历史 -->
+  <div class="pf-card">
+    <div class="pf-history-header">
+      <div>
+        <h3><i class="fas fa-history"></i> 预测历史</h3>
+        <small>最近 50 条预测记录，点击查看详情</small>
+      </div>
+      <button class="pf-refresh" onclick="location.reload()"><i class="fas fa-sync-alt"></i> 刷新</button>
+    </div>
+    {f'''<table class="pf-table">
+      <thead><tr><th>时间</th><th>模式</th><th>比赛</th><th>联赛</th><th>赔率 (主/平/客)</th></tr></thead>
+      <tbody>{history_html}</tbody>
+    </table>''' if history_html else '<div style="text-align:center;padding:2rem;color:var(--muted)"><i class="fas fa-inbox" style="font-size:2rem;margin-bottom:.5rem;display:block"></i>暂无预测记录<br><small>使用 AI 大模型分析比赛后，记录会显示在这里</small></div>'}
+  </div>
+</div>
+<a class="back-link" href="/">← 返回 MatchPredict</a>
+<script>
+async function doCheckin() {{
+  const btn = document.querySelector('.pf-checkin-btn');
+  if (btn.dataset.done) return;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+  try {{
+    const res = await fetch('/api/user/checkin', {{ method: 'POST', credentials: 'same-origin' }});
+    const data = await res.json();
+    if (data.success && !data.already_checked) {{
+      btn.innerHTML = '✅ 签到成功 +' + (data.added || 6) + '积分';
+      btn.style.opacity = '.5';
+      btn.style.pointerEvents = 'none';
+      btn.dataset.done = '1';
+      // 更新积分显示
+      setTimeout(() => location.reload(), 1000);
+    }} else {{
+      btn.innerHTML = '✅ 今日已签到';
+      btn.style.opacity = '.5';
+      btn.style.pointerEvents = 'none';
+      btn.dataset.done = '1';
+    }}
+  }} catch {{
+    btn.innerHTML = '❌ 网络错误，稍后重试';
+  }}
+}}
+</script>
+</body>
+</html>"""
+
 @app.route('/api/teams')
 def get_teams():
     """获取球队数据"""
@@ -615,7 +789,7 @@ def ai_predict():
 
 @app.route('/api/ai/save', methods=['POST'])
 def ai_save():
-    """保存 AI 分析结果（fire-and-forget，不影响主流程）"""
+    """保存 AI 分析结果到 match_predictions 表"""
     try:
         current_user = get_current_user()
         data = request.get_json() or {}
@@ -625,19 +799,27 @@ def ai_save():
         saved = 0
         for r in results:
             try:
-                if hasattr(prediction_db, 'save_prediction'):
-                    prediction_db.save_prediction(
-                        user_id=current_user['id'],
-                        home_team=r.get('home_team', ''),
-                        away_team=r.get('away_team', ''),
-                        league=r.get('league_name', ''),
-                        match_time=r.get('match_time', ''),
-                        prediction_type='ai',
-                        result=r.get('ai_analysis', ''),
-                    )
+                match_data = {
+                    'home_team': r.get('home_team', ''),
+                    'away_team': r.get('away_team', ''),
+                    'league_name': r.get('league_name', ''),
+                    'match_time': r.get('match_time', ''),
+                    'home_odds': r.get('home_odds') or r.get('odds', {}).get('home'),
+                    'draw_odds': r.get('draw_odds') or r.get('odds', {}).get('draw'),
+                    'away_odds': r.get('away_odds') or r.get('odds', {}).get('away'),
+                }
+                prediction_db.save_ai_prediction(
+                    match_data=match_data,
+                    prediction_result=r.get('predicted_result', ''),
+                    confidence=0.0,
+                    ai_analysis=r.get('ai_analysis', ''),
+                    user_ip=request.remote_addr,
+                    user_id=current_user['id'],
+                    username=current_user['username'],
+                )
                 saved += 1
-            except Exception:
-                pass
+            except Exception as e:
+                app.logger.debug(f"保存单条AI预测失败: {e}")
         return jsonify({'success': True, 'saved': saved})
     except Exception:
         return jsonify({'success': True, 'saved': 0})
@@ -828,20 +1010,12 @@ def sync_status():
         if prediction_db:
             with prediction_db.get_db_connection() as conn:
                 cur = conn.cursor()
-                cur.execute("""
-                    SELECT MAX(updated_at) FROM upcoming_fixtures
-                """)
+                cur.execute("SELECT MAX(updated_at) FROM upcoming_fixtures")
                 row = cur.fetchone()
                 if row and row[0]:
-                    # 格式化为北京时间
-                    import pytz
-                    cst = pytz.timezone('Asia/Shanghai')
                     dt = row[0]
-                    if dt.tzinfo is None:
-                        import pytz as _tz
-                        dt = _tz.utc.localize(dt)
-                    dt_cst = dt.astimezone(cst)
-                    last_sync = dt_cst.strftime('%m-%d %H:%M')
+                    # 数据库时区已经是北京时间，直接格式化
+                    last_sync = dt.strftime('%m-%d %H:%M')
         return jsonify({
             'success': True,
             'last_sync_time': last_sync,
@@ -1775,6 +1949,8 @@ def accuracy_matches():
                 conds.append("result_correct = true")
             elif result_filter == 'wrong':
                 conds.append("result_correct = false")
+            elif result_filter == 'score_hit':
+                conds.append("score_correct = true")
 
             where = " AND ".join(conds)
 
