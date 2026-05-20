@@ -284,10 +284,27 @@ def build_rich_prompt(match: Dict[str, Any], ctx: Dict[str, Any],
 # ─────────────────────────────────────────────────────────────────────────────
 
 class AIFootballPredictor:
-    def __init__(self, api_key: str, model_name: str = "gemini-2.0-flash-exp"):
-        self.api_key   = api_key
+    def __init__(self, api_key: str = None, model_name: str = None):
+        # 优先从数据库读取配置，fallback 到参数/环境变量
+        self.api_key = api_key
         self.model_name = model_name
-        self.base_url  = "https://generativelanguage.googleapis.com/v1beta/models"
+        self.base_url = "https://generativelanguage.googleapis.com/v1beta/models"
+        self.use_openai_format = False
+        
+        try:
+            from scripts.database import prediction_db
+            if prediction_db:
+                with prediction_db.get_db_connection() as conn:
+                    cur = conn.cursor()
+                    cur.execute("SELECT key, value FROM system_config WHERE key IN ('ai_api_url','ai_api_key','ai_model')")
+                    cfg = dict(cur.fetchall())
+                    if cfg.get('ai_api_key'):
+                        self.api_key = cfg['ai_api_key']
+                        self.base_url = cfg.get('ai_api_url', self.base_url).rstrip('/')
+                        self.model_name = cfg.get('ai_model', self.model_name)
+                        self.use_openai_format = True  # 数据库配置的都用 OpenAI 兼容格式
+        except Exception:
+            pass
 
     # ── 批量分析 ──────────────────────────────────────────────────────────────
     def analyze_matches(self, matches: List[Dict[str, Any]],
@@ -377,8 +394,53 @@ class AIFootballPredictor:
             best = max(implied, key=implied.get)
             return f"市场偏{label_map[best]}（无ML数据）"
 
-    # ── 调用 Gemini API ───────────────────────────────────────────────────────
+    # ── 调用 AI API ───────────────────────────────────────────────────────
     def _call_ai_model(self, prompt: str) -> Optional[str]:
+        if self.use_openai_format:
+            return self._call_openai_format(prompt)
+        return self._call_gemini_native(prompt)
+
+    def _call_openai_format(self, prompt: str) -> Optional[str]:
+        """使用 OpenAI 兼容格式调用（支持 360 中转、OpenRouter 等）"""
+        url = f"{self.base_url}/chat/completions"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}",
+        }
+        payload = {
+            "model": self.model_name,
+            "messages": [
+                {"role": "system", "content": "你是一位经验丰富的足球分析专家。"},
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": 0.4,
+            "max_tokens": 1500,
+        }
+
+        for attempt in range(3):
+            try:
+                resp = requests.post(url, headers=headers, json=payload, timeout=60)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    content = data.get('choices', [{}])[0].get('message', {}).get('content', '')
+                    return content.strip() if content else None
+                elif resp.status_code == 429:
+                    delay = 2 ** attempt + random.uniform(0, 1)
+                    logger.warning(f"速率限制，等待 {delay:.1f}s")
+                    time.sleep(delay)
+                else:
+                    logger.error(f"AI API 错误 {resp.status_code}: {resp.text[:200]}")
+                    if attempt == 2:
+                        return None
+            except requests.exceptions.Timeout:
+                logger.warning(f"超时 (attempt {attempt+1})")
+            except Exception as e:
+                logger.error(f"AI 调用异常: {e}")
+                return None
+        return None
+
+    def _call_gemini_native(self, prompt: str) -> Optional[str]:
+        """使用 Google Gemini 原生格式调用"""
         url = f"{self.base_url}/{self.model_name}:generateContent"
         headers = {
             "Content-Type":  "application/json",
@@ -387,7 +449,7 @@ class AIFootballPredictor:
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {
-                "temperature":     0.4,   # 降低随机性，让输出更严谨
+                "temperature":     0.4,
                 "topK":            40,
                 "topP":            0.90,
                 "maxOutputTokens": 1200,

@@ -52,15 +52,20 @@ class PredictionDatabase:
         try:
             if self._pool:
                 conn = self._pool.getconn()
+                # 连接池返回的连接可能还在事务中，先重置
+                if conn.status != 0:  # 0 = STATUS_READY
+                    conn.rollback()
             else:
-                # fallback: 无连接池时直接创建
                 conn = psycopg2.connect(**self.connection_params)
             conn.autocommit = False
             yield conn
             conn.commit()
         except Exception as e:
             if conn:
-                conn.rollback()
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
                 logger.error(f"数据库操作失败，事务已回滚: {e}")
             else:
                 logger.error(f"数据库连接失败: {e}")
