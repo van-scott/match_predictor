@@ -247,22 +247,39 @@ def _kelly_recommend(proba: dict, home_odds: Optional[float],
     label_map = {'H': '主胜', 'D': '平局', 'A': '客胜'}
     if not proba:
         return "数据不足"
-    best = max(proba, key=proba.get)
-    best_prob = float(proba[best])
+    
+    # 过滤掉非概率键（如 confidence）
+    prob_only = {k: v for k, v in proba.items() if k in ('H', 'D', 'A')}
+    if not prob_only:
+        return "数据不足"
+    
+    best = max(prob_only, key=prob_only.get)
+    best_prob = float(prob_only[best])
+    
+    # 置信度过滤
+    confidence = proba.get('confidence', 'medium')
+    if confidence == 'low':
+        return f"低置信度/{label_map[best]}（{best_prob*100:.1f}%，不推荐）"
 
     if home_odds and draw_odds and away_odds:
         ho, do, ao = float(home_odds), float(draw_odds), float(away_odds)
         total = 1/ho + 1/do + 1/ao
         impl = {'H': 1/ho/total, 'D': 1/do/total, 'A': 1/ao/total}
         edge = best_prob - impl.get(best, 0)
+        
+        confidence_tag = "⭐" if confidence == 'high' else ""
+        
         if edge >= 0.07:
-            return f"强推{label_map[best]}（优势{edge*100:.1f}%）"
+            return f"强推{label_map[best]}（优势{edge*100:.1f}%）{confidence_tag}"
         elif edge >= 0.04:
-            return f"偏向{label_map[best]}（优势{edge*100:.1f}%）"
+            return f"偏向{label_map[best]}（优势{edge*100:.1f}%）{confidence_tag}"
         else:
             return f"谨慎/{label_map[best]}（优势<4%）"
     else:
-        return f"ML倾向{label_map[best]}（{best_prob*100:.1f}%）"
+        if confidence == 'high':
+            return f"ML强推{label_map[best]}（{best_prob*100:.1f}%）⭐"
+        else:
+            return f"ML倾向{label_map[best]}（{best_prob*100:.1f}%）"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
