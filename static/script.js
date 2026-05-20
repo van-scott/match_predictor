@@ -300,7 +300,12 @@ function renderLotteryList() {
 function formatTime(t) {
   if (!t) return '';
   try {
-    const d = new Date(t.replace(' ', 'T'));
+    // match_time 存的就是北京时间（无时区标记），直接当本地时间解析
+    const s = String(t).replace(' ', 'T');
+    // 去掉可能的 Z 或 +00:00 后缀，当作本地时间
+    const clean = s.replace(/Z$/, '').replace(/[+-]\d{2}:\d{2}$/, '');
+    const d = new Date(clean);
+    if (isNaN(d.getTime())) return t;
     return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
   } catch { return t; }
 }
@@ -944,14 +949,18 @@ function renderSmartMatches() {
 function groupMatchesByDate(matches) {
   const weekDays = ['周日','周一','周二','周三','周四','周五','周六'];
   const now = new Date();
-  const todayKey = now.toISOString().slice(0, 10);
+  const todayKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
   const tomorrow = new Date(now); tomorrow.setDate(now.getDate() + 1);
-  const tomorrowKey = tomorrow.toISOString().slice(0, 10);
+  const tomorrowKey = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth()+1).padStart(2,'0')}-${String(tomorrow.getDate()).padStart(2,'0')}`;
 
   const map = {};
   matches.forEach(m => {
-    const t = m.match_time ? new Date(m.match_time) : null;
-    const key = t ? t.toISOString().slice(0, 10) : 'unknown';
+    let t = null;
+    if (m.match_time) {
+      const s = String(m.match_time).replace(' ', 'T').replace(/Z$/, '').replace(/[+-]\d{2}:\d{2}$/, '');
+      t = new Date(s);
+    }
+    const key = t && !isNaN(t.getTime()) ? `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}` : 'unknown';
     if (!map[key]) map[key] = [];
     map[key].push(m);
   });
@@ -960,8 +969,10 @@ function groupMatchesByDate(matches) {
     let label;
     if (key === todayKey) label = `今天（${weekDays[now.getDay()]}）`;
     else if (key === tomorrowKey) label = `明天（${weekDays[tomorrow.getDay()]}）`;
+    else if (key === 'unknown') label = '日期未知';
     else {
-      const d = new Date(key + 'T00:00:00');
+      const parts = key.split('-');
+      const d = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
       label = `${d.getMonth()+1}月${d.getDate()}日（${weekDays[d.getDay()]}）`;
     }
     return { dateKey: key, label, matches: map[key] };
@@ -1104,6 +1115,7 @@ function buildSmartCard(m) {
 
 // ── 时间格式化 ─────────────────────────────────────────────────────────
 function formatSmartTime(d) {
+  // d 已经是本地时间（数据库存的就是北京时间）
   const now = new Date();
   const isToday = d.toDateString() === now.toDateString();
   const tomorrow = new Date(now);
@@ -1574,7 +1586,44 @@ function renderRecordList(matches) {
     el.innerHTML = '<div class="pr-empty" style="padding:2rem"><p>当前筛选下无匹配比赛</p></div>';
     return;
   }
-  el.innerHTML = matches.map(renderRecordMatchCard).join('');
+
+  // 按天分组（按比赛时间倒序）
+  const weekDays = ['周日','周一','周二','周三','周四','周五','周六'];
+  const groups = {};
+  matches.forEach(m => {
+    const t = m.match_time ? new Date(m.match_time) : null;
+    const key = t ? t.toISOString().slice(0, 10) : 'unknown';
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(m);
+  });
+
+  // 按日期倒序排列（最近的在前）
+  const sortedKeys = Object.keys(groups).sort().reverse();
+
+  let html = '';
+  sortedKeys.forEach((key, idx) => {
+    let label;
+    if (key === 'unknown') {
+      label = '日期未知';
+    } else {
+      const d = new Date(key + 'T00:00:00');
+      label = `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}（${weekDays[d.getDay()]}）`;
+    }
+    // 默认展开第一天（最近的）
+    const isExpanded = idx === 0;
+    html += `<div class="pr-day-group">
+      <div class="pr-day-header ${isExpanded ? 'expanded' : ''}" onclick="this.classList.toggle('expanded'); this.nextElementSibling.classList.toggle('hidden')">
+        <span class="pr-day-label">${label}</span>
+        <span class="pr-day-count">${groups[key].length} 场</span>
+        <i class="fas fa-chevron-down pr-day-arrow"></i>
+      </div>
+      <div class="pr-day-body ${isExpanded ? '' : 'hidden'}">
+        ${groups[key].map(renderRecordMatchCard).join('')}
+      </div>
+    </div>`;
+  });
+
+  el.innerHTML = html;
 }
 
 function renderRecordPagination(total, page, perPage) {

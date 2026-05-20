@@ -44,7 +44,7 @@
       <i class="fas fa-globe"></i> <span>世界杯预测</span>
     </button>
     <button id="tab-record" class="tab-btn" onclick="switchTab('record')">
-      <i class="fas fa-chart-line"></i> <span>预测战绩</span>
+      <i class="fas fa-chart-line"></i> <span>预测回顾</span>
     </button>
   </nav>
 
@@ -205,7 +205,7 @@
     <!-- Hero：始终可见 -->
     <header class="pr-hero">
       <div class="pr-hero-icon"><i class="fas fa-chart-pie"></i></div>
-      <h2 class="pr-hero-title">预测战绩</h2>
+      <h2 class="pr-hero-title">预测回顾</h2>
       <p class="pr-hero-subtitle">ML 模型预测 vs 真实比赛结果，逐场对照</p>
     </header>
 
@@ -234,8 +234,9 @@
         </select>
         <select id="pr-filter-result">
           <option value="">全部结果</option>
-          <option value="correct">✅ 命中</option>
-          <option value="wrong">❌ 未命中</option>
+          <option value="correct">✅ 胜平负命中</option>
+          <option value="wrong">❌ 胜平负未中</option>
+          <option value="score_hit">🎯 比分精确命中</option>
         </select>
       </div>
       <!-- 比赛对比卡片列表 -->

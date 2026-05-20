@@ -1211,7 +1211,8 @@ class PredictionDatabase:
                 
                 select_sql = """
             SELECT id, username, email, user_type, membership_expires, 
-                   daily_predictions_used, last_prediction_date, total_predictions
+                   daily_predictions_used, last_prediction_date, total_predictions,
+                   last_checkin_date, credits
             FROM users 
             WHERE username = %s AND password_hash = %s AND is_active = TRUE
             """
@@ -1255,7 +1256,8 @@ class PredictionDatabase:
                 
                 select_sql = """
             SELECT id, username, email, user_type, membership_expires, 
-                   daily_predictions_used, last_prediction_date, total_predictions
+                   daily_predictions_used, last_prediction_date, total_predictions,
+                   last_checkin_date, credits
             FROM users 
             WHERE username = %s AND is_active = TRUE
             """
@@ -1398,7 +1400,11 @@ class PredictionDatabase:
                 last_checkin = row[0] if row else None
 
                 if last_checkin and last_checkin == today:
-                    return {'success': False, 'msg': '今日已签到，明日再来'}
+                    # 获取当前积分返回给前端
+                    cursor.execute("SELECT credits FROM users WHERE id = %s", (user_id,))
+                    cur_credits = cursor.fetchone()[0]
+                    return {'success': True, 'already_checked': True, 'credits': cur_credits,
+                            'message': '今日已签到，明天再来哦'}
 
                 amount = 30 if user_type == 'premium' else 6
                 cursor.execute(
@@ -1413,11 +1419,12 @@ class PredictionDatabase:
                 cursor.execute("SELECT credits FROM users WHERE id = %s", (user_id,))
                 new_credits = cursor.fetchone()[0]
 
-                return {'success': True, 'added': amount, 'credits': new_credits}
+                return {'success': True, 'added': amount, 'credits': new_credits,
+                        'message': f'签到成功！+{amount} 积分'}
 
         except Exception as e:
             logger.error(f"签到失败: {e}")
-            return {'success': False, 'msg': str(e)}
+            return {'success': False, 'message': f'签到失败: {str(e)}'}
 
     def ensure_credits_columns(self):
         """确保 users 表有 credits 和 last_checkin_date 字段（幂等操作）"""
