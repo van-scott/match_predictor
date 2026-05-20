@@ -333,7 +333,7 @@ function toggleAiCart(match) {
     aiCart.splice(idx, 1);
     if (cardEl) cardEl.classList.remove('selected');
   } else {
-    if (aiCart.length >= 5) { showToast('最多选择5场比赛', 'error'); return; }
+    if (aiCart.length >= 10) { showToast('最多选择10场比赛', 'error'); return; }
     aiCart.push(match);
     if (cardEl) cardEl.classList.add('selected');
   }
@@ -358,7 +358,7 @@ function updateAiCartUI() {
   cartEl.innerHTML = aiCart.map(m => `
     <div class="cart-item">
       <div class="cart-item-info">
-        <b>${m.home_team} vs ${m.away_team}</b>
+        <b>${m.home_team_cn || m.home_team} vs ${m.away_team_cn || m.away_team}</b>
         <small>${m.league_name}</small>
       </div>
       <button class="cart-remove" onclick="removeFromCart('${m.match_id}')">✕</button>

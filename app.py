@@ -484,6 +484,7 @@ def get_lottery_matches():
             d['away_team_display'] = f"{at_cn}({at})" if at_cn else at
             d['home_team_cn'] = ht_cn or ht
             d['away_team_cn'] = at_cn or at
+            d['match_id'] = d['fixture_id']  # 前端用 match_id
             mt = d['match_time']
             d['match_time'] = mt.isoformat() if mt else None
             d['match_date'] = mt.strftime('%Y-%m-%d') if mt else None

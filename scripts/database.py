@@ -14,14 +14,15 @@ from typing import Dict, Any, Optional, List
 import json
 import contextlib # 导入 contextlib
 
-# 配置日志
+# 配置日志（连接池模式下不需要每次连接都打日志）
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
 
 class PredictionDatabase:
-    """预测结果数据库管理"""
+    """预测结果数据库管理（使用连接池）"""
     
     def __init__(self):
-        logger.info("正在初始化数据库连接参数...")
+        logger.info("正在初始化数据库连接池...")
         self.connection_params = {
             "host": os.getenv("DB_HOST", "10.43.104.94"),
             "port": int(os.getenv("DB_PORT", "5432")),
@@ -31,43 +32,55 @@ class PredictionDatabase:
             "sslmode": "prefer",
             "connect_timeout": 10
         }
-        # self.init_tables() # 移除此行，数据库表的初始化应手动触发
+        # 初始化连接池（最少2个连接，最多10个）
+        from psycopg2 import pool
+        try:
+            self._pool = pool.ThreadedConnectionPool(
+                minconn=2,
+                maxconn=10,
+                **self.connection_params
+            )
+            logger.info("✅ 数据库连接池初始化成功 (2-10 连接)")
+        except Exception as e:
+            logger.error(f"❌ 连接池初始化失败: {e}")
+            self._pool = None
     
     @contextlib.contextmanager
     def get_db_connection(self):
-        """使用上下文管理器获取数据库连接，并处理事务。"""
+        """从连接池获取连接，用完归还。"""
         conn = None
         try:
-            conn = psycopg2.connect(**self.connection_params)
-            conn.autocommit = False # 禁用自动提交，手动管理事务
-            logger.info("数据库连接成功并开始事务管理")
+            if self._pool:
+                conn = self._pool.getconn()
+            else:
+                # fallback: 无连接池时直接创建
+                conn = psycopg2.connect(**self.connection_params)
+            conn.autocommit = False
             yield conn
-            conn.commit() # 成功时提交事务
-            logger.info("事务提交成功")
+            conn.commit()
         except Exception as e:
             if conn:
-                conn.rollback() # 失败时回滚事务
+                conn.rollback()
                 logger.error(f"数据库操作失败，事务已回滚: {e}")
             else:
-                logger.error(f"数据库连接失败: {e}", exc_info=True)
-            raise # 重新抛出异常，让上层处理
+                logger.error(f"数据库连接失败: {e}")
+            raise
         finally:
             if conn:
-                conn.close()
-                logger.info("数据库连接已关闭")
+                if self._pool:
+                    self._pool.putconn(conn)
+                else:
+                    conn.close()
 
-    # 修改 connect_to_database 为 _get_conn，仅用于内部获取原始连接
     def _get_conn(self):
-        """内部方法：直接获取原始数据库连接，不进行事务管理"""
-        conn = None
+        """内部方法：直接获取原始数据库连接"""
         try:
-            conn = psycopg2.connect(**self.connection_params)
-            logger.debug("内部数据库连接成功")
-            return conn
+            if self._pool:
+                return self._pool.getconn()
+            return psycopg2.connect(**self.connection_params)
         except Exception as e:
-            logger.error(f"内部数据库连接失败: {e}，参数: {self.connection_params.get('host')}:{self.connection_params.get('port')}/{self.connection_params.get('database')}", exc_info=True)
-            if conn:
-                conn.close()
+            logger.error(f"数据库连接失败: {e}")
+            return None
             raise Exception(f"数据库连接失败: {e}")
     
     def init_tables(self):
