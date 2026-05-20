@@ -381,132 +381,48 @@ async function runAI() {
   resultsEl.scrollIntoView({ behavior: 'smooth' });
 
   let elapsed = 0;
-  const showSpinner = (msg) => {
-    resultsEl.innerHTML = `
-      <div class="spinner-overlay">
-        <i class="fas fa-robot fa-spin fa-3x" style="color:var(--c-gold)"></i>
-        <span>${msg}</span>
-        <small id="ai-elapsed" style="color:var(--c-muted)"></small>
-      </div>`;
-  };
-  showSpinner(`AI大模型深度分析中，请稍候... (${aiCart.length} 场)`);
+  resultsEl.innerHTML = `
+    <div class="spinner-overlay">
+      <i class="fas fa-robot fa-spin fa-3x" style="color:var(--c-gold)"></i>
+      <span>AI大模型深度分析中，请稍候... (${aiCart.length} 场)</span>
+      <small id="ai-elapsed" style="color:var(--c-muted)"></small>
+    </div>`;
 
   const elapsedTimer = setInterval(() => {
     elapsed++;
     const el = document.getElementById('ai-elapsed');
-    if (el) el.textContent = `已等待 ${elapsed}s，owl-alpha 正在深度思考...`;
+    if (el) el.textContent = `已等待 ${elapsed}s，AI 正在深度分析...`;
   }, 1000);
 
   try {
-    // Step 1: 鉴权+扣积分，获取 prompts+apikey
-    const initRes = await fetch('/api/ai/predict', {
+    // 一次请求，后端完成所有 AI 调用
+    const res = await fetch('/api/ai/predict', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
       body: JSON.stringify({ matches: aiCart }),
     });
-    const initData = await initRes.json();
-
-    if (initRes.status === 402 || initData.error_code === 'INSUFFICIENT_CREDITS') {
-      clearInterval(elapsedTimer);
-      resultsEl.classList.add('hidden');
-      showCreditsModal(initData);
-      return;
-    }
-    if (!initData.success) {
-      clearInterval(elapsedTimer);
-      resultsEl.innerHTML = `<div class="error-msg">❌ ${initData.message || initData.error || '请求失败'}</div>`;
-      return;
-    }
-    refreshCredits();
-
-    const { api_key, model, matches: enrichedMatches } = initData;
-
-    // Step 2: 浏览器直接调用 OpenRouter（无 Vercel 超时限制）
-    const predictions = [];
-    const uncachedPredictions = []; // 仅保存新生成的以备后台存储
-
-    for (let i = 0; i < enrichedMatches.length; i++) {
-      const m = enrichedMatches[i];
-      const el = document.getElementById('ai-elapsed');
-
-      if (m.from_cache) {
-        if (el) el.textContent = `从缓存读取第 ${i+1}/${enrichedMatches.length} 场：${m.home_team} vs ${m.away_team}...`;
-        predictions.push({
-          match_id:    m.match_id,
-          home_team:   m.home_team,
-          away_team:   m.away_team,
-          league_name: m.league_name,
-          match_time:  m.match_time,
-          home_odds:   m.home_odds,
-          draw_odds:   m.draw_odds,
-          away_odds:   m.away_odds,
-          ai_analysis: m.ai_analysis,
-          from_cache:  true,
-          odds: { home: m.home_odds, draw: m.draw_odds, away: m.away_odds },
-        });
-        // 为了视觉效果，稍微等一下
-        await new Promise(r => setTimeout(r, 500));
-        continue;
-      }
-
-      if (el) el.textContent = `正在分析第 ${i+1}/${enrichedMatches.length} 场：${m.home_team} vs ${m.away_team}...`;
-
-      try {
-        const aiRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${api_key}`,
-            'Content-Type': 'application/json',
-            'HTTP-Referer': window.location.origin,
-            'X-Title': 'MatchPredict Football Analysis',
-          },
-          body: JSON.stringify({
-            model: model || 'openrouter/owl-alpha',
-            messages: [
-              { role: 'system', content: '你是一位经验丰富的足球分析专家，擅长从数据和赔率中发现价值投注机会，分析精准、专业。' },
-              { role: 'user',   content: m.prompt },
-            ],
-            temperature: 0.3,
-            max_tokens: 2048,
-          }),
-        });
-        const aiData = await aiRes.json();
-        const analysis = aiData.choices?.[0]?.message?.content?.trim() || '⚠️ AI未返回分析内容';
-        const newPred = {
-          match_id:    m.match_id,
-          home_team:   m.home_team,
-          away_team:   m.away_team,
-          league_name: m.league_name,
-          match_time:  m.match_time,
-          home_odds:   m.home_odds,
-          draw_odds:   m.draw_odds,
-          away_odds:   m.away_odds,
-          ai_analysis: analysis,
-          from_cache:  false,
-          odds: { home: m.home_odds, draw: m.draw_odds, away: m.away_odds },
-        };
-        predictions.push(newPred);
-        uncachedPredictions.push(newPred);
-      } catch (e) {
-        predictions.push({
-          match_id: m.match_id, home_team: m.home_team, away_team: m.away_team,
-          league_name: m.league_name, match_time: m.match_time,
-          home_odds: m.home_odds, draw_odds: m.draw_odds, away_odds: m.away_odds,
-          ai_analysis: `⚠️ 分析失败：${e.message}`,
-          from_cache:  false,
-          odds: { home: m.home_odds, draw: m.draw_odds, away: m.away_odds },
-        });
-      }
-    }
+    const data = await res.json();
 
     clearInterval(elapsedTimer);
 
-    // Step 3: 展示结果
+    if (res.status === 402 || data.error_code === 'INSUFFICIENT_CREDITS') {
+      resultsEl.classList.add('hidden');
+      showCreditsModal(data);
+      return;
+    }
+    if (!data.success) {
+      resultsEl.innerHTML = `<div class="error-msg">❌ ${data.message || '请求失败'}</div>`;
+      return;
+    }
+
+    refreshCredits();
+
+    // 展示结果
+    const predictions = data.predictions || [];
     renderAIResults(predictions);
 
-    // Step 4: 后台保存到数据库（fire-and-forget）
-    // 即便是缓存命中，也需要存一条记录，这样用户的"个人预测历史"里才会显示
+    // 后台保存到数据库
     if (predictions.length > 0) {
       fetch('/api/ai/save', {
         method: 'POST',
@@ -529,24 +445,26 @@ function renderAIResults(predictions) {
   predictions.forEach(p => {
     const card = document.createElement('div');
     card.className = 'ai-result-card';
-    const odds = p.odds || {};
+    const ho = p.home_odds || p.odds?.home || '-';
+    const dro = p.draw_odds || p.odds?.draw || '-';
+    const ao = p.away_odds || p.odds?.away || '-';
     // Convert markdown bold **text** to <strong>
     const formattedAnalysis = (p.ai_analysis || '').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
 
     card.innerHTML = `
       <div class="ai-result-header">
         <div>
-          <h3>${p.home_team} vs ${p.away_team}</h3>
+          <h3>${p.home_team_cn || p.home_team} vs ${p.away_team_cn || p.away_team}</h3>
           <small style="color:var(--c-muted)">${p.league_name}</small>
         </div>
-        <span class="ai-badge">🤖 OWL-ALPHA</span>
+        <span class="ai-badge">🤖 AI</span>
       </div>
       <div class="ai-odds-strip">
-        <div class="ai-odd-item"><span class="ai-odd-label">主胜赔率</span><span class="ai-odd-val">${odds.home || '-'}</span></div>
-        <div class="ai-odd-item"><span class="ai-odd-label">平局赔率</span><span class="ai-odd-val">${odds.draw || '-'}</span></div>
-        <div class="ai-odd-item"><span class="ai-odd-label">客胜赔率</span><span class="ai-odd-val">${odds.away || '-'}</span></div>
+        <div class="ai-odd-item"><span class="ai-odd-label">主胜赔率</span><span class="ai-odd-val">${ho}</span></div>
+        <div class="ai-odd-item"><span class="ai-odd-label">平局赔率</span><span class="ai-odd-val">${dro}</span></div>
+        <div class="ai-odd-item"><span class="ai-odd-label">客胜赔率</span><span class="ai-odd-val">${ao}</span></div>
       </div>
-      <div class="ai-analysis-text">${formattedAnalysis}</div>
+      <div class="ai-analysis-text">${formattedAnalysis || '<span style="color:var(--muted)">⚠️ AI未返回分析内容</span>'}</div>
       <div style="margin-top:1.25rem;padding:0.75rem 1rem;background:rgba(255,255,255,0.02);border-radius:10px;font-size:0.75rem;color:var(--c-muted)">
         ⚠️ 以上内容由AI大模型生成，仅供参考，不构成投注建议。
       </div>`;
