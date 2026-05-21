@@ -254,6 +254,7 @@ def profile():
     history_count = 0
     history_html = ''
     already_checked = False
+    analyses_json = []
     config = {'ai_api_url': '', 'ai_api_key': '', 'ai_model': ''}
 
     # 管理员加载 AI 配置
@@ -282,7 +283,8 @@ def profile():
                 rows = cur.fetchall()
                 history_count = len(rows)
 
-                for r in rows:
+                analyses_json = []
+                for idx, r in enumerate(rows):
                     ht, at, league, mt, ho, do_, ao, mode, created, analysis = r
                     ht_cn = TEAM_NAME_CN.get(ht, ht) if ht else '-'
                     at_cn = TEAM_NAME_CN.get(at, at) if at else '-'
@@ -299,7 +301,15 @@ def profile():
                         <td><strong>{ht_cn}</strong> <span style="color:var(--muted)">vs</span> <strong>{at_cn}</strong></td>
                         <td style="font-size:.8rem">{league or "-"}</td>
                         <td style="font-size:.8rem">{odds_html}</td>
+                        <td><button class="pf-refresh" onclick="showDetail({idx})" style="font-size:.7rem;padding:.3rem .6rem">详情</button></td>
                     </tr>'''
+                    analyses_json.append({
+                        'home': ht_cn,
+                        'away': at_cn,
+                        'league': league or '',
+                        'time': time_str,
+                        'analysis': (analysis or '').replace('\n', '<br>').replace('**', ''),
+                    })
         except Exception as e:
             app.logger.error(f"获取用户历史失败: {e}")
 
@@ -314,6 +324,7 @@ def profile():
         already_checked=already_checked,
         config=config,
         first_char=first_char,
+        analyses_json=analyses_json if 'analyses_json' in locals() else [],
     )
 
 @app.route('/api/teams')
@@ -756,7 +767,7 @@ def ai_save():
                 )
                 saved += 1
             except Exception as e:
-                app.logger.debug(f"保存单条AI预测失败: {e}")
+                app.logger.error(f"保存单条AI预测失败: {e}")
         return jsonify({'success': True, 'saved': saved})
     except Exception:
         return jsonify({'success': True, 'saved': 0})

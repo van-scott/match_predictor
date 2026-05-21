@@ -692,27 +692,19 @@ class PredictionDatabase:
             return {'created': False, 'username': username, 'message': str(e)}
     
     def save_prediction(self, prediction_data: Dict[str, Any]) -> bool:
-        """
-        保存预测结果到数据库
-        
-        Args:
-            prediction_data: 预测数据字典
-            
-        Returns:
-            保存是否成功
-        """
+        """保存预测结果到数据库"""
         try:
             with self.get_db_connection() as conn:
                 cursor = conn.cursor()
-                
-                # 准备插入数据
                 insert_sql = """
             INSERT INTO match_predictions (
-                prediction_id, prediction_mode, home_team, away_team, league_name,
+                prediction_id, prediction_mode, user_id, username,
+                home_team, away_team, league_name,
                 match_time, home_odds, draw_odds, away_odds, predicted_result,
                 prediction_confidence, ai_analysis, user_ip
             ) VALUES (
-                %(prediction_id)s, %(prediction_mode)s, %(home_team)s, %(away_team)s, %(league_name)s,
+                %(prediction_id)s, %(prediction_mode)s, %(user_id)s, %(username)s,
+                %(home_team)s, %(away_team)s, %(league_name)s,
                 %(match_time)s, %(home_odds)s, %(draw_odds)s, %(away_odds)s, %(predicted_result)s,
                 %(prediction_confidence)s, %(ai_analysis)s, %(user_ip)s
             ) ON CONFLICT (prediction_id) DO UPDATE SET
@@ -721,68 +713,49 @@ class PredictionDatabase:
                 prediction_confidence = EXCLUDED.prediction_confidence,
                 ai_analysis = EXCLUDED.ai_analysis;
             """
-            
-            cursor.execute(insert_sql, prediction_data)
-            # conn.commit() # 由上下文管理器处理
-            cursor.close()
-            # conn.close() # 由上下文管理器处理
-            
-            logger.info(f"预测结果保存成功: {prediction_data.get('prediction_id')}")
+                cursor.execute(insert_sql, prediction_data)
+                cursor.close()
             return True
-            
         except Exception as e:
             logger.error(f"保存预测结果失败: {e}")
-            # if conn: # 由上下文管理器处理
-            #     conn.rollback() # 确保事务回滚
-            #     conn.close()
             return False
     
     def save_ai_prediction(self, match_data: Dict[str, Any], prediction_result: str, 
                           confidence: float, ai_analysis: str, user_ip: str = None,
                           user_id: int = None, username: str = None) -> bool:
-        """
-        保存AI模式预测结果
-        
-        Args:
-            match_data: 比赛数据
-            prediction_result: 预测结果 (主胜/平局/客胜)
-            confidence: 预测信心指数 (0-10)
-            ai_analysis: AI分析内容
-            user_ip: 用户IP
-            
-        Returns:
-            保存是否成功
-        """
+        """保存AI模式预测结果"""
         try:
-            # 提取赔率信息
-            odds = match_data.get('odds', {})
-            
             # 生成预测ID
             prediction_id = f"ai_{match_data.get('home_team', '')}_{match_data.get('away_team', '')}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
             
-            # 解析比赛时间
+            # 解析比赛时间（支持多种格式）
             match_time = None
-            if match_data.get('match_time'):
-                try:
-                    match_time = datetime.strptime(match_data['match_time'], '%Y-%m-%d %H:%M:%S')
-                except:
+            mt_raw = match_data.get('match_time', '')
+            if mt_raw:
+                for fmt in ['%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M', '%Y-%m-%dT%H:%M:%S+00:00', '%Y-%m-%dT%H:%M:%SZ']:
                     try:
-                        match_time = datetime.strptime(match_data['match_time'], '%Y-%m-%d %H:%M')
+                        match_time = datetime.strptime(mt_raw.split('+')[0].replace('Z',''), fmt.split('+')[0].replace('Z',''))
+                        break
                     except:
-                        pass
+                        continue
+            
+            # 赔率直接从 match_data 取（不再嵌套在 odds 下）
+            home_odds = match_data.get('home_odds')
+            draw_odds = match_data.get('draw_odds')
+            away_odds = match_data.get('away_odds')
             
             prediction_data = {
                 'prediction_id': prediction_id,
-                'prediction_mode': 'AI',
+                'prediction_mode': 'ai',
                 'user_id': user_id,
                 'username': username,
                 'home_team': match_data.get('home_team', ''),
                 'away_team': match_data.get('away_team', ''),
                 'league_name': match_data.get('league_name', ''),
                 'match_time': match_time,
-                'home_odds': float(odds.get('home_odds', 0)) if odds.get('home_odds') else None,
-                'draw_odds': float(odds.get('draw_odds', 0)) if odds.get('draw_odds') else None,
-                'away_odds': float(odds.get('away_odds', 0)) if odds.get('away_odds') else None,
+                'home_odds': float(home_odds) if home_odds and home_odds != '-' else None,
+                'draw_odds': float(draw_odds) if draw_odds and draw_odds != '-' else None,
+                'away_odds': float(away_odds) if away_odds and away_odds != '-' else None,
                 'predicted_result': prediction_result,
                 'prediction_confidence': confidence,
                 'ai_analysis': ai_analysis,
