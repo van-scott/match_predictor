@@ -303,189 +303,18 @@ def profile():
         except Exception as e:
             app.logger.error(f"获取用户历史失败: {e}")
 
-    checkin_btn = '✅ 今日已签到' if already_checked else '<i class="fas fa-calendar-check"></i> 每日签到 +6积分'
-    checkin_disabled = 'opacity:.5;pointer-events:none;cursor:default' if already_checked else ''
     first_char = current_user['username'][0] if current_user['username'] else '?'
 
-    return f"""<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>个人中心 - MatchPredict Pro</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/static/style.css">
-<style>
-body {{ background: var(--bg); color: var(--cream); font-family: 'Inter', sans-serif; padding: 1.5rem; min-height: 100vh; }}
-.pf-wrap {{ max-width: 900px; margin: 0 auto; }}
-.pf-card {{ background: var(--card); border-radius: 16px; padding: 1.5rem; border: 1px solid var(--border); margin-bottom: 1.2rem; }}
-.pf-header {{ display: flex; align-items: center; gap: 1.2rem; }}
-.pf-avatar {{ width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, var(--orange), var(--amber)); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 900; color: #fff; flex-shrink: 0; }}
-.pf-name {{ font-size: 1.3rem; font-weight: 800; }}
-.pf-type {{ display: inline-block; margin-top: .3rem; font-size: .7rem; padding: 2px 10px; border-radius: 20px; background: rgba(74,222,128,.12); color: var(--green); border: 1px solid rgba(74,222,128,.2); }}
-.pf-stats {{ display: flex; gap: 2rem; margin-top: .8rem; }}
-.pf-stat-num {{ font-size: 1.6rem; font-weight: 900; color: var(--cream); }}
-.pf-stat-label {{ font-size: .7rem; color: var(--muted); }}
-.pf-checkin {{ display: flex; align-items: center; justify-content: space-between; }}
-.pf-checkin-info {{ display: flex; align-items: center; gap: .8rem; }}
-.pf-checkin-icon {{ font-size: 1.5rem; }}
-.pf-checkin-text h4 {{ margin: 0; font-size: .95rem; }}
-.pf-checkin-text p {{ margin: .2rem 0 0; font-size: .78rem; color: var(--muted); }}
-.pf-checkin-btn {{ padding: .6rem 1.2rem; border-radius: 20px; border: none; background: var(--orange); color: #fff; font-weight: 700; font-size: .82rem; cursor: pointer; {checkin_disabled} }}
-.pf-history-header {{ display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }}
-.pf-history-header h3 {{ margin: 0; font-size: 1rem; }}
-.pf-history-header small {{ color: var(--muted); font-size: .78rem; }}
-.pf-refresh {{ padding: .4rem .8rem; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--cream); cursor: pointer; font-size: .8rem; }}
-.pf-table {{ width: 100%; border-collapse: collapse; font-size: .85rem; }}
-.pf-table th {{ text-align: left; padding: .6rem .5rem; color: var(--muted); font-size: .72rem; font-weight: 600; border-bottom: 1px solid var(--border); }}
-.pf-table td {{ padding: .7rem .5rem; border-bottom: 1px solid rgba(255,255,255,.03); }}
-.back-link {{ display: block; text-align: center; margin-top: 1.5rem; color: var(--muted); text-decoration: none; font-size: .85rem; }}
-.back-link:hover {{ color: var(--orange); }}
-</style>
-</head>
-<body>
-<div class="pf-wrap">
-  <!-- 用户信息卡 -->
-  <div class="pf-card">
-    <div class="pf-header">
-      <div class="pf-avatar">{first_char}</div>
-      <div>
-        <div class="pf-name">{current_user['username']}</div>
-        <span class="pf-type">👑 {current_user.get('user_type', 'FREE').upper()}</span>
-        <div class="pf-stats">
-          <div><div class="pf-stat-num">{credits}</div><div class="pf-stat-label">当前积分</div></div>
-          <div><div class="pf-stat-num">{total_predictions}</div><div class="pf-stat-label">累计预测</div></div>
-          <div><div class="pf-stat-num">{history_count}</div><div class="pf-stat-label">历史记录</div></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- 签到卡 -->
-  <div class="pf-card">
-    <div class="pf-checkin">
-      <div class="pf-checkin-info">
-        <div class="pf-checkin-icon">📅</div>
-        <div class="pf-checkin-text">
-          <h4>每日签到</h4>
-          <p>每天签到可获得 <strong style="color:var(--orange)">+6 积分</strong>。积分用于预测消耗。</p>
-        </div>
-      </div>
-      <button class="pf-checkin-btn" onclick="doCheckin()">{checkin_btn}</button>
-    </div>
-  </div>
-
-  <!-- 预测历史 -->
-  <div class="pf-card">
-    <div class="pf-history-header">
-      <div>
-        <h3><i class="fas fa-history"></i> 预测历史</h3>
-        <small>最近 50 条预测记录，点击查看详情</small>
-      </div>
-      <button class="pf-refresh" onclick="location.reload()"><i class="fas fa-sync-alt"></i> 刷新</button>
-    </div>
-    {f'''<table class="pf-table">
-      <thead><tr><th>时间</th><th>模式</th><th>比赛</th><th>联赛</th><th>赔率 (主/平/客)</th></tr></thead>
-      <tbody>{history_html}</tbody>
-    </table>''' if history_html else '<div style="text-align:center;padding:2rem;color:var(--muted)"><i class="fas fa-inbox" style="font-size:2rem;margin-bottom:.5rem;display:block"></i>暂无预测记录<br><small>使用 AI 大模型分析比赛后，记录会显示在这里</small></div>'}
-  </div>
-
-  {f"""<!-- 管理员：AI 配置 -->
-  <div class="pf-card">
-    <div class="pf-history-header">
-      <div>
-        <h3><i class="fas fa-cog"></i> AI 模型配置</h3>
-        <small>配置 AI 服务地址、Key 和模型</small>
-      </div>
-      <button class="pf-refresh" onclick="detectModels()"><i class="fas fa-search"></i> 检测模型</button>
-    </div>
-    <div class="ac-field" style="margin-bottom:1rem">
-      <label style="display:block;font-size:.75rem;color:var(--muted);margin-bottom:.3rem;font-weight:600">API 服务地址</label>
-      <input type="text" id="ai-url" value="{config['ai_api_url']}" placeholder="https://openrouter.ai/api/v1" style="width:100%;padding:.6rem .8rem;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--cream);font-size:.85rem">
-    </div>
-    <div class="ac-field" style="margin-bottom:1rem">
-      <label style="display:block;font-size:.75rem;color:var(--muted);margin-bottom:.3rem;font-weight:600">API Key</label>
-      <input type="password" id="ai-key" value="{config['ai_api_key']}" placeholder="sk-..." style="width:100%;padding:.6rem .8rem;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--cream);font-size:.85rem">
-    </div>
-    <div class="ac-field" style="margin-bottom:1rem">
-      <label style="display:block;font-size:.75rem;color:var(--muted);margin-bottom:.3rem;font-weight:600">当前模型</label>
-      <input type="text" id="ai-model" value="{config['ai_model']}" placeholder="openrouter/owl-alpha" style="width:100%;padding:.6rem .8rem;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--cream);font-size:.85rem">
-    </div>
-    <div id="ac-models" style="margin-bottom:1rem"></div>
-    <div id="ac-status" style="margin-bottom:.8rem;padding:.6rem;border-radius:6px;font-size:.8rem;display:none"></div>
-    <button onclick="saveAiConfig()" style="padding:.6rem 1.2rem;border-radius:8px;border:none;background:var(--orange);color:#fff;font-weight:700;font-size:.82rem;cursor:pointer"><i class="fas fa-save"></i> 保存配置</button>
-  </div>""" if current_user.get('user_type') == 'admin' else ''}
-</div>
-<a class="back-link" href="/">← 返回 MatchPredict</a>
-<script>
-async function doCheckin() {{
-  const btn = document.querySelector('.pf-checkin-btn');
-  if (btn.dataset.done) return;
-  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-  try {{
-    const res = await fetch('/api/user/checkin', {{ method: 'POST', credentials: 'same-origin' }});
-    const data = await res.json();
-    if (data.success && !data.already_checked) {{
-      btn.innerHTML = '✅ 签到成功 +' + (data.added || 6) + '积分';
-      btn.style.opacity = '.5';
-      btn.style.pointerEvents = 'none';
-      btn.dataset.done = '1';
-      setTimeout(() => location.reload(), 1000);
-    }} else {{
-      btn.innerHTML = '✅ 今日已签到';
-      btn.style.opacity = '.5';
-      btn.style.pointerEvents = 'none';
-      btn.dataset.done = '1';
-    }}
-  }} catch {{
-    btn.innerHTML = '❌ 网络错误，稍后重试';
-  }}
-}}
-async function detectModels() {{
-  const url = document.getElementById('ai-url')?.value.trim();
-  const key = document.getElementById('ai-key')?.value.trim();
-  const statusEl = document.getElementById('ac-status');
-  const modelsEl = document.getElementById('ac-models');
-  if (!url || !key || !statusEl) return;
-  statusEl.style.display='block'; statusEl.style.background='rgba(255,255,255,.05)'; statusEl.style.color='var(--muted)'; statusEl.textContent='检测中...';
-  modelsEl.innerHTML = '';
-  try {{
-    const res = await fetch('/api/admin/detect-models', {{method:'POST',headers:{{'Content-Type':'application/json'}},credentials:'same-origin',body:JSON.stringify({{url,key}})}});
-    const data = await res.json();
-    if (data.success && data.models?.length > 0) {{
-      statusEl.style.background='rgba(74,222,128,.08)'; statusEl.style.color='var(--green)'; statusEl.textContent=`✅ 检测到 ${{data.models.length}} 个模型`;
-      const cur = document.getElementById('ai-model').value;
-      modelsEl.style.maxHeight='300px'; modelsEl.style.overflowY='auto'; modelsEl.style.padding='.5rem'; modelsEl.style.border='1px solid var(--border)'; modelsEl.style.borderRadius='8px'; modelsEl.style.background='var(--surface)';
-      modelsEl.innerHTML = data.models.map(m => `<div style="display:inline-block;padding:.35rem .7rem;margin:.25rem;border-radius:6px;border:1px solid ${{m.id===cur?'var(--orange)':'var(--border)'}};background:${{m.id===cur?'rgba(232,146,74,.12)':'transparent'}};font-size:.75rem;cursor:pointer;color:var(--cream);white-space:nowrap" onclick="document.getElementById('ai-model').value='${{m.id}}';document.querySelectorAll('#ac-models div').forEach(d=>{{d.style.borderColor='var(--border)';d.style.background='transparent'}});this.style.borderColor='var(--orange)';this.style.background='rgba(232,146,74,.12)'">${{m.id}}</div>`).join('');
-    }} else {{
-      statusEl.style.background='rgba(248,113,113,.08)'; statusEl.style.color='var(--red)'; statusEl.textContent=data.message||'未检测到模型';
-    }}
-  }} catch(e) {{
-    statusEl.style.background='rgba(248,113,113,.08)'; statusEl.style.color='var(--red)'; statusEl.textContent='检测失败: '+e.message;
-  }}
-}}
-async function saveAiConfig() {{
-  const url = document.getElementById('ai-url')?.value.trim();
-  const key = document.getElementById('ai-key')?.value.trim();
-  const model = document.getElementById('ai-model')?.value.trim();
-  const statusEl = document.getElementById('ac-status');
-  if (!url || !key || !model) {{ if(statusEl){{statusEl.style.display='block';statusEl.style.background='rgba(248,113,113,.08)';statusEl.style.color='var(--red)';statusEl.textContent='请填写所有字段';}} return; }}
-  try {{
-    const res = await fetch('/api/admin/save-ai-config', {{method:'POST',headers:{{'Content-Type':'application/json'}},credentials:'same-origin',body:JSON.stringify({{url,key,model}})}});
-    const data = await res.json();
-    if(statusEl){{statusEl.style.display='block';}}
-    if (data.success) {{
-      statusEl.style.background='rgba(74,222,128,.08)'; statusEl.style.color='var(--green)'; statusEl.textContent='✅ 配置已保存';
-    }} else {{
-      statusEl.style.background='rgba(248,113,113,.08)'; statusEl.style.color='var(--red)'; statusEl.textContent=data.message||'保存失败';
-    }}
-  }} catch(e) {{
-    if(statusEl){{statusEl.style.display='block';statusEl.style.background='rgba(248,113,113,.08)';statusEl.style.color='var(--red)';statusEl.textContent='保存失败: '+e.message;}}
-  }}
-}}
-</script>
-</body>
-</html>"""
+    return render_template('profile.html',
+        current_user=current_user,
+        credits=credits,
+        total_predictions=total_predictions,
+        history_count=history_count,
+        history_html=history_html,
+        already_checked=already_checked,
+        config=config,
+        first_char=first_char,
+    )
 
 @app.route('/api/teams')
 def get_teams():
@@ -822,13 +651,13 @@ def ai_predict():
 
         prediction_db.deduct_credits(current_user['id'], total_cost)
 
-        # 从数据库读取 AI 配置（不再依赖 .env 硬编码）
-        ai_config = _get_ai_config()
-        api_key = ai_config['ai_api_key']
-        api_url = ai_config['ai_api_url'].rstrip('/')
-        model = ai_config['ai_model']
-        
-        if not api_key:
+        # 使用统一的 AIFootballPredictor 调用 AI（自动从数据库读取配置）
+        try:
+            predictor = AIFootballPredictor()
+        except Exception:
+            return jsonify({'success': False, 'message': 'AI 服务未配置，请在管理后台设置'}), 500
+
+        if not predictor.api_key:
             return jsonify({'success': False, 'message': 'AI 服务未配置，请在管理后台设置'}), 500
 
         predictions = []
@@ -859,29 +688,9 @@ def ai_predict():
 
 用清晰段落结构回答。"""
 
-            # 后端调用 AI API（使用管理后台配置的 URL）
+            # 统一通过 AIFootballPredictor._call_ai_model 调用
             try:
-                ai_resp = requests.post(
-                    f'{api_url}/chat/completions',
-                    headers={
-                        'Authorization': f'Bearer {api_key}',
-                        'Content-Type': 'application/json',
-                        'HTTP-Referer': request.host_url,
-                        'X-Title': 'MatchPredict Football Analysis',
-                    },
-                    json={
-                        'model': model,
-                        'messages': [
-                            {'role': 'system', 'content': '你是一位经验丰富的足球分析专家，擅长从数据和赔率中发现价值投注机会，分析精准、专业。'},
-                            {'role': 'user', 'content': prompt},
-                        ],
-                        'temperature': 0.3,
-                        'max_tokens': 2048,
-                    },
-                    timeout=60
-                )
-                ai_data = ai_resp.json()
-                analysis = ai_data.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+                analysis = predictor._call_ai_model(prompt)
                 if not analysis:
                     analysis = '⚠️ AI未返回分析内容'
             except Exception as e:
@@ -2221,120 +2030,7 @@ def admin_ai_config():
     if masked_key and len(masked_key) > 10:
         masked_key = masked_key[:6] + '***' + masked_key[-4:]
 
-    return f"""<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>AI 模型配置 - 管理后台</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<link rel="stylesheet" href="/static/style.css">
-<style>
-body {{ background:var(--bg); color:var(--cream); font-family:'Inter',sans-serif; padding:2rem; }}
-.ac-wrap {{ max-width:700px; margin:0 auto; }}
-.ac-card {{ background:var(--card); border-radius:16px; padding:1.5rem; border:1px solid var(--border); margin-bottom:1.2rem; }}
-.ac-title {{ font-size:1.3rem; font-weight:800; margin-bottom:1.5rem; }}
-.ac-field {{ margin-bottom:1.2rem; }}
-.ac-field label {{ display:block; font-size:.8rem; color:var(--muted); margin-bottom:.4rem; font-weight:600; }}
-.ac-field input, .ac-field select {{ width:100%; padding:.7rem 1rem; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--cream); font-size:.9rem; }}
-.ac-field input:focus, .ac-field select:focus {{ border-color:var(--orange); outline:none; }}
-.ac-btn {{ padding:.7rem 1.5rem; border-radius:8px; border:none; font-weight:700; font-size:.85rem; cursor:pointer; }}
-.ac-btn-primary {{ background:var(--orange); color:#fff; }}
-.ac-btn-secondary {{ background:var(--surface); color:var(--cream); border:1px solid var(--border); }}
-.ac-btn:hover {{ opacity:.9; }}
-.ac-actions {{ display:flex; gap:.8rem; margin-top:1.5rem; }}
-.ac-status {{ margin-top:1rem; padding:.8rem; border-radius:8px; font-size:.82rem; display:none; }}
-.ac-status.success {{ display:block; background:rgba(74,222,128,.1); color:var(--green); border:1px solid rgba(74,222,128,.2); }}
-.ac-status.error {{ display:block; background:rgba(248,113,113,.1); color:var(--red); border:1px solid rgba(248,113,113,.2); }}
-.ac-models {{ margin-top:1rem; }}
-.ac-model-item {{ padding:.5rem .8rem; border-radius:6px; border:1px solid var(--border); margin-bottom:.4rem; cursor:pointer; font-size:.82rem; }}
-.ac-model-item:hover {{ border-color:var(--orange); background:rgba(232,146,74,.05); }}
-.ac-model-item.selected {{ border-color:var(--orange); background:rgba(232,146,74,.1); }}
-.back-link {{ display:block; text-align:center; margin-top:1.5rem; color:var(--muted); text-decoration:none; font-size:.85rem; }}
-.back-link:hover {{ color:var(--orange); }}
-</style>
-</head>
-<body>
-<div class="ac-wrap">
-  <div class="ac-card">
-    <h2 class="ac-title"><i class="fas fa-cog"></i> AI 模型配置</h2>
-    <div class="ac-field">
-      <label>API 服务地址（Base URL）</label>
-      <input type="text" id="ai-url" value="{config['ai_api_url']}" placeholder="https://openrouter.ai/api/v1">
-    </div>
-    <div class="ac-field">
-      <label>API Key</label>
-      <input type="password" id="ai-key" value="{config['ai_api_key']}" placeholder="sk-...">
-      <small style="color:var(--muted);font-size:.7rem">当前: {masked_key or '未配置'}</small>
-    </div>
-    <div class="ac-field">
-      <label>当前模型</label>
-      <input type="text" id="ai-model" value="{config['ai_model']}" placeholder="openrouter/owl-alpha">
-    </div>
-    <div class="ac-actions">
-      <button class="ac-btn ac-btn-secondary" onclick="detectModels()"><i class="fas fa-search"></i> 检测可用模型</button>
-      <button class="ac-btn ac-btn-primary" onclick="saveConfig()"><i class="fas fa-save"></i> 保存配置</button>
-    </div>
-    <div id="ac-status" class="ac-status"></div>
-    <div id="ac-models" class="ac-models"></div>
-  </div>
-</div>
-<a class="back-link" href="/">← 返回首页</a>
-<script>
-async function detectModels() {{
-  const url = document.getElementById('ai-url').value.trim();
-  const key = document.getElementById('ai-key').value.trim();
-  const statusEl = document.getElementById('ac-status');
-  const modelsEl = document.getElementById('ac-models');
-  if (!url || !key) {{ statusEl.className='ac-status error'; statusEl.textContent='请填写 URL 和 Key'; return; }}
-  statusEl.className='ac-status'; statusEl.style.display='block'; statusEl.textContent='检测中...'; statusEl.style.color='var(--muted)';
-  modelsEl.innerHTML = '';
-  try {{
-    const res = await fetch('/api/admin/detect-models', {{
-      method:'POST', headers:{{'Content-Type':'application/json'}}, credentials:'same-origin',
-      body: JSON.stringify({{url, key}})
-    }});
-    const data = await res.json();
-    if (data.success && data.models && data.models.length > 0) {{
-      statusEl.className='ac-status success'; statusEl.textContent=`检测到 ${{data.models.length}} 个可用模型`;
-      const currentModel = document.getElementById('ai-model').value;
-      modelsEl.innerHTML = '<p style="font-size:.75rem;color:var(--muted);margin-bottom:.5rem">点击选择模型：</p>' +
-        data.models.map(m => `<div class="ac-model-item ${{m.id===currentModel?'selected':''}}" onclick="selectModel(this,'${{m.id}}')">${{m.id}} <span style="color:var(--muted);font-size:.7rem">${{m.name||''}}</span></div>`).join('');
-    }} else {{
-      statusEl.className='ac-status error'; statusEl.textContent=data.message || '未检测到模型';
-    }}
-  }} catch(e) {{
-    statusEl.className='ac-status error'; statusEl.textContent='检测失败: ' + e.message;
-  }}
-}}
-function selectModel(el, modelId) {{
-  document.querySelectorAll('.ac-model-item').forEach(e => e.classList.remove('selected'));
-  el.classList.add('selected');
-  document.getElementById('ai-model').value = modelId;
-}}
-async function saveConfig() {{
-  const url = document.getElementById('ai-url').value.trim();
-  const key = document.getElementById('ai-key').value.trim();
-  const model = document.getElementById('ai-model').value.trim();
-  const statusEl = document.getElementById('ac-status');
-  if (!url || !key || !model) {{ statusEl.className='ac-status error'; statusEl.textContent='请填写所有字段'; return; }}
-  try {{
-    const res = await fetch('/api/admin/save-ai-config', {{
-      method:'POST', headers:{{'Content-Type':'application/json'}}, credentials:'same-origin',
-      body: JSON.stringify({{url, key, model}})
-    }});
-    const data = await res.json();
-    if (data.success) {{
-      statusEl.className='ac-status success'; statusEl.textContent='✅ 配置已保存';
-    }} else {{
-      statusEl.className='ac-status error'; statusEl.textContent=data.message || '保存失败';
-    }}
-  }} catch(e) {{
-    statusEl.className='ac-status error'; statusEl.textContent='保存失败: ' + e.message;
-  }}
-}}
-</script>
-</body>
-</html>"""
+    return render_template('admin_ai_config.html', config=config, masked_key=masked_key)
 
 
 @app.route('/api/admin/detect-models', methods=['POST'])
