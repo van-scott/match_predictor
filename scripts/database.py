@@ -1481,7 +1481,7 @@ class PredictionDatabase:
         except Exception as e:
             logger.error(f"获取用户 AI 配置失败 (user_id={user_id}): {e}")
         return {
-            'ai_engine_type': 'system',
+            'ai_engine_type': 'api_key',
             'ai_api_url': '',
             'ai_api_key': '',
             'ai_model': '',

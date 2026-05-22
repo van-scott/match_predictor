@@ -392,7 +392,7 @@ class AIFootballPredictor:
         self.permanent_error = None
         
         # 新增多引擎支持的默认属性
-        self.engine_type = 'system'
+        self.engine_type = 'api_key'
         self.cli_path_kiro = 'kiro'
         self.cli_path_antigravity = 'antigravity'
         self.cli_path_cursor = 'cursor'
@@ -404,7 +404,9 @@ class AIFootballPredictor:
                 if prediction_db:
                     user_cfg = prediction_db.get_user_ai_config(user_id)
                     if user_cfg:
-                        self.engine_type = user_cfg.get('ai_engine_type', 'system')
+                        self.engine_type = user_cfg.get('ai_engine_type', 'api_key')
+                        if self.engine_type == 'system':
+                            self.engine_type = 'api_key'
                         if self.engine_type != 'system':
                             # 始终为所有非 system 引擎加载通用自定义/CLI 配置参数（API Key、Base URL 与 Model）
                             self.api_key = user_cfg.get('ai_api_key') or self.api_key
@@ -602,15 +604,28 @@ class AIFootballPredictor:
                 env['OPENAI_MODEL'] = self.model_name
                 env['AI_MODEL'] = self.model_name
 
-            # 运行命令并将 prompt 通过 stdin 输入给 CLI
+            # 针对 Antigravity CLI 引擎拼接 -p/--print 参数以进行非交互式输出，防止挂起
+            if getattr(self, 'engine_type', '') == 'antigravity_cli':
+                has_print_flag = any(flag in cmd_args for flag in ('-p', '--print', '--prompt'))
+                if not has_print_flag:
+                    cmd_exec = cmd_args + ['-p', prompt]
+                    stdin_input = None
+                else:
+                    cmd_exec = cmd_args
+                    stdin_input = prompt
+            else:
+                cmd_exec = cmd_args
+                stdin_input = prompt
+
+            # 运行命令并将 prompt 传递给 CLI
             res = subprocess.run(
-                cmd_args,
-                input=prompt,
+                cmd_exec,
+                input=stdin_input,
                 capture_output=True,
                 text=True,
                 encoding='utf-8',
                 env=env,
-                timeout=30
+                timeout=45  # 增加超时至 45 秒以确保 CLI 有充足的时间生成复杂预测分析
             )
             
             if res.returncode == 0:
@@ -624,7 +639,7 @@ class AIFootballPredictor:
         except FileNotFoundError:
             raise RuntimeError(f"未找到命令行可执行文件 '{cmd_args[0]}'，请检查您的 CLI 是否安装或路径是否配置正确。")
         except subprocess.TimeoutExpired:
-            raise RuntimeError("命令行分析超时（限制为 30 秒）。")
+            raise RuntimeError("命令行分析超时（限制为 45 秒）。")
         except Exception as e:
             raise RuntimeError(f"调用本地命令行异常: {str(e)}")
 
