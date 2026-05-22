@@ -1141,6 +1141,11 @@ async function testUserAiConfig() {
 }
 
 // 检测 CLI 引擎的可用模型列表
+function hideModelSelect() {
+  const wrap = document.getElementById('model-select-wrap');
+  if (wrap) wrap.style.display = 'none';
+}
+
 async function detectCliModels() {
   const data = gatherConfigData();
   let cliPath = '';
@@ -1180,21 +1185,30 @@ async function detectCliModels() {
     btn.innerHTML = origHtml;
 
     if (result.success && result.models && result.models.length > 0) {
-      const modelInput = document.getElementById('ai-model');
-      if (modelInput) {
-        modelInput.value = result.models[0];
+      const isPreset = result.source === 'preset';
+      // 填充下拉选择器
+      const sel = document.getElementById('ai-model-select');
+      const wrap = document.getElementById('model-select-wrap');
+      const hintEl = document.getElementById('model-select-hint');
+      if (sel && wrap) {
+        sel.innerHTML = result.models.map(m => `<option value="${m}">${m}</option>`).join('');
+        wrap.style.display = 'block';
+        if (hintEl) hintEl.textContent = isPreset
+          ? `推荐模型（共 ${result.models.length} 个，下拉选择后自动填入）`
+          : `已检测到 ${result.models.length} 个可用模型，选择后自动填入`;
       }
-      showStatusBanner(
-        'success',
-        '模型自动检测成功！',
-        `已为您自动加载并选中了首选模型: ${result.models[0]}\n\n检测到的完整可用模型列表:\n` + 
-        result.models.map(m => `• ${m}`).join('\n')
+      // 自动填入第一个模型到文本输入框
+      const modelInput = document.getElementById('ai-model');
+      if (modelInput && !modelInput.value) modelInput.value = result.models[0];
+      showStatusBanner('success',
+        isPreset ? `已加载 ${result.models.length} 个推荐模型` : `检测到 ${result.models.length} 个可用模型`,
+        '请在下方下拉框选择模型，选中后将自动填入模型输入框。'
       );
     } else {
       showStatusBanner(
         'error',
-        '模型自动检测失败',
-        (result.message || 'CLI 未能返回任何有效的模型列表，请确认您的 CLI 路径正确且已通过登录校验。') + 
+        '模型检测失败',
+        (result.message || 'CLI 未能返回任何有效的模型列表，请确认您的 CLI 路径正确且已通过登录校验。') +
         (result.raw ? '\n\nCLI 输出原文:\n' + result.raw : '')
       );
     }
