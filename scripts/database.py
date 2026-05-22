@@ -124,7 +124,14 @@ class PredictionDatabase:
                     total_predictions      INTEGER         NOT NULL DEFAULT 0, -- 累计预测总次数
                     created_at             TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     last_login             TIMESTAMP,                         -- 最近登录时间
-                    is_active              BOOLEAN         NOT NULL DEFAULT TRUE -- 账号是否启用
+                    is_active              BOOLEAN         NOT NULL DEFAULT TRUE, -- 账号是否启用
+                    ai_engine_type         VARCHAR(50)     NOT NULL DEFAULT 'system',
+                    ai_api_url             VARCHAR(255),
+                    ai_api_key             VARCHAR(255),
+                    ai_model               VARCHAR(100),
+                    cli_path_kiro         VARCHAR(255)    DEFAULT 'kiro',
+                    cli_path_antigravity   VARCHAR(255)    DEFAULT 'antigravity',
+                    cli_path_cursor        VARCHAR(255)    DEFAULT 'cursor'
                 );
             """)
             # 字段注释（PostgreSQL COMMENT ON COLUMN）
@@ -143,6 +150,13 @@ class PredictionDatabase:
                 ("created_at",             "账号注册时间"),
                 ("last_login",             "最近登录时间"),
                 ("is_active",              "账号是否激活；FALSE 表示封禁/注销"),
+                ("ai_engine_type",         "AI 预测引擎类型：system/api_key/kiro_cli/antigravity_cli/cursor_cli"),
+                ("ai_api_url",             "自定义 AI API 服务地址"),
+                ("ai_api_key",             "自定义 AI API Key"),
+                ("ai_model",               "自定义 AI 模型名称"),
+                ("cli_path_kiro",          "Kiro CLI 可执行文件路径"),
+                ("cli_path_antigravity",   "Antigravity CLI 可执行文件路径"),
+                ("cli_path_cursor",        "Cursor CLI 可执行文件路径"),
             ]:
                 cursor.execute(
                     f"COMMENT ON COLUMN users.{col} IS %s", (comment,)
@@ -1430,6 +1444,81 @@ class PredictionDatabase:
                 logger.info("积分字段检查/添加完成")
         except Exception as e:
             logger.error(f"添加积分字段失败: {e}")
+
+    def ensure_ai_config_columns(self):
+        """确保 users 表有 AI 配置相关的字段（包括自定义 API 以及 kiro-cli, antigravity-cli, cursor-cli 配置，幂等操作）"""
+        try:
+            with self.get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    ALTER TABLE users
+                        ADD COLUMN IF NOT EXISTS ai_engine_type VARCHAR(50) DEFAULT 'system',
+                        ADD COLUMN IF NOT EXISTS ai_api_url VARCHAR(255),
+                        ADD COLUMN IF NOT EXISTS ai_api_key VARCHAR(255),
+                        ADD COLUMN IF NOT EXISTS ai_model VARCHAR(100),
+                        ADD COLUMN IF NOT EXISTS cli_path_kiro VARCHAR(255) DEFAULT 'kiro',
+                        ADD COLUMN IF NOT EXISTS cli_path_antigravity VARCHAR(255) DEFAULT 'antigravity',
+                        ADD COLUMN IF NOT EXISTS cli_path_cursor VARCHAR(255) DEFAULT 'cursor';
+                """)
+                logger.info("AI 用户中心配置字段检查/添加完成")
+        except Exception as e:
+            logger.error(f"添加AI配置相关字段失败: {e}")
+
+    def get_user_ai_config(self, user_id: int) -> dict:
+        """获取用户的 AI 配置"""
+        try:
+            with self.get_db_connection() as conn:
+                cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+                cursor.execute("""
+                    SELECT ai_engine_type, ai_api_url, ai_api_key, ai_model,
+                           cli_path_kiro, cli_path_antigravity, cli_path_cursor
+                    FROM users
+                    WHERE id = %s
+                """, (user_id,))
+                row = cursor.fetchone()
+                if row:
+                    return dict(row)
+        except Exception as e:
+            logger.error(f"获取用户 AI 配置失败 (user_id={user_id}): {e}")
+        return {
+            'ai_engine_type': 'system',
+            'ai_api_url': '',
+            'ai_api_key': '',
+            'ai_model': '',
+            'cli_path_kiro': 'kiro',
+            'cli_path_antigravity': 'antigravity',
+            'cli_path_cursor': 'cursor'
+        }
+
+    def save_user_ai_config(self, user_id: int, config: dict) -> bool:
+        """保存用户的 AI 配置"""
+        try:
+            with self.get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE users
+                    SET ai_engine_type = %s,
+                        ai_api_url = %s,
+                        ai_api_key = %s,
+                        ai_model = %s,
+                        cli_path_kiro = %s,
+                        cli_path_antigravity = %s,
+                        cli_path_cursor = %s
+                    WHERE id = %s
+                """, (
+                    config.get('ai_engine_type', 'system'),
+                    config.get('ai_api_url', '').strip(),
+                    config.get('ai_api_key', '').strip(),
+                    config.get('ai_model', '').strip(),
+                    config.get('cli_path_kiro', 'kiro').strip(),
+                    config.get('cli_path_antigravity', 'antigravity').strip(),
+                    config.get('cli_path_cursor', 'cursor').strip(),
+                    user_id
+                ))
+            return True
+        except Exception as e:
+            logger.error(f"保存用户 AI 配置失败 (user_id={user_id}): {e}")
+            return False
 
     def save_historical_matches(self, matches_list: List[Dict[str, Any]]) -> int:
         """
