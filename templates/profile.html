@@ -723,6 +723,16 @@ body { background: var(--bg); color: var(--cream); font-family: 'Inter', sans-se
               <i class="fas fa-search"></i> 检测模型
             </button>
           </div>
+          <!-- 检测到模型后显示的下拉选择器 -->
+          <div id="model-select-wrap" style="display:none; margin-top:0.5rem;">
+            <select id="ai-model-select" onchange="document.getElementById('ai-model').value=this.value"
+              style="width:100%;padding:0.55rem 0.8rem;border-radius:8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:var(--cream);font-size:0.85rem;cursor:pointer;outline:none;">
+            </select>
+            <div style="margin-top:0.3rem;display:flex;align-items:center;justify-content:space-between;">
+              <small style="color:var(--muted);font-size:0.72rem;" id="model-select-hint"></small>
+              <button type="button" onclick="hideModelSelect()" style="background:none;border:none;color:var(--muted);font-size:0.72rem;cursor:pointer;padding:0;">&#10005; 手动输入</button>
+            </div>
+          </div>
           <small id="hint-ai-model" style="display: block; margin-top: 0.3rem; color: var(--muted); font-size: 0.72rem;">请输入模型名称。CLI 模式下支持登录后点击“检测模型”自动获取并选择。</small>
         </div>
       </div>
