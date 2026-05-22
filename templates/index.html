@@ -50,11 +50,23 @@
 
     <div class="nav-right" id="nav-right">
     {% if current_user %}
-    <div class="user-info-nav">
-      <span class="credits-badge"><i class="fas fa-coins" style="color:#f5c842"></i> <span id="nav-credits">--</span></span>
-      <span class="username-badge">{{ current_user.username }}</span>
-      <a href="/profile" class="btn-link-nav"><i class="fas fa-user"></i></a>
-      <button class="btn-ghost-sm" onclick="doLogout()">退出</button>
+    <div class="user-pill">
+      <span class="credits-badge">
+        <i class="fas fa-coins"></i>
+        <span class="credit-num" id="credits-display">{{ current_user.credits|default(0) }}</span>
+        <span class="credit-label">积分</span>
+      </span>
+      <button class="btn-checkin" id="checkin-btn" onclick="doCheckin()" {% if already_checked %}disabled style="opacity:0.5; pointer-events:none;"{% endif %}>
+        <i class="fas fa-calendar-check"></i>
+        <span>{% if already_checked %}已签到{% else %}签到{% endif %}</span>
+      </button>
+      <div class="user-actions">
+        <a href="/profile" class="btn-user-link">
+          <i class="fas fa-user-circle"></i>
+          <span>用户中心</span>
+        </a>
+        <button class="btn-logout" onclick="doLogout()">退出</button>
+      </div>
     </div>
     {% else %}
     <button class="btn-primary" style="padding:.5rem 1.1rem;font-size:.82rem" onclick="openModal('login')">
