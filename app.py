@@ -1937,7 +1937,41 @@ def detect_cli_models_api():
         env['OPENAI_API_BASE'] = old_config['ai_api_url']
         env['GEMINI_API_URL']  = old_config['ai_api_url']
 
+    # 各引擎已知可用的预设模型列表（当命令行检测失败时使用）
+    preset_models = {
+        'kiro_cli': [
+            'claude-sonnet-4-5',
+            'claude-sonnet-4-5-20251101',
+            'claude-opus-4',
+            'claude-3-7-sonnet-latest',
+            'claude-3-5-sonnet-20241022',
+            'gpt-4o',
+            'gpt-4o-mini',
+        ],
+        'cursor_cli': [
+            'claude-sonnet-4-5',
+            'claude-sonnet-4-5-thinking',
+            'claude-opus-4',
+            'gpt-4o',
+            'gpt-4o-mini',
+            'gpt-5',
+            'gemini-2.5-pro',
+            'cursor-small',
+        ],
+        'antigravity_cli': [
+            'gemini-2.5-pro',
+            'gemini-2.5-flash',
+            'gemini-2.0-flash',
+            'gemini-1.5-pro',
+            'claude-sonnet-4-5',
+            'claude-opus-4',
+            'gpt-4o',
+        ],
+    }
+
+    # 先尝试真实命令行检测
     last_output = ''
+    error_keywords = ['error', 'unrecognized', 'unknown', 'not found', 'no models available']
     for sub in candidates:
         try:
             res = subprocess.run(
@@ -1947,16 +1981,35 @@ def detect_cli_models_api():
             )
             combined = (res.stdout + res.stderr).strip()
             last_output = combined
+            combined_lower = combined.lower()
+            # 跳过明显是错误信息的输出
+            if any(kw in combined_lower for kw in error_keywords):
+                continue
             if res.returncode == 0 and combined:
-                # 简单解析：每行当做一个候选模型名（过滤空行和明显的非模型行）
                 lines = [l.strip() for l in combined.splitlines() if l.strip()]
-                models = [l for l in lines if len(l) < 120 and not l.startswith('#')]
+                # 过滤空行、注释行、过长的行（非模型名）
+                models = [l for l in lines if l and len(l) < 80 and not l.startswith('#') and not l.startswith('-')]
                 if models:
-                    return jsonify({'success': True, 'models': models, 'raw': combined})
+                    return jsonify({
+                        'success': True,
+                        'models': models,
+                        'raw': combined,
+                        'source': 'detected'
+                    })
         except (FileNotFoundError, subprocess.TimeoutExpired):
             break
         except Exception:
             continue
+
+    # 命令检测失败，返回预设模型列表
+    presets = preset_models.get(engine_type, [])
+    if presets:
+        return jsonify({
+            'success': True,
+            'models': presets,
+            'message': '已返回该 CLI 引擎的推荐模型列表（自动检测不可用，以下为已知可用模型）。',
+            'source': 'preset'
+        })
 
     return jsonify({
         'success': False,
