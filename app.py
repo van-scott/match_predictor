@@ -1650,6 +1650,254 @@ def login_cli_api():
         }), 500
 
 
+
+# ── 异步 CLI OAuth 登录任务存储 ──────────────────────────────────────────
+import subprocess, threading, uuid, time as _time
+_cli_login_jobs: dict = {}  # { job_id: { status, output, started_at, engine_type } }
+
+def _run_cli_login_job(job_id: str, cmd_args: list, env: dict, engine_type: str):
+    """后台线程：运行 CLI login 命令，逐行读取输出，检测到 OAuth URL 后用 macOS open 打开浏览器"""
+    import re
+    url_pattern = re.compile(r'https?://\S+')
+    browser_opened = False
+    output_lines = []
+
+    try:
+        proc = subprocess.Popen(
+            cmd_args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding='utf-8',
+            errors='replace',
+            env=env,
+        )
+
+        deadline = _time.time() + 180
+        while True:
+            if _time.time() > deadline:
+                proc.kill()
+                _cli_login_jobs[job_id].update({
+                    'status': 'failed',
+                    'message': '登录等待超时（超过 3 分钟），请重试。',
+                    'output': '\n'.join(output_lines)
+                })
+                return
+
+            line = proc.stdout.readline()
+            if line == '' and proc.poll() is not None:
+                break
+
+            if line:
+                output_lines.append(line.rstrip())
+                _cli_login_jobs[job_id]['output'] = '\n'.join(output_lines[-40:])
+
+                if not browser_opened:
+                    urls = url_pattern.findall(line)
+                    if urls:
+                        target_url = None
+                        for url in urls:
+                            if any(kw in url for kw in ['login', 'auth', 'oauth', 'token', 'signin', 'sso', 'code=']):
+                                target_url = url
+                                break
+                        if not target_url:
+                            target_url = urls[0]
+                        try:
+                            subprocess.Popen(['open', target_url])
+                            browser_opened = True
+                            _cli_login_jobs[job_id]['browser_opened'] = True
+                            _cli_login_jobs[job_id]['message'] = f'浏览器已打开授权页面，请完成登录...\n🔗 {target_url}'
+                        except Exception:
+                            pass
+
+        returncode = proc.wait()
+        full_output = '\n'.join(output_lines)
+
+        # 检测"已登录"状态
+        already_logged_in_keywords = ['already logged in', 'already signed in', 'already authenticated', 'already log']
+        is_already_logged_in = any(kw in full_output.lower() for kw in already_logged_in_keywords)
+
+        if returncode == 0:
+            _cli_login_jobs[job_id].update({
+                'status': 'success',
+                'message': 'CLI 登录授权成功！凭证已保存到本地。',
+                'output': full_output
+            })
+        elif is_already_logged_in:
+            _cli_login_jobs[job_id].update({
+                'status': 'already_logged_in',
+                'message': '该 CLI 当前已处于登录状态。您可以直接使用，或先退出再重新登录。',
+                'output': full_output,
+                'cmd_args': cmd_args  # 保存命令路径以便后续退出
+            })
+        else:
+            _cli_login_jobs[job_id].update({
+                'status': 'failed',
+                'message': f'CLI 登录失败，退出码: {returncode}',
+                'output': full_output
+            })
+
+    except FileNotFoundError:
+        _cli_login_jobs[job_id].update({
+            'status': 'failed',
+            'message': '未找到 CLI 可执行文件，请确认路径正确并已安装。',
+            'output': ''
+        })
+    except Exception as e:
+        _cli_login_jobs[job_id].update({
+            'status': 'failed',
+            'message': f'登录过程发生异常：{str(e)}',
+            'output': '\n'.join(output_lines)
+        })
+
+
+@app.route('/api/user/start-cli-login', methods=['POST'])
+def start_cli_login_api():
+    """启动 CLI OAuth 浏览器登录（后台异步，立即返回 job_id）"""
+    current_user = get_current_user()
+    if not current_user or not prediction_db:
+        return jsonify({'success': False, 'message': '请先登录'}), 401
+
+    data = request.get_json() or {}
+    engine_type = data.get('ai_engine_type', '').strip()
+    cli_path = data.get('cli_path', '').strip()
+
+    if not engine_type or not cli_path:
+        return jsonify({'success': False, 'message': 'CLI 类型与命令路径不能为空'}), 400
+
+    import shlex, subprocess, os
+    try:
+        cmd_args = shlex.split(cli_path)
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'命令格式非法: {e}'}), 400
+
+    env = os.environ.copy()
+
+    # Antigravity CLI 无 login 子命令，快速同步做路径校验
+    if engine_type == 'antigravity_cli':
+        try:
+            res = subprocess.run(
+                cmd_args + ['--help'],
+                capture_output=True, text=True, encoding='utf-8',
+                errors='replace', env=env, timeout=8
+            )
+            merged = f"STDOUT:\n{res.stdout.strip()}\n\nSTDERR:\n{res.stderr.strip()}"
+            if res.returncode == 0:
+                return jsonify({
+                    'success': True,
+                    'sync': True,
+                    'message': 'Antigravity CLI 路径校验成功！无需 OAuth 登录，凭证将在预测时通过环境变量注入。',
+                    'output': merged
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'sync': True,
+                    'message': f'Antigravity CLI 路径校验失败，退出码: {res.returncode}',
+                    'output': merged
+                })
+        except FileNotFoundError:
+            return jsonify({'success': False, 'sync': True, 'message': f"未找到 '{cli_path}'，请确认已安装。"}), 404
+        except Exception as e:
+            return jsonify({'success': False, 'sync': True, 'message': str(e)}), 500
+
+    # Kiro CLI / Cursor Agent：真正的浏览器 OAuth，异步启动
+    if engine_type == 'kiro_cli':
+        login_cmd = cmd_args + ['login']
+    elif engine_type == 'cursor_cli':
+        login_cmd = cmd_args + ['login']
+    else:
+        login_cmd = cmd_args + ['login']
+
+    job_id = str(uuid.uuid4())
+    _cli_login_jobs[job_id] = {
+        'status': 'pending',
+        'message': '正在启动 CLI 登录，浏览器窗口将自动打开...',
+        'output': '',
+        'engine_type': engine_type,
+        'started_at': _time.time()
+    }
+
+    t = threading.Thread(target=_run_cli_login_job, args=(job_id, login_cmd, env, engine_type), daemon=True)
+    t.start()
+
+    return jsonify({
+        'success': True,
+        'sync': False,
+        'job_id': job_id,
+        'message': '后台登录任务已启动，浏览器将自动打开 OAuth 授权页面...'
+    })
+
+
+@app.route('/api/user/cli-login-poll/<job_id>', methods=['GET'])
+def cli_login_poll_api(job_id: str):
+    """轮询异步 CLI 登录任务状态"""
+    current_user = get_current_user()
+    if not current_user:
+        return jsonify({'success': False, 'message': '请先登录'}), 401
+
+    job = _cli_login_jobs.get(job_id)
+    if not job:
+        return jsonify({'success': False, 'status': 'not_found', 'message': '任务不存在或已过期'}), 404
+
+    elapsed = int(_time.time() - job.get('started_at', _time.time()))
+    return jsonify({
+        'success': True,
+        'status': job['status'],
+        'message': job['message'],
+        'output': job.get('output', ''),
+        'elapsed': elapsed
+    })
+
+
+@app.route('/api/user/cli-logout', methods=['POST'])
+def cli_logout_api():
+    """同步执行 CLI 退出登录"""
+    current_user = get_current_user()
+    if not current_user:
+        return jsonify({'success': False, 'message': '请先登录'}), 401
+
+    data = request.get_json() or {}
+    cli_path = data.get('cli_path', '').strip()
+    engine_type = data.get('ai_engine_type', '').strip()
+
+    if not cli_path:
+        return jsonify({'success': False, 'message': 'CLI 路径不能为空'}), 400
+
+    import shlex, os
+    try:
+        cmd_args = shlex.split(cli_path)
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'命令格式非法: {e}'}), 400
+
+    # 构建退出命令
+    if engine_type == 'cursor_cli':
+        logout_cmd = cmd_args + ['logout']
+    else:
+        logout_cmd = cmd_args + ['logout']
+
+    env = os.environ.copy()
+    try:
+        res = subprocess.run(
+            logout_cmd,
+            capture_output=True, text=True,
+            encoding='utf-8', errors='replace',
+            env=env, timeout=15
+        )
+        merged = (res.stdout.strip() + '\n' + res.stderr.strip()).strip()
+        return jsonify({
+            'success': True,
+            'message': '退出登录成功！现在可以重新登录。',
+            'output': merged
+        })
+    except FileNotFoundError:
+        return jsonify({'success': False, 'message': f"未找到 '{cli_path}'"}), 404
+    except subprocess.TimeoutExpired:
+        return jsonify({'success': False, 'message': '退出登录超时，请手动执行退出命令。'}), 408
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @app.route('/api/user/detect-cli-models', methods=['POST'])
 def detect_cli_models_api():
     """登录 CLI 后尝试检测可用模型列表"""
