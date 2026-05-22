@@ -190,12 +190,42 @@ def build_rich_prompt(match: Dict[str, Any], ctx: Dict[str, Any],
     home_team  = match.get('home_team', '主队')
     away_team  = match.get('away_team', '客队')
     league     = match.get('league_name', '未知联赛')
+    match_time = match.get('match_time') or match.get('match_date', '未知时间')
 
     odds       = match.get('odds', {})
     hhad       = odds.get('hhad', {})
-    home_odds  = float(hhad.get('h', match.get('home_odds', 2.0)))
-    draw_odds  = float(hhad.get('d', match.get('draw_odds', 3.2)))
-    away_odds  = float(hhad.get('a', match.get('away_odds', 2.8)))
+    odds_type  = odds.get('type', 'had')
+    goal_line  = match.get('goal_line') or odds.get('goal_line') or ''
+    
+    # 区分不让球与让球赔率
+    input_odds_str = ""
+    home_odds = 2.0
+    draw_odds = 3.2
+    away_odds = 2.8
+    
+    if odds_type == 'had':
+        home_odds = float(hhad.get('h', match.get('home_odds', 2.0)))
+        draw_odds = float(hhad.get('d', match.get('draw_odds', 3.2)))
+        away_odds = float(hhad.get('a', match.get('away_odds', 2.8)))
+        input_odds_str = f"【提供的不让球赔率】：主胜 {home_odds:.2f} | 平局 {draw_odds:.2f} | 客胜 {away_odds:.2f}"
+    else:
+        # 如果只有让球赔率
+        handicap_h = float(hhad.get('h', 2.0))
+        handicap_d = float(hhad.get('d', 3.2))
+        handicap_a = float(hhad.get('a', 2.8))
+        if not goal_line:
+            goal_line = '-1.0'
+        input_odds_str = f"【提供的让球赔率】：让球主胜 {handicap_h:.2f} | 让球平局 {handicap_d:.2f} | 让球客胜 {handicap_a:.2f} （让球盘口：{goal_line}）"
+        # 估算对应的不让球赔率作为参考
+        home_odds = float(match.get('home_odds') or 2.0)
+        draw_odds = float(match.get('draw_odds') or 3.2)
+        away_odds = float(match.get('away_odds') or 2.8)
+
+    # 计算不让球隐含概率
+    sum_inv = (1 / home_odds) + (1 / draw_odds) + (1 / away_odds)
+    home_prob = (1 / home_odds) / sum_inv * 100
+    draw_prob = (1 / draw_odds) / sum_inv * 100
+    away_prob = (1 / away_odds) / sum_inv * 100
 
     # ── 球队上下文块 ─────────────────────────────────────────────────────────
     home_ctx = ctx.get('home', {})
@@ -235,13 +265,14 @@ def build_rich_prompt(match: Dict[str, Any], ctx: Dict[str, Any],
             f"  主胜概率 {ph*100:.1f}%  |  平局 {pd_*100:.1f}%  |  客胜 {pa*100:.1f}%"
         )
 
-    prompt = f"""你是一位专业足球分析师，请基于以下量化数据对这场比赛做出全面分析和预测。
+    prompt = f"""你是一位专业足球分析师。请基于以下量化统计数据和赔率信息，对这场比赛做全面深入的专业分析。
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-【比赛信息】
-{home_team} vs {away_team}
+【比赛基础信息】
+对阵：{home_team} vs {away_team}
 联赛：{league}
-赔率：主胜 {home_odds:.2f} | 平局 {draw_odds:.2f} | 客胜 {away_odds:.2f}
+比赛时间：{match_time}
+{input_odds_str}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 【量化统计数据（来自真实历史数据库）】
@@ -252,29 +283,97 @@ def build_rich_prompt(match: Dict[str, Any], ctx: Dict[str, Any],
 {h2h_str}
 {ml_str}
 
-赔率隐含概率：主胜 {1/home_odds/(1/home_odds+1/draw_odds+1/away_odds)*100:.1f}% | 平 {1/draw_odds/(1/home_odds+1/draw_odds+1/away_odds)*100:.1f}% | 客胜 {1/away_odds/(1/home_odds+1/draw_odds+1/away_odds)*100:.1f}%
+不让球赔率隐含概率：主胜 {home_prob:.1f}% | 平局 {draw_prob:.1f}% | 客胜 {away_prob:.1f}%
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-【请按以下格式给出分析】
+【⚠️ 核心指令：格式与术语标准】
+你必须完全按照以下格式结构返回分析报告，不能遗漏任何一节，不能更改任何小标题，注意保留所有的连字符 `---` 以及 emoji 符号，使得输出极其专业精美。
 
-**一、关键因素分析**
-（基于上方量化数据，点评主客队近期状态、历史交锋及赔率信号）
+### 重要说明（关于让球与不让球赔率）：
+- 如果输入中缺少某些赔率，或者没有指明“让球盘口”与“让球赔率”，请作为专家根据“不让球赔率”与两队实力差距，**合理估算、推导并补齐**。
+- 让球盘口应以让球个数表示（例如 `主队让1球` 可写为 `-1.0 球`，`主队受让1球` 可写为 `+1.0 球`）。
+- 让球赔率应当符合精算概率（例如：若不让球赔率为：主胜 2.46 / 平 2.8 / 客胜 2.74，让球盘口为 -1.0 球时，合理的让球赔率约为：让球主胜 6.1 | 让球平局 3.82 | 让球客胜 1.42。若不让球主胜为 1.5，让球主胜（-1球）约为 2.4）。
 
-**二、胜平负预测**
-推荐：[主胜/平局/客胜]
-置信度：[1-10]
-理由：（需引用具体数据支撑，而非泛泛而谈）
+请生成以下格式的内容（请直接返回以下Markdown，不要有任何包裹在外的多余废话）：
 
-**三、比分预测**
-最可能比分：X:X（说明依据）
+### {home_team} vs {away_team} 比赛分析报告
 
-**四、大小球**
-大/小球预测：（依据两队进失球均值）
+比赛信息：
+*   联赛： {league}
+*   比赛时间： {match_time}
+*   赔率： 主胜 {home_odds:.2f} | 平局 {draw_odds:.2f} | 客胜 {away_odds:.2f}
+*   让球盘口： [在此处填写合理的让球数，如 -1.0 球]
+*   让球赔率： 让球主胜 [在此处推导合理的让球主胜赔率] | 让球平局 [推导合理的让球平局赔率] | 让球客胜 [推导合理的让球客胜赔率]
+*   赔率隐含概率： 主胜 {home_prob:.1f}% | 平局 {draw_prob:.1f}% | 客胜 {away_prob:.1f}%
 
-**五、风险提示**
-（识别不确定因素）
+---
 
-请用中文回答，分析要简练有力，每条理由必须有数字支撑。"""
+📊 一、综合形势分析
+
+1.  赔率隐含概率分析：
+    *   [在此处详细解读赔率隐含概率，分析市场倾向]
+2.  近期状态：
+    *   {home_team}：[分析主队近期战绩、胜率、攻防得失球等表现]
+    *   {away_team}：[分析客队近期战绩、胜率、攻防得失球等表现]
+3.  历史交锋：
+    *   [解读双方历史对战结果及心理优势]
+4.  主客场表现：
+    *   {home_team}（主场）：[详细点评主队主场优势和战术特征]
+    *   {away_team}（客场）：[详细点评客队客场表现与防守抗压能力]
+
+综合判断：
+[给出精炼的整体对局总结与盘面分析]
+
+---
+
+🎯 二、胜平负预测
+
+*   推荐结果： [推荐赛果，必须是：主胜、平局 或 客胜]
+*   置信度： [高 / 中 / 低]
+*   核心理由：
+    1.  [第一条核心理由，引用具体数据如进球率、历史战绩支持]
+    2.  [第二条核心理由，引用具体数据如主客场胜率或模型概率支持]
+    3.  [第三条核心理由，引用具体数据如赔率变动信号支持]
+
+---
+
+⚽ 三、比分预测
+
+*   最可能比分： [例如 1-1] (约[例如 30]%)
+    *   理由：[阐述理由]
+*   备选比分1： [备选比分，如 0-0]
+    *   理由：[阐述理由]
+*   备选比分2： [备选比分，如 1-0 (主队胜) 或其他合适比分]
+    *   理由：[阐述理由]
+*   总进球： [例如 2-3球]
+    *   理由：[总进球区间判断理由]
+
+---
+
+⏱️ 四、半全场预测
+
+*   半场： [例如 平局]
+    *   理由：[半场倾向研判依据]
+*   全场： [例如 平局]
+    *   理由：[全场倾向研判依据]
+
+---
+
+💰 五、投注价值
+
+*   最具价值投注项：
+    1.  不让球盘口：[如 平局 @2.80]
+        *   理由：[选择该项的投注价值与性价比分析]
+    2.  让球盘口：[如 让球客胜 (-1.0 球) @1.42]
+        *   理由：[选择该项的受让价值与保本防线分析]
+
+---
+
+⚠️ 六、风险提示
+
+*   {home_team}的主场爆发力：[识别并分析主队潜在的主场抢分和定位球突袭风险]
+*   {away_team}的客场进攻效率：[识别并分析客队防守反击与客场终结效率的潜在变数]
+*   突发伤病或红牌：[总结针对足球比赛无法预测的非控风险，如红黄牌或临场伤退]"""
 
     return prompt
 
