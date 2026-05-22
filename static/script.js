@@ -445,6 +445,13 @@ function renderAIResults(predictions) {
   predictions.forEach(p => {
     const card = document.createElement('div');
     card.className = 'ai-result-card';
+    
+    const isError = (p.ai_analysis || '').includes('⚠️') || (p.ai_analysis || '').includes('失败') || (p.ai_analysis || '').includes('不可用');
+    if (isError) {
+      card.style.border = '1px solid rgba(248, 113, 113, 0.2)';
+      card.style.background = 'rgba(248, 113, 113, 0.03)';
+    }
+
     const ho = p.home_odds || p.odds?.home || '-';
     const dro = p.draw_odds || p.odds?.draw || '-';
     const ao = p.away_odds || p.odds?.away || '-';
@@ -457,7 +464,7 @@ function renderAIResults(predictions) {
           <h3>${p.home_team_cn || p.home_team} vs ${p.away_team_cn || p.away_team}</h3>
           <small style="color:var(--c-muted)">${p.league_name}</small>
         </div>
-        <span class="ai-badge">🤖 AI</span>
+        <span class="ai-badge" style="${isError ? 'background:rgba(248,113,113,0.1);color:#f87171;' : ''}">🤖 ${isError ? 'AI 错误' : 'AI'}</span>
       </div>
       <div class="ai-odds-strip">
         <div class="ai-odd-item"><span class="ai-odd-label">主胜赔率</span><span class="ai-odd-val">${ho}</span></div>

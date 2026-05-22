@@ -383,13 +383,48 @@ def build_rich_prompt(match: Dict[str, Any], ctx: Dict[str, Any],
 # ─────────────────────────────────────────────────────────────────────────────
 
 class AIFootballPredictor:
-    def __init__(self, api_key: str = None, model_name: str = None):
+    def __init__(self, api_key: str = None, model_name: str = None, user_id: int = None):
         # 优先从数据库读取配置，fallback 到参数/环境变量
         self.api_key = api_key
         self.model_name = model_name
-        self.base_url = "https://generativelanguage.googleapis.com/v1beta/models"
+        self.base_url = os.environ.get('GEMINI_BASE_URL') or os.environ.get('GEMINI_API_URL') or "https://generativelanguage.googleapis.com/v1beta/models"
         self.use_openai_format = False
+        self.permanent_error = None
         
+        # 新增多引擎支持的默认属性
+        self.engine_type = 'system'
+        self.cli_path_kiro = 'kiro'
+        self.cli_path_antigravity = 'antigravity'
+        self.cli_path_cursor = 'cursor'
+        
+        # 1. 尝试从数据库读取用户的个性化 AI 配置
+        if user_id:
+            try:
+                from scripts.database import prediction_db
+                if prediction_db:
+                    user_cfg = prediction_db.get_user_ai_config(user_id)
+                    if user_cfg:
+                        self.engine_type = user_cfg.get('ai_engine_type', 'system')
+                        if self.engine_type != 'system':
+                            # 始终为所有非 system 引擎加载通用自定义/CLI 配置参数（API Key、Base URL 与 Model）
+                            self.api_key = user_cfg.get('ai_api_key') or self.api_key
+                            self.base_url = user_cfg.get('ai_api_url') or self.base_url
+                            if self.base_url:
+                                self.base_url = self.base_url.rstrip('/')
+                            self.model_name = user_cfg.get('ai_model') or self.model_name
+
+                            if self.engine_type == 'api_key':
+                                self.use_openai_format = True
+                            
+                            # 获取各类 CLI 路径配置
+                            self.cli_path_kiro = user_cfg.get('cli_path_kiro', 'kiro')
+                            self.cli_path_antigravity = user_cfg.get('cli_path_antigravity', 'antigravity')
+                            self.cli_path_cursor = user_cfg.get('cli_path_cursor', 'cursor')
+                            return # 成功加载用户定制的非 system 配置，直接返回
+            except Exception as e:
+                logger.error(f"加载用户个性化 AI 配置失败 (user_id={user_id}): {e}")
+        
+        # 2. 如果配置为 system 或未提供 user_id，则加载系统全局配置
         try:
             from scripts.database import prediction_db
             if prediction_db:
@@ -405,6 +440,30 @@ class AIFootballPredictor:
         except Exception:
             pass
 
+    def _is_permanent_error(self, status_code: int, text: str) -> Optional[str]:
+        """检测响应是否指示永久性 API 错误（如额度不足、无效 Key）"""
+        text_lower = text.lower()
+        if status_code == 401:
+            return "API Key 无效或未授权，请检查后台配置。"
+        
+        quota_keywords = [
+            "quota", "balance", "exceeded", "insufficient", "limit", 
+            "额度", "余额", "欠费", "超限", "次数已达上限"
+        ]
+        invalid_keywords = [
+            "invalid", "key not valid", "api key", "not valid", "无效"
+        ]
+        
+        if status_code in (400, 403, 429):
+            for kw in quota_keywords:
+                if kw in text_lower:
+                    return "API 额度不足或账号余额不足，请联系管理员充值。"
+            for kw in invalid_keywords:
+                if kw in text_lower:
+                    return "API Key 无效或已过期，请检查后台配置。"
+                    
+        return None
+
     # ── 批量分析 ──────────────────────────────────────────────────────────────
     def analyze_matches(self, matches: List[Dict[str, Any]],
                         use_db: bool = True) -> List[SimpleMatchAnalysis]:
@@ -414,6 +473,8 @@ class AIFootballPredictor:
                 analysis = self._analyze_single_match(match, use_db=use_db)
                 if analysis:
                     analyses.append(analysis)
+                else:
+                    analyses.append(self._create_error_analysis(match, "AI 分析未返回结果"))
             except Exception as e:
                 ht = match.get('home_team', '')
                 at = match.get('away_team', '')
@@ -493,11 +554,79 @@ class AIFootballPredictor:
             best = max(implied, key=implied.get)
             return f"市场偏{label_map[best]}（无ML数据）"
 
-    # ── 调用 AI API ───────────────────────────────────────────────────────
+    # ── 调用 AI 引擎（支持 API 与 CLI） ───────────────────────────────────────
     def _call_ai_model(self, prompt: str) -> Optional[str]:
+        if getattr(self, 'permanent_error', None):
+            raise RuntimeError(self.permanent_error)
+            
+        # 根据配置的引擎类型路由请求
+        if self.engine_type == 'kiro_cli':
+            return self._call_cli_command(self.cli_path_kiro, prompt)
+        elif self.engine_type == 'antigravity_cli':
+            return self._call_cli_command(self.cli_path_antigravity, prompt)
+        elif self.engine_type == 'cursor_cli':
+            return self._call_cli_command(self.cli_path_cursor, prompt)
+
         if self.use_openai_format:
             return self._call_openai_format(prompt)
         return self._call_gemini_native(prompt)
+
+    def _call_cli_command(self, cmd_str: str, prompt: str) -> str:
+        """安全并稳健地调用本地命令行 AI 工具（kiro-cli / antigravity cli / cursor cli）"""
+        import shlex
+        import subprocess
+
+        if not cmd_str:
+            raise RuntimeError("命令行路径/指令未配置，请在个人中心填写。")
+
+        try:
+            cmd_args = shlex.split(cmd_str)
+        except Exception as e:
+            raise RuntimeError(f"命令行指令格式非法: {e}")
+
+        logger.info(f"正在调用本地 CLI 预测引擎: {' '.join(cmd_args)}")
+        try:
+            # 准备环境变量，向 CLI 传递用户在界面配置的密钥、地址和模型
+            import os
+            env = os.environ.copy()
+            if getattr(self, 'api_key', None):
+                env['GEMINI_API_KEY'] = self.api_key
+                env['OPENAI_API_KEY'] = self.api_key
+                env['CURSOR_TOKEN'] = self.api_key
+            if getattr(self, 'base_url', None):
+                env['GEMINI_API_URL'] = self.base_url
+                env['GEMINI_BASE_URL'] = self.base_url
+                env['OPENAI_API_BASE'] = self.base_url
+            if getattr(self, 'model_name', None):
+                env['GEMINI_MODEL'] = self.model_name
+                env['OPENAI_MODEL'] = self.model_name
+                env['AI_MODEL'] = self.model_name
+
+            # 运行命令并将 prompt 通过 stdin 输入给 CLI
+            res = subprocess.run(
+                cmd_args,
+                input=prompt,
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                env=env,
+                timeout=30
+            )
+            
+            if res.returncode == 0:
+                stdout_content = res.stdout.strip()
+                if not stdout_content:
+                    raise RuntimeError("命令行执行成功，但未返回任何输出。")
+                return stdout_content
+            else:
+                err_msg = (res.stderr or res.stdout or '').strip()
+                raise RuntimeError(f"命令行执行失败 (退出码 {res.returncode}): {err_msg[:300]}")
+        except FileNotFoundError:
+            raise RuntimeError(f"未找到命令行可执行文件 '{cmd_args[0]}'，请检查您的 CLI 是否安装或路径是否配置正确。")
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("命令行分析超时（限制为 30 秒）。")
+        except Exception as e:
+            raise RuntimeError(f"调用本地命令行异常: {str(e)}")
 
     def _call_openai_format(self, prompt: str) -> Optional[str]:
         """使用 OpenAI 兼容格式调用（支持 360 中转、OpenRouter 等）"""
@@ -518,7 +647,14 @@ class AIFootballPredictor:
 
         for attempt in range(3):
             try:
-                resp = requests.post(url, headers=headers, json=payload, timeout=60)
+                logger.info(f"调用 OpenAI 兼容 API (attempt {attempt+1}/3)")
+                resp = requests.post(url, headers=headers, json=payload, timeout=25)
+                
+                perm_err = self._is_permanent_error(resp.status_code, resp.text)
+                if perm_err:
+                    self.permanent_error = perm_err
+                    raise RuntimeError(perm_err)
+
                 if resp.status_code == 200:
                     data = resp.json()
                     content = data.get('choices', [{}])[0].get('message', {}).get('content', '')
@@ -533,9 +669,18 @@ class AIFootballPredictor:
                         return None
             except requests.exceptions.Timeout:
                 logger.warning(f"超时 (attempt {attempt+1})")
+                if attempt < 2:
+                    time.sleep(attempt + 1)
+            except RuntimeError as re:
+                if getattr(self, 'permanent_error', None) == str(re):
+                    raise
+                logger.error(f"AI 调用运行时异常: {re}")
+                if attempt == 2:
+                    return None
             except Exception as e:
                 logger.error(f"AI 调用异常: {e}")
-                return None
+                if attempt == 2:
+                    return None
         return None
 
     def _call_gemini_native(self, prompt: str) -> Optional[str]:
@@ -558,7 +703,12 @@ class AIFootballPredictor:
         for attempt in range(3):
             try:
                 logger.info(f"调用 Gemini API (attempt {attempt+1}/3)")
-                resp = requests.post(url, headers=headers, json=payload, timeout=30)
+                resp = requests.post(url, headers=headers, json=payload, timeout=25)
+
+                perm_err = self._is_permanent_error(resp.status_code, resp.text)
+                if perm_err:
+                    self.permanent_error = perm_err
+                    raise RuntimeError(perm_err)
 
                 if resp.status_code == 200:
                     data = resp.json()
@@ -579,7 +729,14 @@ class AIFootballPredictor:
 
             except requests.exceptions.Timeout:
                 logger.warning(f"超时 (attempt {attempt+1})")
-                time.sleep(attempt + 1)
+                if attempt < 2:
+                    time.sleep(attempt + 1)
+            except RuntimeError as re:
+                if getattr(self, 'permanent_error', None) == str(re):
+                    raise
+                logger.error(f"Gemini 调用运行时异常: {re}")
+                if attempt == 2:
+                    return None
             except Exception as e:
                 logger.error(f"调用异常: {e}")
                 if attempt == 2:

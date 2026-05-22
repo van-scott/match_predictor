@@ -261,11 +261,29 @@ def profile():
     history_html = ''
     already_checked = False
     analyses_json = []
-    config = {'ai_api_url': '', 'ai_api_key': '', 'ai_model': ''}
+    user_ai_config = {
+        'ai_engine_type': 'system',
+        'ai_api_url': '',
+        'ai_api_key': '',
+        'ai_model': '',
+        'cli_path_kiro': 'kiro',
+        'cli_path_antigravity': 'antigravity',
+        'cli_path_cursor': 'cursor'
+    }
+    masked_key = ''
+    if prediction_db:
+        try:
+            user_ai_config = prediction_db.get_user_ai_config(current_user['id'])
+            raw_key = user_ai_config.get('ai_api_key', '')
+            if raw_key:
+                if len(raw_key) > 10:
+                    masked_key = raw_key[:6] + '***' + raw_key[-4:]
+                else:
+                    masked_key = '***'
+        except Exception:
+            pass
 
-    # 管理员加载 AI 配置
-    if current_user.get('user_type') == 'admin':
-        config = _get_ai_config()
+    config = user_ai_config
 
     if prediction_db:
         try:
@@ -668,14 +686,23 @@ def ai_predict():
 
         prediction_db.deduct_credits(current_user['id'], total_cost)
 
-        # 使用统一的 AIFootballPredictor 调用 AI（自动从数据库读取配置）
+        # 使用统一的 AIFootballPredictor 调用 AI（支持用户中心自定义的 API 或 CLI 引擎）
         try:
-            predictor = AIFootballPredictor()
-        except Exception:
-            return jsonify({'success': False, 'message': 'AI 服务未配置，请在管理后台设置'}), 500
+            predictor = AIFootballPredictor(user_id=current_user['id'])
+        except Exception as e:
+            return jsonify({'success': False, 'message': f'AI 服务初始化失败: {str(e)}'}), 500
 
-        if not predictor.api_key:
-            return jsonify({'success': False, 'message': 'AI 服务未配置，请在管理后台设置'}), 500
+        # 进行引擎级校验
+        if predictor.engine_type == 'system' and not predictor.api_key:
+            return jsonify({'success': False, 'message': '系统 AI 服务未配置，请在管理后台设置'}), 500
+        elif predictor.engine_type == 'api_key' and not predictor.api_key:
+            return jsonify({'success': False, 'message': '您选择使用自定义 API Key，但未在个人中心配置 Key'}), 500
+        elif predictor.engine_type == 'kiro_cli' and not predictor.cli_path_kiro:
+            return jsonify({'success': False, 'message': 'Kiro CLI 路径未配置'}), 500
+        elif predictor.engine_type == 'antigravity_cli' and not predictor.cli_path_antigravity:
+            return jsonify({'success': False, 'message': 'Antigravity CLI 路径未配置'}), 500
+        elif predictor.engine_type == 'cursor_cli' and not predictor.cli_path_cursor:
+            return jsonify({'success': False, 'message': 'Cursor CLI 路径未配置'}), 500
 
         predictions = []
         for m in matches:
@@ -1307,6 +1334,333 @@ def user_checkin():
     return jsonify(result)
 
 
+# ── 用户自定义 AI 配置 ─────────────────────────────────────────────────────────
+
+@app.route('/api/user/ai-config', methods=['GET'])
+def get_user_ai_config_api():
+    """获取当前用户的 AI 配置"""
+    current_user = get_current_user()
+    if not current_user or not prediction_db:
+        return jsonify({'success': False, 'message': '请先登录'}), 401
+    
+    config = prediction_db.get_user_ai_config(current_user['id'])
+    # 遮罩敏感的 key，仅在 api_key 存在时遮罩
+    masked_key = config.get('ai_api_key', '')
+    if masked_key and len(masked_key) > 10:
+        masked_key = masked_key[:6] + '***' + masked_key[-4:]
+    elif masked_key:
+        masked_key = '***'
+    
+    # 遮罩真实 key 以防泄露给前端
+    config['_masked_key'] = masked_key
+    return jsonify({'success': True, 'config': config})
+
+
+@app.route('/api/user/save-ai-config', methods=['POST'])
+def save_user_ai_config_api():
+    """保存当前用户的 AI 配置"""
+    current_user = get_current_user()
+    if not current_user or not prediction_db:
+        return jsonify({'success': False, 'message': '请先登录'}), 401
+
+    data = request.get_json() or {}
+    engine_type = data.get('ai_engine_type', 'system').strip()
+    
+    # 获取已有配置，处理未变动的 masked api_key
+    old_config = prediction_db.get_user_ai_config(current_user['id'])
+    api_key = data.get('ai_api_key', '').strip()
+    if api_key.startswith('***') or '***' in api_key:
+        api_key = old_config.get('ai_api_key', '')
+
+    config = {
+        'ai_engine_type': engine_type,
+        'ai_api_url': data.get('ai_api_url', '').strip(),
+        'ai_api_key': api_key,
+        'ai_model': data.get('ai_model', '').strip(),
+        'cli_path_kiro': data.get('cli_path_kiro', 'kiro').strip(),
+        'cli_path_antigravity': data.get('cli_path_antigravity', 'antigravity').strip(),
+        'cli_path_cursor': data.get('cli_path_cursor', 'cursor').strip()
+    }
+    
+    # 参数校验：自定义 API 三项全部必填；CLI 引擎路径 + 模型必填，Base URL 和 API Key 可选
+    if engine_type == 'api_key':
+        if not config['ai_api_url']:
+            return jsonify({'success': False, 'message': '自定义 API 模式：API 服务地址不能为空'}), 400
+        if not config['ai_api_key']:
+            return jsonify({'success': False, 'message': '自定义 API 模式：API Key 不能为空'}), 400
+        if not config['ai_model']:
+            return jsonify({'success': False, 'message': '自定义 API 模式：分析模型名称不能为空'}), 400
+    elif engine_type in ('kiro_cli', 'antigravity_cli', 'cursor_cli'):
+        cli_path_map = {
+            'kiro_cli': config['cli_path_kiro'],
+            'antigravity_cli': config['cli_path_antigravity'],
+            'cursor_cli': config['cli_path_cursor'],
+        }
+        cli_name_map = {'kiro_cli': 'Kiro', 'antigravity_cli': 'Antigravity', 'cursor_cli': 'Cursor'}
+        if not cli_path_map[engine_type]:
+            return jsonify({'success': False, 'message': f'{cli_name_map[engine_type]} CLI 可执行路径不能为空'}), 400
+        if not config['ai_model']:
+            return jsonify({'success': False, 'message': f'{cli_name_map[engine_type]} CLI 模式：分析模型名称不能为空，请在登录后检测或手动填写'}), 400
+
+    success = prediction_db.save_user_ai_config(current_user['id'], config)
+    if success:
+        return jsonify({'success': True, 'message': 'AI 配置保存成功'})
+    else:
+        return jsonify({'success': False, 'message': '保存 AI 配置失败，请检查数据库连接'}), 500
+
+
+@app.route('/api/user/test-ai-config', methods=['POST'])
+def test_user_ai_config_api():
+    """测试当前用户的 AI 配置"""
+    current_user = get_current_user()
+    if not current_user or not prediction_db:
+        return jsonify({'success': False, 'message': '请先登录'}), 401
+
+    data = request.get_json() or {}
+    engine_type = data.get('ai_engine_type', 'system').strip()
+    
+    # 获取已有配置以防 api_key 使用了 masking
+    old_config = prediction_db.get_user_ai_config(current_user['id'])
+    api_key = data.get('ai_api_key', '').strip()
+    if api_key.startswith('***') or '***' in api_key:
+        api_key = old_config.get('ai_api_key', '')
+
+    config = {
+        'ai_engine_type': engine_type,
+        'ai_api_url': data.get('ai_api_url', '').strip(),
+        'ai_api_key': api_key,
+        'ai_model': data.get('ai_model', '').strip(),
+        'cli_path_kiro': data.get('cli_path_kiro', 'kiro').strip(),
+        'cli_path_antigravity': data.get('cli_path_antigravity', 'antigravity').strip(),
+        'cli_path_cursor': data.get('cli_path_cursor', 'cursor').strip()
+    }
+
+    # 用一个极简的测试 prompt
+    test_prompt = "请回复 'OK'，不需要任何其他多余文本。"
+    
+    try:
+        from scripts.ai_predictor import AIFootballPredictor
+        # 实例化测试用的预测器，直接把提交上来的测试参数写入实例
+        predictor = AIFootballPredictor()
+        predictor.engine_type = engine_type
+        
+        if engine_type == 'system':
+            # 测试系统默认配置，需确保系统有配置好的 key
+            if not predictor.api_key:
+                return jsonify({'success': False, 'message': '系统默认 AI 服务未配置，请联系管理员设置'}), 400
+        elif engine_type == 'api_key':
+            if not config['ai_api_url'] or not config['ai_api_key'] or not config['ai_model']:
+                return jsonify({'success': False, 'message': '使用自定义 API Key 时，服务地址、密钥和模型名称均不能为空'}), 400
+            predictor.api_key = config['ai_api_key']
+            predictor.base_url = config['ai_api_url'].rstrip('/')
+            predictor.model_name = config['ai_model']
+            predictor.use_openai_format = True
+        elif engine_type == 'kiro_cli':
+            predictor.cli_path_kiro = config['cli_path_kiro']
+        elif engine_type == 'antigravity_cli':
+            predictor.cli_path_antigravity = config['cli_path_antigravity']
+        elif engine_type == 'cursor_cli':
+            predictor.cli_path_cursor = config['cli_path_cursor']
+        
+        # 同时为 CLI 引擎注入测试所用的通用参数（API Key、Base URL 与 Model）
+        if engine_type in ('kiro_cli', 'antigravity_cli', 'cursor_cli'):
+            predictor.api_key = config['ai_api_key']
+            predictor.base_url = config['ai_api_url'].rstrip('/') if config['ai_api_url'] else ''
+            predictor.model_name = config['ai_model']
+        
+        # 调用 AI 接口
+        # 在测试时，如果是 CLI 且没有安装，_call_ai_model 会抛出 FileNotFoundError，这在 Exception 中捕获并优雅返回
+        response = predictor._call_ai_model(test_prompt)
+        if response:
+            return jsonify({
+                'success': True,
+                'message': '连接测试成功！',
+                'response': response
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': '连接成功，但 AI 未返回任何内容。'
+            })
+    except Exception as e:
+        app.logger.warning(f"AI 配置测试失败: {e}")
+        # 如果是未找到命令的错误，输出更加友好的提示
+        err_msg = str(e)
+        if "FileNotFoundError" in err_msg or "未找到命令行" in err_msg or "No such file" in err_msg:
+            return jsonify({
+                'success': False,
+                'message': f'连接测试失败：未在本地系统找到指定的 CLI 可执行命令或路径。请确保对应工具已安装，并已正确配置绝对路径。'
+            })
+        return jsonify({
+            'success': False,
+            'message': f'连接测试失败：{err_msg}'
+        })
+
+
+@app.route('/api/user/login-cli', methods=['POST'])
+def login_cli_api():
+    """在后台非交互式登录用户指定的 CLI 智能预测引擎"""
+    current_user = get_current_user()
+    if not current_user or not prediction_db:
+        return jsonify({'success': False, 'message': '请先登录'}), 401
+
+    data = request.get_json() or {}
+    engine_type = data.get('ai_engine_type', '').strip()
+    cli_path = data.get('cli_path', '').strip()
+    
+    if not engine_type or not cli_path:
+        return jsonify({'success': False, 'message': 'CLI 类型与命令路径不能为空'}), 400
+
+    # 还原掩码处理的 API Key
+    old_config = prediction_db.get_user_ai_config(current_user['id'])
+    api_key = data.get('ai_api_key', '').strip()
+    if api_key.startswith('***') or '***' in api_key:
+        api_key = old_config.get('ai_api_key', '')
+
+    api_url = data.get('ai_api_url', '').strip()
+    api_model = data.get('ai_model', '').strip()
+
+    # 构建登录命令
+    import shlex
+    import subprocess
+    
+    try:
+        cmd_args = shlex.split(cli_path)
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'命令行指令格式非法: {str(e)}'}), 400
+
+    # 针对不同 CLI 拼接不同的登录子命令
+    if engine_type == 'cursor_cli':
+        cmd = cmd_args + ['auth', 'login']
+    else:  # kiro_cli, antigravity_cli
+        cmd = cmd_args + ['login']
+
+    # 环境变量注入
+    import os
+    env = os.environ.copy()
+    if api_key:
+        env['GEMINI_API_KEY'] = api_key
+        env['OPENAI_API_KEY'] = api_key
+        env['CURSOR_TOKEN'] = api_key
+    if api_url:
+        env['GEMINI_API_URL'] = api_url
+        env['GEMINI_BASE_URL'] = api_url
+        env['OPENAI_API_BASE'] = api_url
+    if api_model:
+        env['GEMINI_MODEL'] = api_model
+        env['OPENAI_MODEL'] = api_model
+        env['AI_MODEL'] = api_model
+
+    try:
+        # 执行非交互式登录，限制超时为 15 秒以防终端挂起
+        res = subprocess.run(
+            cmd,
+            input=api_key,  # 通过 stdin 输入 API Key (或者 Token)
+            capture_output=True,
+            text=True,
+            encoding='utf-8',
+            env=env,
+            timeout=15
+        )
+        
+        merged_output = f"STDOUT:\n{res.stdout.strip()}\n\nSTDERR:\n{res.stderr.strip()}"
+        if res.returncode == 0:
+            return jsonify({
+                'success': True,
+                'message': 'CLI 登录指令执行完毕，返回状态正常。',
+                'output': merged_output
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': f'CLI 登录失败，进程退出码: {res.returncode}',
+                'output': merged_output
+            })
+            
+    except FileNotFoundError:
+        return jsonify({
+            'success': False,
+            'message': f"未在系统中找到可执行命令或绝对路径 '{cli_path}'，请确认该 CLI 工具已正确安装且路径拼写无误。"
+        }), 404
+    except subprocess.TimeoutExpired:
+        return jsonify({
+            'success': False,
+            'message': '登录指令执行超时（15 秒已到），后台已自动终止。请检查本地网络或 API 密钥及地址的可用性。'
+        }), 408
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'执行登录认证时发生异常：{str(e)}'
+        }), 500
+
+
+@app.route('/api/user/detect-cli-models', methods=['POST'])
+def detect_cli_models_api():
+    """登录 CLI 后尝试检测可用模型列表"""
+    current_user = get_current_user()
+    if not current_user or not prediction_db:
+        return jsonify({'success': False, 'message': '请先登录'}), 401
+
+    data = request.get_json() or {}
+    engine_type = data.get('ai_engine_type', '').strip()
+    cli_path = data.get('cli_path', '').strip()
+
+    if not cli_path:
+        return jsonify({'success': False, 'message': 'CLI 路径不能为空'}), 400
+
+    import shlex, subprocess, os
+
+    try:
+        cmd_args = shlex.split(cli_path)
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'命令格式非法: {e}'}), 400
+
+    # 各 CLI 尝试的模型列表子命令（按优先级依次尝试）
+    model_cmds = {
+        'kiro_cli':        [['models'], ['model', 'list'], ['list', 'models']],
+        'antigravity_cli': [['models'], ['model', 'list'], ['list']],
+        'cursor_cli':      [['models'], ['model', 'list'], ['api', 'models']],
+    }
+    candidates = model_cmds.get(engine_type, [['models']])
+
+    env = os.environ.copy()
+    old_config = prediction_db.get_user_ai_config(current_user['id'])
+    if old_config.get('ai_api_key'):
+        env['GEMINI_API_KEY'] = old_config['ai_api_key']
+        env['OPENAI_API_KEY'] = old_config['ai_api_key']
+        env['CURSOR_TOKEN']   = old_config['ai_api_key']
+    if old_config.get('ai_api_url'):
+        env['OPENAI_API_BASE'] = old_config['ai_api_url']
+        env['GEMINI_API_URL']  = old_config['ai_api_url']
+
+    last_output = ''
+    for sub in candidates:
+        try:
+            res = subprocess.run(
+                cmd_args + sub,
+                capture_output=True, text=True, encoding='utf-8',
+                env=env, timeout=10
+            )
+            combined = (res.stdout + res.stderr).strip()
+            last_output = combined
+            if res.returncode == 0 and combined:
+                # 简单解析：每行当做一个候选模型名（过滤空行和明显的非模型行）
+                lines = [l.strip() for l in combined.splitlines() if l.strip()]
+                models = [l for l in lines if len(l) < 120 and not l.startswith('#')]
+                if models:
+                    return jsonify({'success': True, 'models': models, 'raw': combined})
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            break
+        except Exception:
+            continue
+
+    return jsonify({
+        'success': False,
+        'message': '未能自动检测到模型列表，请手动填写模型名称。',
+        'raw': last_output
+    })
+
+
 # ── 管理员初始化接口 ──────────────────────────────────────────────────────────
 
 @app.route('/api/admin/init-db', methods=['POST'])
@@ -1344,6 +1698,7 @@ def admin_init_db():
 
         # 2. 确保积分字段存在（兼容旧表）
         prediction_db.ensure_credits_columns()
+        prediction_db.ensure_ai_config_columns()
 
         # 3. 初始化超管账号
         admin_result = prediction_db.init_admin(
@@ -1819,12 +2174,12 @@ def smart_predict():
             if not can_predict:
                 return jsonify({'success': False, 'message': '今日预测次数已用完'}), 403
 
-            gemini_key = os.environ.get('GEMINI_API_KEY')
-            if gemini_key and AIFootballPredictor:
+            if AIFootballPredictor:
                 try:
                     predictor = AIFootballPredictor(
                         api_key    = gemini_key,
-                        model_name = os.environ.get('GEMINI_MODEL', 'gemini-2.0-flash-exp')
+                        model_name = os.environ.get('GEMINI_MODEL', 'gemini-2.0-flash-exp'),
+                        user_id    = current_user['id']
                     )
                     match_input = {
                         'match_id':    fix_id,
@@ -2119,7 +2474,7 @@ def get_available_leagues():
 def _get_ai_config():
     """从数据库读取 AI 配置"""
     config = {
-        'ai_api_url': os.environ.get('GEMINI_API_KEY', 'https://openrouter.ai/api/v1'),
+        'ai_api_url': os.environ.get('GEMINI_BASE_URL') or os.environ.get('GEMINI_API_URL') or 'https://openrouter.ai/api/v1',
         'ai_api_key': '',
         'ai_model': os.environ.get('GEMINI_MODEL', 'openrouter/owl-alpha'),
     }
@@ -2310,12 +2665,13 @@ def _setup_scheduler():
 
 
 if __name__ == '__main__':
-    # 启动时确保积分字段存在
+    # 启动时确保积分字段和AI配置字段存在
     if prediction_db:
         try:
             prediction_db.ensure_credits_columns()
+            prediction_db.ensure_ai_config_columns()
         except Exception as e:
-            app.logger.warning(f"积分字段初始化跳过: {e}")
+            app.logger.warning(f"字段初始化跳过: {e}")
 
     # 启动定时任务调度器
     _setup_scheduler()

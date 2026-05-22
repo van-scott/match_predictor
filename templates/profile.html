@@ -149,6 +149,219 @@ body { background: var(--bg); color: var(--cream); font-family: 'Inter', sans-se
     transform: translate(-50%, -50%) scale(1);
   }
 }
+
+/* AI 预测配置专属高级样式 */
+.ai-config-card {
+  background: linear-gradient(135deg, rgba(26, 21, 44, 0.9) 0%, rgba(18, 14, 32, 0.95) 100%);
+  border: 1px solid rgba(232, 146, 74, 0.15);
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+  position: relative;
+  overflow: hidden;
+}
+.ai-config-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: linear-gradient(90deg, var(--orange), var(--amber));
+}
+
+/* 引擎选择区域 - 精美胶囊选项卡 */
+.engine-tabs-container {
+  margin: 1.5rem 0 2rem 0;
+}
+.engine-tabs-label {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.6rem;
+}
+.engine-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+.engine-tab {
+  flex: 1;
+  min-width: 140px;
+  padding: 0.8rem 1rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--cream);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  text-align: center;
+}
+.engine-tab i {
+  font-size: 1.2rem;
+  color: var(--muted);
+  transition: color 0.25s ease;
+}
+.engine-tab:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(232, 146, 74, 0.4);
+  transform: translateY(-2px);
+}
+.engine-tab.active {
+  background: rgba(232, 146, 74, 0.1);
+  border-color: var(--orange);
+  color: #fff;
+  box-shadow: 0 0 15px rgba(232, 146, 74, 0.15);
+}
+.engine-tab.active i {
+  color: var(--orange);
+}
+
+/* 表单分组 */
+.config-section {
+  display: none;
+  animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(255, 255, 255, 0.01);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.config-section.active {
+  display: block;
+}
+
+.input-group {
+  margin-bottom: 1.2rem;
+}
+.input-group:last-child {
+  margin-bottom: 0;
+}
+.input-group label {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-bottom: 0.4rem;
+  font-weight: 600;
+}
+.input-group input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--cream);
+  font-size: 0.85rem;
+  transition: all 0.2s ease;
+}
+.input-group input:focus {
+  border-color: var(--orange);
+  box-shadow: 0 0 8px rgba(232, 146, 74, 0.25);
+  outline: none;
+}
+
+/* 按钮动作区域 */
+.config-actions {
+  display: flex;
+  gap: 0.8rem;
+  margin-top: 1.5rem;
+}
+.btn-premium {
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  border: none;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.btn-premium.primary {
+  background: linear-gradient(135deg, var(--orange) 0%, var(--amber) 100%);
+  color: #fff;
+  box-shadow: 0 4px 15px rgba(232, 146, 74, 0.3);
+}
+.btn-premium.primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(232, 146, 74, 0.45);
+}
+.btn-premium.secondary {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  color: var(--cream);
+}
+.btn-premium.secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+/* 诊断结果提示框 (Glassmorphism Banners) */
+.diagnostic-banner {
+  margin-top: 1.2rem;
+  padding: 1rem 1.2rem;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  animation: fadeIn 0.3s ease;
+  backdrop-filter: blur(8px);
+  display: none;
+}
+.diagnostic-banner.success {
+  display: block;
+  background: rgba(74, 222, 128, 0.08);
+  border: 1px solid rgba(74, 222, 128, 0.25);
+  color: #86efac;
+  box-shadow: 0 8px 32px rgba(74, 222, 128, 0.05);
+}
+.diagnostic-banner.error {
+  display: block;
+  background: rgba(248, 113, 113, 0.08);
+  border: 1px solid rgba(248, 113, 113, 0.25);
+  color: #fca5a5;
+  box-shadow: 0 8px 32px rgba(248, 113, 113, 0.05);
+}
+
+.diagnostic-banner .banner-title {
+  font-weight: 700;
+  margin-bottom: 0.3rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.diagnostic-banner .banner-content {
+  opacity: 0.9;
+  font-family: monospace;
+  white-space: pre-wrap;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 0.5rem;
+  border-radius: 6px;
+  margin-top: 0.4rem;
+  font-size: 0.75rem;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 </style>
 </head>
 <body>
@@ -223,41 +436,158 @@ body { background: var(--bg); color: var(--cream); font-family: 'Inter', sans-se
     </div>
     {% if history_html %}
     <table class="pf-table">
-      <thead><tr><th>时间</th><th>模式</th><th>比赛</th><th>联赛</th><th>赔率 (主/平/客)</th><th>操作</th></tr></thead>
-      <tbody>{{ history_html|safe }}</tbody>
-    </table>
-    {% else %}
-    <div style="text-align:center;padding:2rem;color:var(--muted)"><i class="fas fa-inbox" style="font-size:2rem;margin-bottom:.5rem;display:block"></i>暂无预测记录<br><small>使用 AI 大模型分析比赛后，记录会显示在这里</small></div>
-    {% endif %}
-  </div>
-
-  {% if current_user.user_type == 'admin' %}
-  <!-- 管理员：AI 配置 -->
-  <div class="pf-card">
-    <div class="pf-history-header">
+      <thead><tr><th>时间</th><th>模式</th><th>比赛</th><th>联赛</th><th>赔率 (主/平/客)</th><th>�  <!-- AI 预测引擎配置（所有登录用户可用） -->
+  <div class="pf-card ai-config-card">
+    <div class="pf-history-header" style="margin-bottom: 0.5rem;">
       <div>
-        <h3><i class="fas fa-cog"></i> AI 模型配置</h3>
-        <small>配置 AI 服务地址、Key 和模型</small>
+        <h3><i class="fas fa-brain"></i> AI 智能预测引擎配置</h3>
+        <small style="color: var(--muted); font-size: 0.78rem;">为您的账户独立配置 AI 分析引擎，可选择自定义 API 接口或本地 CLI 工具</small>
       </div>
-      <button class="pf-refresh" onclick="detectModels()"><i class="fas fa-search"></i> 检测模型</button>
     </div>
-    <div class="ac-field" style="margin-bottom:1rem">
-      <label style="display:block;font-size:.75rem;color:var(--muted);margin-bottom:.3rem;font-weight:600">API 服务地址</label>
-      <input type="text" id="ai-url" value="{{ config.ai_api_url }}" placeholder="https://openrouter.ai/api/v1" style="width:100%;padding:.6rem .8rem;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--cream);font-size:.85rem">
+
+    <!-- 引擎类型切换 -->
+    <div class="engine-tabs-container">
+      <div class="engine-tabs-label">选择预测引擎</div>
+      <div class="engine-tabs">
+        <button type="button" class="engine-tab active" data-engine="api_key" onclick="switchEngine('api_key')">
+          <i class="fas fa-key"></i>
+          <span>自定义 API</span>
+        </button>
+        <button type="button" class="engine-tab" data-engine="kiro_cli" onclick="switchEngine('kiro_cli')">
+          <i class="fas fa-terminal"></i>
+          <span>Kiro CLI</span>
+        </button>
+        <button type="button" class="engine-tab" data-engine="antigravity_cli" onclick="switchEngine('antigravity_cli')">
+          <i class="fas fa-rocket"></i>
+          <span>Antigravity CLI</span>
+        </button>
+        <button type="button" class="engine-tab" data-engine="cursor_cli" onclick="switchEngine('cursor_cli')">
+          <i class="fas fa-code"></i>
+          <span>Cursor CLI</span>
+        </button>
+      </div>
     </div>
-    <div class="ac-field" style="margin-bottom:1rem">
-      <label style="display:block;font-size:.75rem;color:var(--muted);margin-bottom:.3rem;font-weight:600">API Key</label>
-      <input type="password" id="ai-key" value="{{ config.ai_api_key }}" placeholder="sk-..." style="width:100%;padding:.6rem .8rem;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--cream);font-size:.85rem">
+
+    <!-- 各引擎配置表单区 -->
+    <div id="cfg-form-container">
+      <!-- 1. 自定义 API 提示 -->
+      <div id="cfg-api_key" class="config-section active">
+        <div style="background: rgba(255, 255, 255, 0.02); padding: 1rem; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.05); font-size: 0.85rem; line-height: 1.6;">
+          <i class="fas fa-info-circle" style="color: var(--orange); margin-right: 0.4rem;"></i>
+          <strong>自定义 API 模式</strong>：直接通过 HTTP 请求访问第三方大模型。请在下方配置您的服务地址、API Key 和分析模型（全部必填）。
+        </div>
+      </div>
+
+      <!-- 2. Kiro CLI -->
+      <div id="cfg-kiro_cli" class="config-section">
+        <div class="input-group">
+          <label for="cli-path-kiro">Kiro CLI 可执行路径</label>
+          <input type="text" id="cli-path-kiro" placeholder="例如: kiro 或 /usr/local/bin/kiro" value="kiro">
+          <small style="display: block; margin-top: 0.3rem; color: var(--muted); font-size: 0.72rem;">请输入本地可执行命令或绝对路径，后台将通过标准输入传入预测 Prompt</small>
+        </div>
+        <div style="margin-top: 1rem;">
+          <button type="button" class="btn-premium secondary" id="btn-login-kiro" onclick="loginCliEngine('kiro_cli')" style="width: 100%; justify-content: center; height: 38px;">
+            <i class="fas fa-sign-in-alt"></i> 登录 Kiro CLI &amp; 检测模型
+          </button>
+        </div>
+      </div>
+
+      <!-- 3. Antigravity CLI -->
+      <div id="cfg-antigravity_cli" class="config-section">
+        <div class="input-group">
+          <label for="cli-path-antigravity">Antigravity CLI 可执行路径</label>
+          <input type="text" id="cli-path-antigravity" placeholder="例如: antigravity 或 /usr/local/bin/antigravity" value="antigravity">
+          <small style="display: block; margin-top: 0.3rem; color: var(--muted); font-size: 0.72rem;">请输入本地可执行命令或绝对路径，使用标准输入通信</small>
+        </div>
+        <div style="margin-top: 1rem;">
+          <button type="button" class="btn-premium secondary" id="btn-login-antigravity" onclick="loginCliEngine('antigravity_cli')" style="width: 100%; justify-content: center; height: 38px;">
+            <i class="fas fa-sign-in-alt"></i> 登录 Antigravity CLI &amp; 检测模型
+          </button>
+        </div>
+      </div>
+
+      <!-- 4. Cursor CLI -->
+      <div id="cfg-cursor_cli" class="config-section">
+        <div class="input-group">
+          <label for="cli-path-cursor">Cursor CLI 可执行路径</label>
+          <input type="text" id="cli-path-cursor" placeholder="例如: cursor 或 /usr/local/bin/cursor" value="cursor">
+          <small style="display: block; margin-top: 0.3rem; color: var(--muted); font-size: 0.72rem;">请输入本地可执行命令或绝对路径，使用标准输入通信</small>
+        </div>
+        <div style="margin-top: 1rem;">
+          <button type="button" class="btn-premium secondary" id="btn-login-cursor" onclick="loginCliEngine('cursor_cli')" style="width: 100%; justify-content: center; height: 38px;">
+            <i class="fas fa-sign-in-alt"></i> 登录 Cursor CLI &amp; 检测模型
+          </button>
+        </div>
+      </div>
+
+      <!-- 通用自定义/CLI 参数配置区（始终显示） -->
+      <div id="cfg-custom-fields" style="display: block; animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1); background: rgba(255, 255, 255, 0.01); border: 1px solid rgba(255, 255, 255, 0.03); border-radius: 12px; padding: 1.5rem; margin-top: 1.5rem; margin-bottom: 1.5rem;">
+        <div style="margin-bottom: 1.2rem; border-bottom: 1px solid rgba(255, 255, 255, 0.05); padding-bottom: 0.5rem; font-size: 0.9rem; font-weight: bold; color: var(--orange); display: flex; align-items: center; gap: 0.4rem;">
+          <i class="fas fa-sliders-h"></i> <span>通用 API 与模型参数配置</span>
+        </div>
+        <div class="input-group">
+          <label for="ai-url" id="label-ai-url">API 服务地址 (Base URL) <span id="badge-url" style="color: #f87171; font-size: 0.75rem; margin-left: 0.3rem;">* 必填</span></label>
+          <input type="text" id="ai-url" placeholder="https://api.openai.com/v1 或兼容网关" value="">
+        </div>
+        <div class="input-group">
+          <label for="ai-key" id="label-ai-key">API Key / Token <span id="badge-key" style="color: #f87171; font-size: 0.75rem; margin-left: 0.3rem;">* 必填</span></label>
+          <input type="password" id="ai-key" placeholder="请输入 API Key (sk-...) 或 CLI Token" value="">
+        </div>
+        <div class="input-group" style="margin-bottom: 0;">
+          <label for="ai-model">分析模型名称 (Model) <span style="color: #f87171; font-size: 0.75rem; margin-left: 0.3rem;">* 必填</span></label>
+          <div style="display: flex; gap: 0.5rem;">
+            <input type="text" id="ai-model" placeholder="例如 gpt-4o 或 claude-3-5-sonnet-20241022" value="" style="flex: 1;">
+            <button type="button" class="btn-premium secondary" id="btn-detect-models" onclick="detectCliModels()" style="display: none; height: 38px; padding: 0 1rem; white-space: nowrap; font-size: 0.8rem; align-items: center; gap: 0.3rem;">
+              <i class="fas fa-search"></i> 检测模型
+            </button>
+          </div>
+          <small id="hint-ai-model" style="display: block; margin-top: 0.3rem; color: var(--muted); font-size: 0.72rem;">请输入模型名称。CLI 模式下支持登录后点击“检测模型”自动获取并选择。</small>
+        </div>
+      </div>
     </div>
-    <div class="ac-field" style="margin-bottom:1rem">
-      <label style="display:block;font-size:.75rem;color:var(--muted);margin-bottom:.3rem;font-weight:600">当前模型</label>
-      <input type="text" id="ai-model" value="{{ config.ai_model }}" placeholder="openrouter/owl-alpha" style="width:100%;padding:.6rem .8rem;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--cream);font-size:.85rem">
+
+    <!-- 诊断状态提示框 -->
+    <div id="cfg-status-banner" class="diagnostic-banner">
+      <div class="banner-title" id="cfg-status-title"></div>
+      <div class="banner-content" id="cfg-status-content"></div>
     </div>
-    <div id="ac-models" style="margin-bottom:1rem"></div>
-    <div id="ac-status" style="margin-bottom:.8rem;padding:.6rem;border-radius:6px;font-size:.8rem;display:none"></div>
-    <button onclick="saveAiConfig()" style="padding:.6rem 1.2rem;border-radius:8px;border:none;background:var(--orange);color:#fff;font-weight:700;font-size:.82rem;cursor:pointer"><i class="fas fa-save"></i> 保存配置</button>
+
+    <!-- 按钮动作区 -->
+    <div class="config-actions">
+      <button type="button" class="btn-premium primary" id="btn-save-cfg" onclick="saveUserAiConfig()">
+        <i class="fas fa-save"></i> 保存配置
+      </button>
+      <button type="button" class="btn-premium secondary" id="btn-test-cfg" onclick="testUserAiConfig()">
+        <i class="fas fa-vial"></i> 测试配置
+      </button>
+    </div>
   </div>
-  {% endif %}
+</div>
+<a class="back-link" href="/">← 返回 MatchPredict</a>sword" id="ai-key" placeholder="请输入 API Key (sk-...) 或 CLI Token" value="">
+        </div>
+        <div class="input-group">
+          <label for="ai-model">分析模型名称 (Model)</label>
+          <input type="text" id="ai-model" placeholder="例如 gpt-4o 或 claude-3-5-sonnet-20241022" value="">
+        </div>
+      </div>
+    </div>
+
+    <!-- 诊断状态提示框 -->
+    <div id="cfg-status-banner" class="diagnostic-banner">
+      <div class="banner-title" id="cfg-status-title"></div>
+      <div class="banner-content" id="cfg-status-content"></div>
+    </div>
+
+    <!-- 按钮动作区 -->
+    <div class="config-actions">
+      <button type="button" class="btn-premium primary" id="btn-save-cfg" onclick="saveUserAiConfig()">
+        <i class="fas fa-save"></i> 保存配置
+      </button>
+      <button type="button" class="btn-premium secondary" id="btn-test-cfg" onclick="testUserAiConfig()">
+        <i class="fas fa-vial"></i> 测试配置
+      </button>
+    </div>
+  </div>
 </div>
 <a class="back-link" href="/">← 返回 MatchPredict</a>
 <script>
@@ -322,48 +652,238 @@ async function doCheckin() {
     }
   }
 }
-async function detectModels() {
-  const url = document.getElementById('ai-url')?.value.trim();
-  const key = document.getElementById('ai-key')?.value.trim();
-  const statusEl = document.getElementById('ac-status');
-  const modelsEl = document.getElementById('ac-models');
-  if (!url || !key || !statusEl) return;
-  statusEl.style.display='block'; statusEl.style.background='rgba(255,255,255,.05)'; statusEl.style.color='var(--muted)'; statusEl.textContent='检测中...';
-  modelsEl.innerHTML = '';
-  try {
-    const res = await fetch('/api/admin/detect-models', {method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({url,key})});
-    const data = await res.json();
-    if (data.success && data.models?.length > 0) {
-      statusEl.style.background='rgba(74,222,128,.08)'; statusEl.style.color='var(--green)'; statusEl.textContent=`✅ 检测到 ${data.models.length} 个模型`;
-      const cur = document.getElementById('ai-model').value;
-      modelsEl.style.maxHeight='300px'; modelsEl.style.overflowY='auto'; modelsEl.style.padding='.5rem'; modelsEl.style.border='1px solid var(--border)'; modelsEl.style.borderRadius='8px'; modelsEl.style.background='var(--surface)';
-      modelsEl.innerHTML = data.models.map(m => `<div style="display:inline-block;padding:.35rem .7rem;margin:.25rem;border-radius:6px;border:1px solid ${m.id===cur?'var(--orange)':'var(--border)'};background:${m.id===cur?'rgba(232,146,74,.12)':'transparent'};font-size:.75rem;cursor:pointer;color:var(--cream);white-space:nowrap" onclick="document.getElementById('ai-model').value='${m.id}';document.querySelectorAll('#ac-models div').forEach(d=>{d.style.borderColor='var(--border)';d.style.background='transparent'});this.style.borderColor='var(--orange)';this.style.background='rgba(232,146,74,.12)'">${m.id}</div>`).join('');
+let currentEngine = 'system';
+
+// 切换引擎显示
+function switchEngine(engineType) {
+  currentEngine = engineType;
+  
+  // 切换 Tabs 高亮
+  document.querySelectorAll('.engine-tab').forEach(tab => {
+    if (tab.dataset.engine === engineType) {
+      tab.classList.add('active');
     } else {
-      statusEl.style.background='rgba(248,113,113,.08)'; statusEl.style.color='var(--red)'; statusEl.textContent=data.message||'未检测到模型';
+      tab.classList.remove('active');
     }
-  } catch(e) {
-    statusEl.style.background='rgba(248,113,113,.08)'; statusEl.style.color='var(--red)'; statusEl.textContent='检测失败: '+e.message;
+  });
+
+  // 切换表单分组显示
+  document.querySelectorAll('.config-section').forEach(sec => {
+    if (sec.id === `cfg-${engineType}`) {
+      sec.classList.add('active');
+    } else {
+      sec.classList.remove('active');
+    }
+  });
+
+  // 切换通用配置区显示（非系统默认时显示）
+  const customFields = document.getElementById('cfg-custom-fields');
+  if (customFields) {
+    if (engineType === 'system') {
+      customFields.style.display = 'none';
+    } else {
+      customFields.style.display = 'block';
+    }
+  }
+
+  // 清除状态横幅
+  hideStatusBanner();
+}
+
+// 登录 CLI 引擎
+async function loginCliEngine(engineType) {
+  const data = gatherConfigData();
+  let cliPath = '';
+  let btnId = '';
+  
+  if (engineType === 'kiro_cli') {
+    cliPath = data.cli_path_kiro;
+    btnId = 'btn-login-kiro';
+  } else if (engineType === 'antigravity_cli') {
+    cliPath = data.cli_path_antigravity;
+    btnId = 'btn-login-antigravity';
+  } else if (engineType === 'cursor_cli') {
+    cliPath = data.cli_path_cursor;
+    btnId = 'btn-login-cursor';
+  }
+
+  const btn = document.getElementById(btnId);
+  if (!btn) return;
+  const origHtml = btn.innerHTML;
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 登录认证中...';
+  showStatusBanner('success', '启动 CLI 登录认证...', '正在尝试后台执行非交互式登录指令，并自动注入环境变量与标准输入...');
+
+  try {
+    const res = await fetch('/api/user/login-cli', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        ai_engine_type: engineType,
+        cli_path: cliPath,
+        ai_api_key: data.ai_api_key,
+        ai_api_url: data.ai_api_url,
+        ai_model: data.ai_model
+      })
+    });
+    const result = await res.json();
+    btn.disabled = false;
+    btn.innerHTML = origHtml;
+
+    if (result.success) {
+      showStatusBanner('success', 'CLI 登录成功！', result.message + '\n\n' + (result.output || ''));
+    } else {
+      showStatusBanner('error', 'CLI 登录未通过', result.message + '\n\n' + (result.output || ''));
+    }
+  } catch (err) {
+    btn.disabled = false;
+    btn.innerHTML = origHtml;
+    showStatusBanner('error', '登录通信异常', '请求后台登录接口时失败，请确认服务已正常运行。' + '\n' + err.message);
   }
 }
-async function saveAiConfig() {
-  const url = document.getElementById('ai-url')?.value.trim();
-  const key = document.getElementById('ai-key')?.value.trim();
-  const model = document.getElementById('ai-model')?.value.trim();
-  const statusEl = document.getElementById('ac-status');
-  if (!url || !key || !model) { if(statusEl){statusEl.style.display='block';statusEl.style.background='rgba(248,113,113,.08)';statusEl.style.color='var(--red)';statusEl.textContent='请填写所有字段';} return; }
-  try {
-    const res = await fetch('/api/admin/save-ai-config', {method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({url,key,model})});
-    const data = await res.json();
-    if(statusEl){statusEl.style.display='block';}
-    if (data.success) {
-      statusEl.style.background='rgba(74,222,128,.08)'; statusEl.style.color='var(--green)'; statusEl.textContent='✅ 配置已保存';
-    } else {
-      statusEl.style.background='rgba(248,113,113,.08)'; statusEl.style.color='var(--red)'; statusEl.textContent=data.message||'保存失败';
-    }
-  } catch(e) {
-    if(statusEl){statusEl.style.display='block';statusEl.style.background='rgba(248,113,113,.08)';statusEl.style.color='var(--red)';statusEl.textContent='保存失败: '+e.message;}
+
+function showStatusBanner(type, title, text) {
+  const banner = document.getElementById('cfg-status-banner');
+  const titleEl = document.getElementById('cfg-status-title');
+  const contentEl = document.getElementById('cfg-status-content');
+  if (!banner || !titleEl || !contentEl) return;
+
+  banner.className = 'diagnostic-banner ' + type;
+  titleEl.innerHTML = (type === 'success' ? '<i class="fas fa-check-circle"></i> ' : '<i class="fas fa-exclamation-triangle"></i> ') + title;
+  
+  if (text) {
+    contentEl.style.display = 'block';
+    contentEl.textContent = text;
+  } else {
+    contentEl.style.display = 'none';
   }
 }
+
+function hideStatusBanner() {
+  const banner = document.getElementById('cfg-status-banner');
+  if (banner) banner.style.display = 'none';
+}
+
+// 收集当前表单参数
+function gatherConfigData() {
+  return {
+    ai_engine_type: currentEngine,
+    ai_api_url: document.getElementById('ai-url')?.value.trim() || '',
+    ai_api_key: document.getElementById('ai-key')?.value.trim() || '',
+    ai_model: document.getElementById('ai-model')?.value.trim() || '',
+    cli_path_kiro: document.getElementById('cli-path-kiro')?.value.trim() || 'kiro',
+    cli_path_antigravity: document.getElementById('cli-path-antigravity')?.value.trim() || 'antigravity',
+    cli_path_cursor: document.getElementById('cli-path-cursor')?.value.trim() || 'cursor'
+  };
+}
+
+// 保存配置
+async function saveUserAiConfig() {
+  const data = gatherConfigData();
+  const btn = document.getElementById('btn-save-cfg');
+  if (!btn) return;
+  const origHtml = btn.innerHTML;
+  
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 保存中...';
+  hideStatusBanner();
+
+  try {
+    const res = await fetch('/api/user/save-ai-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify(data)
+    });
+    const result = await res.json();
+    btn.disabled = false;
+    btn.innerHTML = origHtml;
+
+    if (result.success) {
+      showStatusBanner('success', '保存成功', result.message || 'AI 预测引擎配置已更新。');
+    } else {
+      showStatusBanner('error', '保存失败', result.message || '未知的保存错误');
+    }
+  } catch (err) {
+    btn.disabled = false;
+    btn.innerHTML = origHtml;
+    showStatusBanner('error', '保存失败', '网络请求错误，请重试。\n' + err.message);
+  }
+}
+
+// 测试配置
+async function testUserAiConfig() {
+  const data = gatherConfigData();
+  const btn = document.getElementById('btn-test-cfg');
+  if (!btn) return;
+  const origHtml = btn.innerHTML;
+  
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 联调测试中...';
+  showStatusBanner('success', '启动诊断...', '正在建立连接并发送测试 Prompt...');
+
+  try {
+    const res = await fetch('/api/user/test-ai-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify(data)
+    });
+    const result = await res.json();
+    btn.disabled = false;
+    btn.innerHTML = origHtml;
+
+    if (result.success) {
+      showStatusBanner('success', '联调测试成功！', 'AI 响应输出:\n' + result.response);
+    } else {
+      showStatusBanner('error', '测试未通过', result.message || '未成功接收到预期的 AI 回复');
+    }
+  } catch (err) {
+    btn.disabled = false;
+    btn.innerHTML = origHtml;
+    showStatusBanner('error', '测试连接失败', '测试服务响应异常，请检查配置。\n' + err.message);
+  }
+}
+
+// 初始化加载配置
+async function initUserAiConfig() {
+  try {
+    const res = await fetch('/api/user/ai-config', { credentials: 'same-origin' });
+    const result = await res.json();
+    if (result.success && result.config) {
+      const cfg = result.config;
+      
+      // 填入 API 输入框
+      if (document.getElementById('ai-url')) document.getElementById('ai-url').value = cfg.ai_api_url || '';
+      // 如果有 masked key，填入 masked key 作为 placeholder 并清空输入框，以保护安全且允许直接保存
+      if (document.getElementById('ai-key')) {
+        if (cfg._masked_key) {
+          document.getElementById('ai-key').value = cfg._masked_key;
+        } else {
+          document.getElementById('ai-key').value = '';
+        }
+      }
+      if (document.getElementById('ai-model')) document.getElementById('ai-model').value = cfg.ai_model || '';
+      
+      // 填入 CLI 输入框
+      if (document.getElementById('cli-path-kiro')) document.getElementById('cli-path-kiro').value = cfg.cli_path_kiro || 'kiro';
+      if (document.getElementById('cli-path-antigravity')) document.getElementById('cli-path-antigravity').value = cfg.cli_path_antigravity || 'antigravity';
+      if (document.getElementById('cli-path-cursor')) document.getElementById('cli-path-cursor').value = cfg.cli_path_cursor || 'cursor';
+
+      // 切换到已保存的引擎
+      switchEngine(cfg.ai_engine_type || 'system');
+    }
+  } catch (err) {
+    console.error('无法初始化用户 AI 配置:', err);
+  }
+}
+
+// 页面加载后自动初始化
+document.addEventListener('DOMContentLoaded', () => {
+  initUserAiConfig();
+});
 
 // 预测详情弹窗
 const _analyses = {{ analyses_json | tojson }};
