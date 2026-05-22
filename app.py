@@ -233,10 +233,16 @@ def index():
         # 获取当前用户信息
         current_user = get_current_user()
         
+        already_checked = False
+        if current_user:
+            from datetime import date
+            already_checked = (current_user.get('last_checkin_date') == date.today())
+        
         return render_template('index.html', 
                              gemini_api_key=gemini_api_key,
                              gemini_model=gemini_model,
-                             current_user=current_user)
+                             current_user=current_user,
+                             already_checked=already_checked)
     except Exception as e:
         app.logger.error(f"渲染主页失败: {e}")
         return f"页面加载错误: {str(e)}", 500
@@ -308,7 +314,7 @@ def profile():
                         'away': at_cn,
                         'league': league or '',
                         'time': time_str,
-                        'analysis': (analysis or '').replace('\n', '<br>').replace('**', ''),
+                        'analysis': analysis or '',
                     })
         except Exception as e:
             app.logger.error(f"获取用户历史失败: {e}")
@@ -1069,6 +1075,9 @@ def login():
             session['username'] = user['username']
             session.permanent = True
             
+            from datetime import date
+            already_checked = (user.get('last_checkin_date') == date.today())
+            
             app.logger.info(f"用户登录成功，设置会话: {username}")
             return jsonify({
                 'success': True,
@@ -1077,6 +1086,7 @@ def login():
                     'username': user['username'],
                     'user_type': user['user_type'],
                     'credits': user.get('credits', 0),
+                    'already_checked': already_checked,
                 }
             })
         else:

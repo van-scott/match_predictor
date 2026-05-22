@@ -100,21 +100,101 @@ body::after {
 }
 
 .nav-right{display:flex;align-items:center;gap:1rem;}
-.user-pill{
-  display:flex;align-items:center;gap:.5rem;
-  padding:.4rem 1rem;
-  background:rgba(255,255,255,0.05);
-  border:1px solid var(--border);
-  border-radius:50px;font-size:.8rem;
+.user-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.35rem 1.1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 50px;
+  font-size: 0.8rem;
+  transition: border-color var(--transition), box-shadow var(--transition);
+  backdrop-filter: blur(8px);
 }
-.user-pill .fa-coins{color:var(--amber);}
-.credit-num{font-family:'Orbitron',sans-serif;color:var(--amber);font-weight:700;}
-.user-name{color:var(--sub);}
-.btn-ghost{background:none;border:none;color:var(--muted);cursor:pointer;font-size:.75rem;transition:var(--transition);}
-.btn-ghost:hover{color:var(--text);}
-.btn-checkin{background:linear-gradient(135deg,rgba(74,222,128,.15),rgba(74,222,128,.08));border:1px solid rgba(74,222,128,.3);color:#4ade80;cursor:pointer;font-size:.72rem;font-weight:700;padding:.28rem .7rem;border-radius:8px;transition:var(--transition);font-family:'Inter',sans-serif;}
-.btn-checkin:hover{background:rgba(74,222,128,.25);box-shadow:0 0 12px rgba(74,222,128,.3);}
-.btn-checkin:disabled{opacity:.5;cursor:not-allowed;}
+.user-pill:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+.user-pill .credits-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--text);
+}
+.user-pill .credits-badge .fa-coins {
+  color: var(--amber);
+  font-size: 0.9rem;
+}
+.user-pill .credit-num {
+  font-family: 'Orbitron', sans-serif;
+  color: var(--amber);
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+}
+.user-pill .credit-label {
+  color: var(--sub);
+  font-size: 0.75rem;
+  margin-left: 2px;
+}
+.user-pill .btn-checkin {
+  background: rgba(74, 222, 128, 0.08);
+  border: 1px solid rgba(74, 222, 128, 0.35);
+  color: var(--green);
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.28rem 0.8rem;
+  border-radius: 8px;
+  transition: all var(--transition);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-family: 'Inter', sans-serif;
+}
+.user-pill .btn-checkin:hover:not(:disabled) {
+  background: rgba(74, 222, 128, 0.15);
+  border-color: var(--green);
+  box-shadow: 0 0 10px rgba(74, 222, 128, 0.2);
+}
+.user-pill .btn-checkin:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--muted);
+}
+.user-pill .user-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.user-pill .btn-user-link {
+  color: var(--sub);
+  text-decoration: none;
+  font-size: 0.78rem;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  transition: color var(--transition);
+}
+.user-pill .btn-user-link:hover {
+  color: var(--orange);
+}
+.user-pill .btn-logout {
+  background: none;
+  border: none;
+  color: var(--sub);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 500;
+  transition: color var(--transition);
+  padding: 0;
+}
+.user-pill .btn-logout:hover {
+  color: var(--red);
+}
 
 
 /* ── HERO ── */

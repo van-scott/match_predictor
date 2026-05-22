@@ -511,18 +511,25 @@ async function doLogin(e) {
 function updateNavUser(user) {
   const navRight = document.getElementById('nav-right');
   if (!navRight || !user) return;
+  const checked = user.already_checked || false;
   navRight.innerHTML = `
     <div class="user-pill">
-      <i class="fas fa-coins"></i>
-      <span class="credit-num" id="credits-display">${user.credits ?? 0}</span>
-      <span style="color:var(--muted);font-size:.7rem">积分</span>
-      <button class="btn-checkin" id="checkin-btn" onclick="doCheckin()" title="每日签到+6积分">
-        <i class="fas fa-calendar-check"></i> 签到
+      <span class="credits-badge">
+        <i class="fas fa-coins"></i>
+        <span class="credit-num" id="credits-display">${user.credits ?? 0}</span>
+        <span class="credit-label">积分</span>
+      </span>
+      <button class="btn-checkin" id="checkin-btn" onclick="doCheckin()" ${checked ? 'disabled style="opacity:0.5; pointer-events:none;"' : ''}>
+        <i class="fas fa-calendar-check"></i>
+        <span>${checked ? '已签到' : '签到'}</span>
       </button>
-      <a href="/profile" class="btn-ghost" style="text-decoration:none">
-        <i class="fas fa-user"></i> ${user.username}
-      </a>
-      <button class="btn-ghost" onclick="doLogout()">退出</button>
+      <div class="user-actions">
+        <a href="/profile" class="btn-user-link">
+          <i class="fas fa-user-circle"></i>
+          <span>用户中心</span>
+        </a>
+        <button class="btn-logout" onclick="doLogout()">退出</button>
+      </div>
     </div>`;
 }
 
@@ -555,9 +562,17 @@ async function doCheckin() {
       const el = document.getElementById('credits-display');
       if (el) el.textContent = data.credits;
     }
-  } catch { showToast('签到失败', 'error'); }
-  finally {
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-calendar-check"></i> 签到'; }
+    if (data.success || data.already_checked) {
+      if (btn) {
+        btn.innerHTML = '<i class="fas fa-calendar-check"></i> <span>已签到</span>';
+        btn.style.opacity = '0.5';
+        btn.style.pointerEvents = 'none';
+        btn.disabled = true;
+      }
+    }
+  } catch {
+    showToast('签到失败', 'error');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-calendar-check"></i> <span>签到</span>'; }
   }
 }
 
@@ -1219,7 +1234,7 @@ function closeSmartDetail() {
 document.addEventListener('DOMContentLoaded', () => {
   initWCTeams();
   // 更新 nav credits 显示（若有）
-  const navCredits = document.getElementById('nav-credits');
+  const navCredits = document.getElementById('credits-display') || document.getElementById('nav-credits');
   if (navCredits) {
     fetch('/api/user/credits', { credentials: 'same-origin' })
       .then(r => r.json())
