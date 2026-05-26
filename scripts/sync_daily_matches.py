@@ -24,12 +24,24 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('/Users/sco/Desktop/MatchPredict/sync_matches.log', encoding='utf-8'),
+        logging.FileHandler(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'sync_matches.log'), encoding='utf-8'),
         logging.StreamHandler()
     ]
 )
 
 logger = logging.getLogger(__name__)
+
+# 中文联赛名 → league_code（用于写入 upcoming_fixtures）
+LEAGUE_CODE_MAP = {
+    "英超": "PL", "西甲": "PD", "意甲": "SA", "德甲": "BL1", "法甲": "FL1",
+    "英冠": "ELC", "德乙": "BL2", "西乙": "PD2", "意乙": "SA2", "法乙": "FL2",
+    "荷甲": "DED", "葡超": "PPL", "苏超": "PPL",
+    "欧冠": "CL", "欧联": "EL", "欧协联": "ECL",
+    "解放者杯": "CLI", "南美杯": "CSA", "巴甲": "BSA", "巴乙": "BSB",
+    "美职联": "MLS", "日职联": "JPL", "中超": "CSL",
+    "世界杯": "WC", "欧洲杯": "EC", "亚洲杯": "ASC",
+}
+
 
 class MatchSyncManager:
     """比赛数据同步管理器"""
@@ -128,6 +140,64 @@ class MatchSyncManager:
             logger.error(f"获取统计信息失败: {e}")
             return {}
     
+    def merge_to_upcoming_fixtures(self, days_ahead: int = 7) -> int:
+        """
+        把 daily_matches 里未来 N 天的比赛写入 upcoming_fixtures，
+        让 AI 赛事广场显示彩票来源的比赛（如法甲附加赛、欧协联等）。
+        fixture_id 以 'dm_' 前缀区分来源，避免与 football-data.org 数据冲突。
+        """
+        from datetime import datetime, timedelta, timezone
+        merged = 0
+        try:
+            with self.db.get_db_connection() as conn:
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT match_id, home_team, away_team, league_name,
+                           match_datetime, home_odds, draw_odds, away_odds
+                    FROM daily_matches
+                    WHERE is_active = TRUE
+                      AND match_datetime > NOW()
+                      AND match_datetime < NOW() + INTERVAL '%s days'
+                    ORDER BY match_datetime
+                """ % int(days_ahead))
+                rows = cur.fetchall()
+
+                for match_id, home, away, league_name, match_dt, ho, do, ao in rows:
+                    fixture_id = f"dm_{match_id}"
+                    league_code = LEAGUE_CODE_MAP.get(league_name, "OTH")
+
+                    # 如果同联赛同时段（±30分钟）已有 API 来源的比赛，跳过（避免重复）
+                    cur.execute("""
+                        SELECT 1 FROM upcoming_fixtures
+                        WHERE league_code = %s
+                          AND fixture_id NOT LIKE 'dm_%%'
+                          AND ABS(EXTRACT(EPOCH FROM (match_time - %s))) < 1800
+                        LIMIT 1
+                    """, (league_code, match_dt))
+                    if cur.fetchone():
+                        continue  # API 已有该场比赛，跳过
+
+                    cur.execute("""
+                        INSERT INTO upcoming_fixtures
+                            (fixture_id, league_code, league_name,
+                             home_team, away_team, match_time, status,
+                             home_odds, draw_odds, away_odds, updated_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, 'SCHEDULED', %s, %s, %s, CURRENT_TIMESTAMP)
+                        ON CONFLICT (fixture_id) DO UPDATE SET
+                            home_odds   = COALESCE(EXCLUDED.home_odds,   upcoming_fixtures.home_odds),
+                            draw_odds   = COALESCE(EXCLUDED.draw_odds,   upcoming_fixtures.draw_odds),
+                            away_odds   = COALESCE(EXCLUDED.away_odds,   upcoming_fixtures.away_odds),
+                            updated_at  = CURRENT_TIMESTAMP
+                    """, (fixture_id, league_code, league_name,
+                          home, away, match_dt, ho, do, ao))
+                    if cur.rowcount > 0:
+                        merged += 1
+
+                conn.commit()
+        except Exception as e:
+            logger.error(f"❌ 合并到 upcoming_fixtures 失败: {e}", exc_info=True)
+        return merged
+
     def test_connection(self) -> bool:
         """
         测试数据库连接
@@ -210,6 +280,11 @@ def main():
             print(f"  📥 新增: {stats['inserted']} 场")
             print(f"  🔄 更新: {stats['updated']} 场")
             print(f"  ⏭️ 跳过: {stats['skipped']} 场")
+
+        # 将彩票比赛合并到 upcoming_fixtures（赛事广场数据源）
+        merged = sync_manager.merge_to_upcoming_fixtures(days_ahead=args.days)
+        if merged:
+            print(f"  🔀 已合并 {merged} 场到赛事广场")
     
     print("=" * 60)
     print("🎉 脚本执行完成")

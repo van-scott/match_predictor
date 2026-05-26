@@ -178,7 +178,7 @@
       <div class="form-card">
         <div class="card-header-row">
           <h2 class="card-title"><i class="fas fa-ticket-alt"></i> 赛事广场</h2>
-          <div class="auto-sync-badge" id="sync-status-badge" title="每日 06:00 / 10:00 / 14:00 / 18:00 / 22:00 自动更新">
+          <div class="auto-sync-badge" id="sync-status-badge" title="每 10 分钟自动同步（五大联赛 + 解放者杯 + 巴甲 + 英冠等）">
             <span class="dot-live"></span>
             <span id="sync-status-text">自动更新中</span>
           </div>
@@ -256,6 +256,12 @@
           <option value="意甲">🇮🇹 意甲</option>
           <option value="德甲">🇩🇪 德甲</option>
           <option value="法甲">🇫🇷 法甲</option>
+          <option value="欧冠">🏆 欧冠</option>
+          <option value="欧协联">🥈 欧协联</option>
+          <option value="解放者杯">🌎 解放者杯</option>
+          <option value="巴甲">🇧🇷 巴甲</option>
+          <option value="英冠">🏴󠁧󠁢󠁥󠁮󠁧󠁿 英冠</option>
+          <option value="德乙">🇩🇪 德乙</option>
         </select>
         <select id="pr-filter-result">
           <option value="">全部结果</option>
@@ -397,6 +403,12 @@
         <button class="smart-filter-btn" onclick="filterSmartLeague('意甲', this)">🇮🇹 意甲</button>
         <button class="smart-filter-btn" onclick="filterSmartLeague('德甲', this)">🇩🇪 德甲</button>
         <button class="smart-filter-btn" onclick="filterSmartLeague('法甲', this)">🇫🇷 法甲</button>
+        <button class="smart-filter-btn" onclick="filterSmartLeague('欧冠', this)">🏆 欧冠</button>
+        <button class="smart-filter-btn" onclick="filterSmartLeague('欧协联', this)">🥈 欧协联</button>
+        <button class="smart-filter-btn" onclick="filterSmartLeague('解放者杯', this)">🌎 解放者杯</button>
+        <button class="smart-filter-btn" onclick="filterSmartLeague('巴甲', this)">🇧🇷 巴甲</button>
+        <button class="smart-filter-btn" onclick="filterSmartLeague('英冠', this)">🏴󠁧󠁢󠁥󠁮󠁧󠁿 英冠</button>
+        <button class="smart-filter-btn" onclick="filterSmartLeague('德乙', this)">🇩🇪 德乙</button>
       </div>
       <div class="smart-filter-right">
         <span id="smart-match-count" class="smart-count-badge">加载中...</span>

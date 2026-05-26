@@ -127,6 +127,38 @@ TEAM_NAME_CN = {
     "FC Lorient": "洛里昂", "Le Havre AC": "勒阿弗尔",
     "Stade Brestois 29": "布雷斯特", "FC Metz": "梅斯",
     "Angers SCO": "昂热",
+    # 欧冠额外球队
+    "Club Brugge KV": "布鲁日", "SL Benfica": "本菲卡", "FC Porto": "波尔图",
+    "Sporting CP": "体育CP", "Borussia Dortmund": "多特蒙德",
+    "Real Madrid CF": "皇家马德里", "FC Barcelona": "巴塞罗那",
+    "FC Bayern München": "拜仁慕尼黑", "Paris Saint-Germain FC": "巴黎圣日耳曼",
+    "Inter Milan": "国际米兰", "AC Milan": "AC米兰",
+    # 巴甲
+    "CR Flamengo": "弗拉门戈", "SE Palmeiras": "帕尔梅拉斯",
+    "SC Corinthians Paulista": "科林蒂安", "Fluminense FC": "弗鲁米嫩塞",
+    "SC Internacional": "国际体育", "Grêmio FBPA": "格雷米奥",
+    "CR Vasco da Gama": "瓦斯科达伽马", "Botafogo FR": "博塔福戈",
+    "CA Mineiro": "米内罗竞技", "Cruzeiro EC": "克鲁塞罗",
+    "CA Paranaense": "巴拉纳竞技", "Santos FC": "桑托斯",
+    "São Paulo FC": "圣保罗", "EC Bahia": "巴伊亚",
+    "Mirassol FC": "米拉索尔", "RB Bragantino": "布拉干蒂诺",
+    "Coritiba FBC": "科里蒂巴", "EC Vitória": "维多利亚",
+    "Chapecoense AF": "沙佩科恩塞", "Clube do Remo": "雷莫",
+    # 解放者杯
+    "CA Boca Juniors": "博卡青年", "CA River Plate": "河床",
+    "CA Peñarol": "佩尼亚罗尔", "Club Nacional de Football": "国民队",
+    "Estudiantes de La Plata": "拉普拉塔学生", "CA Rosario Central": "罗萨里奥中央",
+    "CA Lanús": "拉努斯", "CA Platense": "普拉滕塞",
+    "Club Bolívar": "玻利瓦尔", "Club Always Ready": "永远准备",
+    "Club Cerro Porteño": "塞罗港", "Club Libertad Asuncion": "自由队",
+    "CAR Independiente del Valle": "独立山谷", "LDU de Quito": "独立基多",
+    "Barcelona SC": "厄瓜多尔巴塞罗那", "CD Universidad Católica": "天主教大学",
+    "CS Cristal": "水晶体育", "Club Universitario de Deportes": "利马大学",
+    "Cusco FC": "库斯科", "CDP Junior FC": "后卫竞技",
+    "CD Independiente Medellín": "麦德林独立", "Independiente Santa Fe": "圣菲独立",
+    "CD Tolima": "托利马", "Deportivo La Guaira FC": "拉瓜伊拉",
+    "CD Coquimbo Unido": "科金博联合", "CS Independiente Rivadavia": "独立里瓦达维亚",
+    "Universidad Central de Venezuela FC": "委内瑞拉中央大学",
 }
 
 
@@ -2958,8 +2990,9 @@ def _setup_scheduler():
     所有任务都在同一个进程中以后台线程方式运行，无需额外 cron 或独立服务。
 
     调度计划：
-      - sync_results:  每 10 分钟检查一次已结束比赛，有新结果就同步
-      - sync_upcoming: 每 4 小时同步一次未来赛程 + ML 预测
+      - sync_results:       每 10 分钟检查已结束比赛，有新结果才写库
+      - sync_upcoming:      每 60 分钟同步未来赛程 + 赔率（含巴甲/解放者杯等全年联赛）
+      - sync_daily_matches: 每 10 分钟同步彩票模式当日赛事
     """
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
@@ -2993,15 +3026,17 @@ def _setup_scheduler():
                 app.logger.error(f"❌ [定时] 同步异常: {e}")
 
         def job_sync_upcoming():
-            """每4小时同步未来赛程 + ML 预测"""
+            """每60分钟同步未来赛程 + 赔率（含巴甲/解放者杯等全年联赛）"""
             try:
                 import subprocess
                 result = subprocess.run(
-                    [PYTHON_BIN, 'scripts/sync_upcoming.py', '--days', '14'],
-                    capture_output=True, text=True, timeout=300
+                    [PYTHON_BIN, 'scripts/sync_upcoming.py', '--days', '14', '--no-ml'],
+                    capture_output=True, text=True, timeout=600
                 )
                 if result.returncode == 0:
-                    app.logger.info("✅ [定时] 赛程同步完成")
+                    out = result.stdout.strip()
+                    if out and ('插入' in out or '更新' in out or '赔率' in out):
+                        app.logger.info(f"✅ [定时] 赛程+赔率已同步")
                 else:
                     stderr = result.stderr.strip()
                     if stderr:
@@ -3011,18 +3046,48 @@ def _setup_scheduler():
             except Exception as e:
                 app.logger.error(f"❌ [定时] 赛程同步异常: {e}")
 
+        def job_sync_daily_matches():
+            """每10分钟同步彩票模式当日赛事（有新赛事才写库）"""
+            try:
+                import subprocess
+                result = subprocess.run(
+                    [PYTHON_BIN, 'scripts/sync_daily_matches.py'],
+                    capture_output=True, text=True, timeout=120
+                )
+                if result.returncode == 0:
+                    out = result.stdout.strip()
+                    if out and '插入' in out and '0 场' not in out:
+                        app.logger.info(f"✅ [定时] 彩票赛事已更新: {out[:120]}")
+                else:
+                    stderr = result.stderr.strip()
+                    if stderr:
+                        app.logger.error(f"❌ [定时] 彩票赛事同步失败: {stderr[:200]}")
+            except subprocess.TimeoutExpired:
+                pass
+            except Exception as e:
+                app.logger.error(f"❌ [定时] 彩票赛事同步异常: {e}")
+
         # 每 10 分钟检查比赛结果
         scheduler.add_job(job_sync_results, IntervalTrigger(minutes=10),
                           id='sync_results', replace_existing=True)
 
-        # 每 4 小时同步未来赛程
-        scheduler.add_job(job_sync_upcoming, IntervalTrigger(hours=4),
+        # 每 10 分钟检查比赛结果
+        scheduler.add_job(job_sync_results, IntervalTrigger(minutes=10),
+                          id='sync_results', replace_existing=True)
+
+        # 每 60 分钟同步未来赛程 + 赔率
+        scheduler.add_job(job_sync_upcoming, IntervalTrigger(minutes=60),
                           id='sync_upcoming', replace_existing=True)
+
+        # 每 10 分钟同步彩票模式当日赛事
+        scheduler.add_job(job_sync_daily_matches, IntervalTrigger(minutes=10),
+                          id='sync_daily_matches', replace_existing=True)
 
         scheduler.start()
         app.logger.info("📅 定时任务已启动:")
-        app.logger.info(f"   • 每 10 分钟检查比赛结果（使用 {PYTHON_BIN}）")
-        app.logger.info("   • 每 4 小时同步未来赛程 + ML 预测")
+        app.logger.info(f"   • sync_results       每10分钟 — 比赛结果（使用 {PYTHON_BIN}）")
+        app.logger.info("   • sync_upcoming      每60分钟 — 未来赛程 + 赔率（五大联赛+巴甲/解放者杯等）")
+        app.logger.info("   • sync_daily_matches 每10分钟 — 彩票模式当日赛事")
 
         # 注册 Flask 退出时关闭 scheduler
         import atexit
