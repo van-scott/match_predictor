@@ -203,7 +203,7 @@ async function loadLotteryMatches() {
       listEl.innerHTML = `
         <div class="error-msg">
           <p>ℹ️ 暂无赛事数据</p>
-          <p style="font-size:.8rem;color:var(--c-muted);margin-top:.5rem">数据将在每日 06:00 / 10:00 / 14:00 / 18:00 / 22:00（北京时间）自动同步</p>
+          <p style="font-size:.8rem;color:var(--c-muted);margin-top:.5rem">赛事数据每 10 分钟自动同步，包含五大联赛、解放者杯、巴甲等全年赛事</p>
         </div>`;
     }
   } catch (e) {
@@ -1017,7 +1017,11 @@ function buildSmartCard(m) {
 
   // 联赛 emoji
   const leagueEmoji = {
-    '英超': '🏴󠁧󠁢󠁥󠁮󠁧󠁿', '西甲': '🇪🇸', '意甲': '🇮🇹', '德甲': '🇩🇪', '法甲': '🇫🇷'
+    '英超': '🏴󠁧󠁢󠁥󠁮󠁧󠁿', '西甲': '🇪🇸', '意甲': '🇮🇹', '德甲': '🇩🇪', '法甲': '🇫🇷',
+    '英冠': '🏴󠁧󠁢󠁥󠁮󠁧󠁿', '德乙': '🇩🇪', '荷甲': '🇳🇱', '葡超': '🇵🇹',
+    '欧冠': '🏆', '欧联': '🥈', '欧协联': '🥈',
+    '解放者杯': '🌎', '南美杯': '🌎', '巴甲': '🇧🇷', '巴乙': '🇧🇷',
+    '美职联': '🇺🇸', '日职联': '🇯🇵', '中超': '🇨🇳',
   }[m.league] || '⚽';
 
   // source 来源标注（需先声明，在下面的 ml 判断块中使用）
