@@ -669,7 +669,7 @@ body { background: var(--bg); color: var(--cream); font-family: 'Inter', sans-se
         </div>
         <div style="margin-top: 1rem;">
           <button type="button" class="btn-premium secondary" id="btn-login-kiro" onclick="loginCliEngine('kiro_cli')" style="width: 100%; justify-content: center; height: 38px;">
-            <i class="fas fa-sign-in-alt"></i> 登录 Kiro CLI &amp; 检测模型
+            <i class="fas fa-sign-in-alt"></i> 登录 Kiro CLI
           </button>
         </div>
       </div>
@@ -683,7 +683,7 @@ body { background: var(--bg); color: var(--cream); font-family: 'Inter', sans-se
         </div>
         <div style="margin-top: 1rem;">
           <button type="button" class="btn-premium secondary" id="btn-login-antigravity" onclick="loginCliEngine('antigravity_cli')" style="width: 100%; justify-content: center; height: 38px;">
-            <i class="fas fa-sign-in-alt"></i> 登录 Antigravity CLI &amp; 检测模型
+            <i class="fas fa-sign-in-alt"></i> 登录 Antigravity CLI
           </button>
         </div>
       </div>
@@ -697,7 +697,7 @@ body { background: var(--bg); color: var(--cream); font-family: 'Inter', sans-se
         </div>
         <div style="margin-top: 1rem;">
           <button type="button" class="btn-premium secondary" id="btn-login-cursor" onclick="loginCliEngine('cursor_cli')" style="width: 100%; justify-content: center; height: 38px;">
-            <i class="fas fa-sign-in-alt"></i> 登录 Cursor CLI &amp; 检测模型
+            <i class="fas fa-sign-in-alt"></i> 登录 Cursor CLI
           </button>
         </div>
       </div>
@@ -716,11 +716,14 @@ body { background: var(--bg); color: var(--cream); font-family: 'Inter', sans-se
           <input type="password" id="ai-key" placeholder="请输入 API Key (sk-...) 或 CLI Token" value="">
         </div>
         <div class="input-group" style="margin-bottom: 0;">
-          <label for="ai-model">分析模型名称 (Model) <span style="color: #f87171; font-size: 0.75rem; margin-left: 0.3rem;">* 必填</span></label>
+          <label for="ai-model">默认分析模型 (Model)
+            <span id="badge-model-required" style="color: #f87171; font-size: 0.75rem; margin-left: 0.3rem;">* 必填</span>
+            <span id="badge-model-optional" style="display:none; color: var(--muted); font-size: 0.75rem; margin-left: 0.3rem;">选填</span>
+          </label>
           <div style="display: flex; gap: 0.5rem;">
             <input type="text" id="ai-model" placeholder="例如 gpt-4o 或 claude-3-5-sonnet-20241022" value="" style="flex: 1;">
             <button type="button" class="btn-premium secondary" id="btn-detect-models" onclick="detectCliModels()" style="display: none; height: 38px; padding: 0 1rem; white-space: nowrap; font-size: 0.8rem; align-items: center; gap: 0.3rem;">
-              <i class="fas fa-search"></i> 检测模型
+              <i class="fas fa-search"></i> 检测可用模型
             </button>
           </div>
           <!-- 检测到模型后显示的下拉选择器 -->
@@ -733,7 +736,7 @@ body { background: var(--bg); color: var(--cream); font-family: 'Inter', sans-se
               <button type="button" onclick="hideModelSelect()" style="background:none;border:none;color:var(--muted);font-size:0.72rem;cursor:pointer;padding:0;">&#10005; 手动输入</button>
             </div>
           </div>
-          <small id="hint-ai-model" style="display: block; margin-top: 0.3rem; color: var(--muted); font-size: 0.72rem;">请输入模型名称。CLI 模式下支持登录后点击“检测模型”自动获取并选择。</small>
+          <small id="hint-ai-model" style="display: block; margin-top: 0.3rem; color: var(--muted); font-size: 0.72rem;">自定义 API 模式必填；CLI 模式可不填，每次发起分析时在页面上临时选择模型。</small>
         </div>
       </div>
     </div>
@@ -853,30 +856,21 @@ function switchEngine(engineType) {
   const badgeKey = document.getElementById('badge-key');
   const btnDetect = document.getElementById('btn-detect-models');
   
+  const badgeModelRequired = document.getElementById('badge-model-required');
+  const badgeModelOptional = document.getElementById('badge-model-optional');
+
   if (engineType === 'api_key') {
-    if (badgeUrl) {
-      badgeUrl.textContent = '* 必填';
-      badgeUrl.style.color = '#f87171';
-    }
-    if (badgeKey) {
-      badgeKey.textContent = '* 必填';
-      badgeKey.style.color = '#f87171';
-    }
-    if (btnDetect) {
-      btnDetect.style.display = 'none';
-    }
+    if (badgeUrl) { badgeUrl.textContent = '* 必填'; badgeUrl.style.color = '#f87171'; }
+    if (badgeKey) { badgeKey.textContent = '* 必填'; badgeKey.style.color = '#f87171'; }
+    if (btnDetect) btnDetect.style.display = 'none';
+    if (badgeModelRequired) badgeModelRequired.style.display = '';
+    if (badgeModelOptional) badgeModelOptional.style.display = 'none';
   } else {
-    if (badgeUrl) {
-      badgeUrl.textContent = '(可选)';
-      badgeUrl.style.color = 'var(--muted)';
-    }
-    if (badgeKey) {
-      badgeKey.textContent = '(可选)';
-      badgeKey.style.color = 'var(--muted)';
-    }
-    if (btnDetect) {
-      btnDetect.style.display = 'inline-flex';
-    }
+    if (badgeUrl) { badgeUrl.textContent = '(可选)'; badgeUrl.style.color = 'var(--muted)'; }
+    if (badgeKey) { badgeKey.textContent = '(可选)'; badgeKey.style.color = 'var(--muted)'; }
+    if (btnDetect) btnDetect.style.display = 'inline-flex';
+    if (badgeModelRequired) badgeModelRequired.style.display = 'none';
+    if (badgeModelOptional) badgeModelOptional.style.display = '';
   }
 
   // 清除状态横幅

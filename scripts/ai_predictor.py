@@ -383,7 +383,8 @@ def build_rich_prompt(match: Dict[str, Any], ctx: Dict[str, Any],
 # ─────────────────────────────────────────────────────────────────────────────
 
 class AIFootballPredictor:
-    def __init__(self, api_key: str = None, model_name: str = None, user_id: int = None):
+    def __init__(self, api_key: str = None, model_name: str = None, user_id: int = None,
+                 override_engine: str = None, override_model: str = None):
         # 优先从数据库读取配置，fallback 到参数/环境变量
         self.api_key = api_key
         self.model_name = model_name
@@ -422,11 +423,21 @@ class AIFootballPredictor:
                             self.cli_path_kiro = user_cfg.get('cli_path_kiro', 'kiro')
                             self.cli_path_antigravity = user_cfg.get('cli_path_antigravity', 'antigravity')
                             self.cli_path_cursor = user_cfg.get('cli_path_cursor', 'cursor')
-                            return # 成功加载用户定制的非 system 配置，直接返回
             except Exception as e:
                 logger.error(f"加载用户个性化 AI 配置失败 (user_id={user_id}): {e}")
+
+        # 2. 应用本次请求的临时覆盖（不修改数据库，仅影响当次调用）
+        if override_engine:
+            self.engine_type = override_engine
+            self.use_openai_format = (override_engine == 'api_key')
+        if override_model:
+            self.model_name = override_model
+
+        # 如果成功加载了非 system 用户配置，或有 override，则直接返回
+        if user_id and (self.engine_type != 'api_key' or self.api_key or override_engine):
+            return
         
-        # 2. 如果配置为 system 或未提供 user_id，则加载系统全局配置
+        # 3. 如果无用户配置且无 override，则加载系统全局配置
         try:
             from scripts.database import prediction_db
             if prediction_db:

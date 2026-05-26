@@ -196,6 +196,19 @@
             <div class="empty-msg">请从左侧点击选择比赛</div>
           </div>
           <div class="cart-footer">
+            <!-- 引擎 & 模型选择器 -->
+            <div id="ai-engine-picker" style="margin-bottom:0.8rem; display:none;">
+              <div style="font-size:0.78rem; color:var(--muted); margin-bottom:0.4rem;">
+                <i class="fas fa-sliders-h" style="margin-right:0.3rem;"></i>分析引擎 &amp; 模型
+              </div>
+              <select id="ai-engine-sel"
+                style="width:100%;padding:0.45rem 0.6rem;border-radius:7px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);color:var(--cream);font-size:0.82rem;margin-bottom:0.4rem;cursor:pointer;outline:none;"
+                onchange="onAIEngineChange()">
+              </select>
+              <select id="ai-model-sel"
+                style="width:100%;padding:0.45rem 0.6rem;border-radius:7px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);color:var(--cream);font-size:0.82rem;cursor:pointer;outline:none;">
+              </select>
+            </div>
             <div class="cost-row">
               <span>本次消耗积分</span>
               <span id="ai-cost" class="cost-val">0</span>
