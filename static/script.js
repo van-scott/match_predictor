@@ -375,7 +375,7 @@ function removeFromCart(id) {
 
 // ── AI ENGINE PICKER ──────────────────────────────────────────────────────
 const AI_PRESET_MODELS = {
-  kiro_cli:        ['claude-sonnet-4-5', 'claude-opus-4', 'claude-haiku-3-5', 'claude-sonnet-4-5-20251101'],
+  kiro_cli:        ['auto', 'claude-sonnet-4.5', 'claude-sonnet-4', 'claude-haiku-4.5', 'deepseek-3.2', 'minimax-m2.5', 'minimax-m2.1', 'glm-5', 'qwen3-coder-next'],
   antigravity_cli: ['claude-sonnet-4-5', 'claude-opus-4', 'claude-haiku-3-5'],
   cursor_cli:      ['claude-sonnet-4-5', 'gpt-4o', 'gpt-4o-mini', 'gemini-2.0-flash-exp'],
   api_key:         [],
@@ -525,7 +525,10 @@ function renderAIResults(predictions) {
     const card = document.createElement('div');
     card.className = 'ai-result-card';
     
-    const isError = (p.ai_analysis || '').includes('⚠️') || (p.ai_analysis || '').includes('失败') || (p.ai_analysis || '').includes('不可用');
+    // 只有明确的错误消息才标红（短文本 + 包含失败关键字），正常分析内容可能也含 ⚠️ 不能误判
+    const analysisText = p.ai_analysis || '';
+    const isError = !analysisText ||
+      (analysisText.length < 80 && (analysisText.includes('失败') || analysisText.includes('超时') || analysisText.includes('不可用') || analysisText.includes('错误')));
     if (isError) {
       card.style.border = '1px solid rgba(248, 113, 113, 0.2)';
       card.style.background = 'rgba(248, 113, 113, 0.03)';
@@ -1211,12 +1214,19 @@ function onSmartEngineChange() {
   m.innerHTML = opts;
 }
 
+let _smartAIRunning = false;
 async function confirmSmartAI(fixtureId) {
-  const engineSel = document.getElementById('smart-engine-pick');
-  const modelSel  = document.getElementById('smart-model-pick');
-  const overrideEngine = engineSel ? engineSel.value : null;
-  const overrideModel  = modelSel  ? modelSel.value  : null;
-  await _doSmartAI(fixtureId, overrideEngine, overrideModel);
+  if (_smartAIRunning) return;  // 防止重复提交
+  _smartAIRunning = true;
+  try {
+    const engineSel = document.getElementById('smart-engine-pick');
+    const modelSel  = document.getElementById('smart-model-pick');
+    const overrideEngine = engineSel ? engineSel.value : null;
+    const overrideModel  = modelSel  ? modelSel.value  : null;
+    await _doSmartAI(fixtureId, overrideEngine, overrideModel);
+  } finally {
+    _smartAIRunning = false;
+  }
 }
 
 // ── 深度分析弹窗 ───────────────────────────────────────────────────────
@@ -1386,7 +1396,7 @@ function buildDetailView(data, aiText) {
     ` : ''}
 
     ${formattedAI ? `
-    <div class="sdr-ai-title"><i class="fas fa-robot"></i> Gemini AI 深度研报</div>
+    <div class="sdr-ai-title"><i class="fas fa-robot"></i> AI 大模型深度研报</div>
     <div class="sdr-ai-text">${formattedAI}</div>
     <div class="sdr-credits-note">
       <i class="fas fa-coins" style="color:var(--amber)"></i>

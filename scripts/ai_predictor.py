@@ -379,6 +379,51 @@ def build_rich_prompt(match: Dict[str, Any], ctx: Dict[str, Any],
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Kiro CLI 路径自动检测
+# ─────────────────────────────────────────────────────────────────────────────
+
+_KIRO_CANDIDATE_PATHS = [
+    # macOS 正式安装位置
+    '/Applications/Kiro CLI.app/Contents/MacOS/kiro-cli',
+    '/Applications/Kiro.app/Contents/MacOS/kiro-cli',
+    # Linux / 自定义路径
+    os.path.expanduser('~/.local/bin/kiro-cli'),
+    os.path.expanduser('~/bin/kiro-cli'),
+    '/usr/local/bin/kiro-cli',
+    '/usr/bin/kiro-cli',
+    # 旧版或通用名
+    'kiro-cli',
+    'kiro',
+]
+
+# Kiro CLI 支持的模型（用于前端展示）
+KIRO_CLI_MODELS = [
+    'auto',
+    'claude-sonnet-4.5',
+    'claude-sonnet-4',
+    'claude-haiku-4.5',
+    'deepseek-3.2',
+    'minimax-m2.5',
+    'minimax-m2.1',
+    'glm-5',
+    'qwen3-coder-next',
+]
+
+
+def _detect_kiro_path() -> str:
+    """自动检测本机 kiro-cli 可执行文件路径，找不到则返回默认值 'kiro-cli'。"""
+    import shutil
+    for p in _KIRO_CANDIDATE_PATHS:
+        if os.path.isfile(p) and os.access(p, os.X_OK):
+            return p
+        if not os.path.sep in p:  # 相对名称，用 shutil.which 查 PATH
+            resolved = shutil.which(p)
+            if resolved:
+                return resolved
+    return 'kiro-cli'
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # AI 预测器主类
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -394,7 +439,7 @@ class AIFootballPredictor:
         
         # 新增多引擎支持的默认属性
         self.engine_type = 'api_key'
-        self.cli_path_kiro = 'kiro'
+        self.cli_path_kiro = _detect_kiro_path()
         self.cli_path_antigravity = 'antigravity'
         self.cli_path_cursor = 'cursor'
         
@@ -597,6 +642,10 @@ class AIFootballPredictor:
         except Exception as e:
             raise RuntimeError(f"命令行指令格式非法: {e}")
 
+        # 如果解析后第一个元素不存在（路径含空格被 shlex 错误拆分），
+        # 将整个 cmd_str 作为单一可执行文件路径处理（在 import os 之后执行）
+        _cmd_str_raw = cmd_str
+
         logger.info(f"正在调用本地 CLI 预测引擎: {' '.join(cmd_args)}")
         try:
             # 准备环境变量，向 CLI 传递用户在界面配置的密钥、地址和模型
@@ -615,8 +664,31 @@ class AIFootballPredictor:
                 env['OPENAI_MODEL'] = self.model_name
                 env['AI_MODEL'] = self.model_name
 
-            # 针对 Antigravity CLI 引擎拼接 -p/--print 参数以进行非交互式输出，防止挂起
-            if getattr(self, 'engine_type', '') == 'antigravity_cli':
+            # 修正路径含空格被 shlex 拆分的问题（如 /Applications/Kiro CLI.app/...）
+            import shutil as _shutil
+            if not (os.path.isfile(cmd_args[0]) or _shutil.which(cmd_args[0])):
+                if os.path.isfile(_cmd_str_raw) and os.access(_cmd_str_raw, os.X_OK):
+                    cmd_args = [_cmd_str_raw]
+
+            engine = getattr(self, 'engine_type', '')
+
+            if engine == 'kiro_cli':
+                # kiro-cli chat --no-interactive [--model MODEL] < stdin
+                extra = ['chat', '--no-interactive']
+                model = getattr(self, 'model_name', None)
+                if model and model not in ('', 'auto'):
+                    extra += ['--model', model]
+                # 如果用户已经在 cmd_args 里写了 chat / --no-interactive，就不重复加
+                base = cmd_args[:]
+                if 'chat' not in base:
+                    base = base + extra
+                elif '--no-interactive' not in base:
+                    base.append('--no-interactive')
+                cmd_exec = base
+                stdin_input = prompt
+
+            elif engine == 'antigravity_cli':
+                # 针对 Antigravity CLI 引擎拼接 -p/--print 参数以进行非交互式输出，防止挂起
                 has_print_flag = any(flag in cmd_args for flag in ('-p', '--print', '--prompt'))
                 if not has_print_flag:
                     cmd_exec = cmd_args + ['-p', prompt]
@@ -624,11 +696,14 @@ class AIFootballPredictor:
                 else:
                     cmd_exec = cmd_args
                     stdin_input = prompt
+
             else:
                 cmd_exec = cmd_args
                 stdin_input = prompt
 
             # 运行命令并将 prompt 传递给 CLI
+            # kiro-cli 模型可能需要更长时间；其余 CLI 保持 45 秒
+            cli_timeout = 120 if getattr(self, 'engine_type', '') == 'kiro_cli' else 45
             res = subprocess.run(
                 cmd_exec,
                 input=stdin_input,
@@ -636,11 +711,16 @@ class AIFootballPredictor:
                 text=True,
                 encoding='utf-8',
                 env=env,
-                timeout=45  # 增加超时至 45 秒以确保 CLI 有充足的时间生成复杂预测分析
+                timeout=cli_timeout
             )
             
             if res.returncode == 0:
                 stdout_content = res.stdout.strip()
+                # 去除 ANSI 转义码（kiro-cli 输出含颜色控制字符）
+                import re as _re
+                stdout_content = _re.sub(r'\x1b\[[0-9;?]*[A-Za-z]', '', stdout_content)
+                stdout_content = _re.sub(r'\x1b\[[0-9;]*m', '', stdout_content)
+                stdout_content = stdout_content.strip()
                 if not stdout_content:
                     raise RuntimeError("命令行执行成功，但未返回任何输出。")
                 return stdout_content
