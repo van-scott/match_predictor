@@ -25,8 +25,9 @@ function switchTab(tab) {
   document.getElementById(`tab-${tab}`).classList.add('active');
   document.getElementById(`panel-${tab}`).classList.remove('hidden');
 
-  if (tab === 'ai' && lotteryMatches.length === 0) {
-    loadLotteryMatches();
+  if (tab === 'ai') {
+    if (lotteryMatches.length === 0) loadLotteryMatches();
+    initAIEnginePicker();
   }
   // 智能选场：首次进入时加载比赛
   if (tab === 'smart' && smartMatches.length === 0) {
@@ -372,6 +373,82 @@ function removeFromCart(id) {
   updateAiCartUI();
 }
 
+// ── AI ENGINE PICKER ──────────────────────────────────────────────────────
+const AI_PRESET_MODELS = {
+  kiro_cli:        ['claude-sonnet-4-5', 'claude-opus-4', 'claude-haiku-3-5', 'claude-sonnet-4-5-20251101'],
+  antigravity_cli: ['claude-sonnet-4-5', 'claude-opus-4', 'claude-haiku-3-5'],
+  cursor_cli:      ['claude-sonnet-4-5', 'gpt-4o', 'gpt-4o-mini', 'gemini-2.0-flash-exp'],
+  api_key:         [],
+};
+
+const AI_ENGINE_LABELS = {
+  api_key:         '自定义 API',
+  kiro_cli:        'Kiro CLI',
+  antigravity_cli: 'Antigravity CLI',
+  cursor_cli:      'Cursor CLI',
+};
+
+let _aiPickerConfig = null;  // 缓存用户配置
+
+async function initAIEnginePicker() {
+  const pickerEl = document.getElementById('ai-engine-picker');
+  if (!pickerEl) return;
+
+  // 已初始化过则只展示
+  if (_aiPickerConfig) { pickerEl.style.display = 'block'; return; }
+
+  try {
+    const res = await fetch('/api/user/ai-config', { credentials: 'same-origin' });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.success) return;
+
+    _aiPickerConfig = data.config || {};
+    const savedEngine = _aiPickerConfig.ai_engine_type || 'api_key';
+    const savedModel  = _aiPickerConfig.ai_model || '';
+
+    // 填充引擎下拉
+    const engineSel = document.getElementById('ai-engine-sel');
+    engineSel.innerHTML = Object.entries(AI_ENGINE_LABELS)
+      .map(([v, l]) => `<option value="${v}"${v === savedEngine ? ' selected' : ''}>${l}</option>`)
+      .join('');
+
+    // 填充模型下拉
+    _fillModelSel(savedEngine, savedModel);
+    pickerEl.style.display = 'block';
+  } catch (_) { /* 未登录或网络错误时不显示 */ }
+}
+
+function _fillModelSel(engineType, currentModel) {
+  const modelSel = document.getElementById('ai-model-sel');
+  if (!modelSel) return;
+  const presets = AI_PRESET_MODELS[engineType] || [];
+
+  let opts = '<option value="">(使用账户默认模型)</option>';
+  presets.forEach(m => {
+    opts += `<option value="${m}"${m === currentModel ? ' selected' : ''}>${m}</option>`;
+  });
+  if (currentModel && !presets.includes(currentModel)) {
+    opts += `<option value="${currentModel}" selected>${currentModel}</option>`;
+  }
+  modelSel.innerHTML = opts;
+}
+
+function onAIEngineChange() {
+  const engineSel = document.getElementById('ai-engine-sel');
+  const savedModel = (_aiPickerConfig && _aiPickerConfig.ai_model) || '';
+  _fillModelSel(engineSel.value, savedModel);
+}
+
+function getAIPickerValues() {
+  const engineSel = document.getElementById('ai-engine-sel');
+  const modelSel  = document.getElementById('ai-model-sel');
+  return {
+    engine: engineSel ? engineSel.value : null,
+    model:  modelSel  ? modelSel.value  : null,
+  };
+}
+
 // ── AI PREDICT ────────────────────────────────────────────────────────────
 async function runAI() {
   if (aiCart.length === 0) return;
@@ -394,13 +471,15 @@ async function runAI() {
     if (el) el.textContent = `已等待 ${elapsed}s，AI 正在深度分析...`;
   }, 1000);
 
+  const { engine, model } = getAIPickerValues();
+
   try {
     // 一次请求，后端完成所有 AI 调用
     const res = await fetch('/api/ai/predict', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
-      body: JSON.stringify({ matches: aiCart }),
+      body: JSON.stringify({ matches: aiCart, override_engine: engine || undefined, override_model: model || undefined }),
     });
     const data = await res.json();
 
@@ -1068,6 +1147,74 @@ function formatSmartTime(d) {
   return `${d.getMonth()+1}月${d.getDate()}日 ${hm}`;
 }
 
+// ── 智能选场：模型选择弹窗 ─────────────────────────────────────────────
+function showSmartModelPicker(fixtureId) {
+  // 构建当前引擎的模型列表
+  const savedEngine = (_aiPickerConfig && _aiPickerConfig.ai_engine_type) || 'kiro_cli';
+  const savedModel  = (_aiPickerConfig && _aiPickerConfig.ai_model) || '';
+  const presets = AI_PRESET_MODELS[savedEngine] || [];
+
+  let modelOpts = '<option value="">(使用账户默认模型)</option>';
+  presets.forEach(m => {
+    modelOpts += `<option value="${m}"${m === savedModel ? ' selected' : ''}>${m}</option>`;
+  });
+  if (savedModel && !presets.includes(savedModel)) {
+    modelOpts += `<option value="${savedModel}" selected>${savedModel}</option>`;
+  }
+
+  let engineOpts = Object.entries(AI_ENGINE_LABELS)
+    .map(([v, l]) => `<option value="${v}"${v === savedEngine ? ' selected' : ''}>${l}</option>`)
+    .join('');
+
+  const inner = document.getElementById('smart-detail-inner');
+  inner.innerHTML = `
+    <div style="padding:1.5rem; max-width:420px; margin:0 auto;">
+      <h3 style="margin:0 0 1rem; font-size:1rem; display:flex; align-items:center; gap:0.5rem;">
+        <i class="fas fa-sliders-h" style="color:var(--orange)"></i> 选择分析引擎 &amp; 模型
+      </h3>
+      <div style="margin-bottom:0.8rem;">
+        <label style="font-size:0.8rem; color:var(--muted); display:block; margin-bottom:0.3rem;">引擎</label>
+        <select id="smart-engine-pick"
+          style="width:100%;padding:0.5rem 0.7rem;border-radius:8px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);color:var(--cream);font-size:0.85rem;cursor:pointer;outline:none;"
+          onchange="onSmartEngineChange()">
+          ${engineOpts}
+        </select>
+      </div>
+      <div style="margin-bottom:1.2rem;">
+        <label style="font-size:0.8rem; color:var(--muted); display:block; margin-bottom:0.3rem;">模型</label>
+        <select id="smart-model-pick"
+          style="width:100%;padding:0.5rem 0.7rem;border-radius:8px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);color:var(--cream);font-size:0.85rem;cursor:pointer;outline:none;">
+          ${modelOpts}
+        </select>
+      </div>
+      <div style="display:flex; gap:0.8rem;">
+        <button onclick="closeSmartDetail()" style="flex:1; padding:0.6rem; border-radius:8px; background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.1); color:var(--muted); cursor:pointer; font-size:0.85rem;">取消</button>
+        <button onclick="confirmSmartAI('${fixtureId}')"
+          style="flex:2; padding:0.6rem; border-radius:8px; background:linear-gradient(135deg,#f97316,#fb923c); border:none; color:#fff; cursor:pointer; font-size:0.85rem; font-weight:600;">
+          <i class="fas fa-robot"></i> 开始 AI 分析
+        </button>
+      </div>
+    </div>`;
+}
+
+function onSmartEngineChange() {
+  const e = document.getElementById('smart-engine-pick');
+  const m = document.getElementById('smart-model-pick');
+  if (!e || !m) return;
+  const presets = AI_PRESET_MODELS[e.value] || [];
+  let opts = '<option value="">(使用账户默认模型)</option>';
+  presets.forEach(p => { opts += `<option value="${p}">${p}</option>`; });
+  m.innerHTML = opts;
+}
+
+async function confirmSmartAI(fixtureId) {
+  const engineSel = document.getElementById('smart-engine-pick');
+  const modelSel  = document.getElementById('smart-model-pick');
+  const overrideEngine = engineSel ? engineSel.value : null;
+  const overrideModel  = modelSel  ? modelSel.value  : null;
+  await _doSmartAI(fixtureId, overrideEngine, overrideModel);
+}
+
 // ── 深度分析弹窗 ───────────────────────────────────────────────────────
 async function showSmartDetail(fixtureId, withAI) {
   const overlay = document.getElementById('smart-detail-overlay');
@@ -1086,12 +1233,26 @@ async function showSmartDetail(fixtureId, withAI) {
     return;
   }
 
+  // 确保引擎配置已加载，然后显示模型选择器
+  if (!_aiPickerConfig) {
+    try {
+      const res = await fetch('/api/user/ai-config', { credentials: 'same-origin' });
+      const d = await res.json();
+      if (d.success) _aiPickerConfig = d.config || {};
+    } catch (_) { _aiPickerConfig = {}; }
+  }
+  showSmartModelPicker(fixtureId);
+}
+
+async function _doSmartAI(fixtureId, overrideEngine, overrideModel) {
+  const inner = document.getElementById('smart-detail-inner');
+
   // 显示 Loading
   inner.innerHTML = `
     <div class="smart-detail-loading">
       <i class="fas fa-robot fa-spin fa-2x" style="color:var(--orange)"></i>
       <p>AI 正在深度分析，通常需要 10-20 秒...</p>
-      <small style="color:var(--muted)">正在调用 Gemini 大模型 + 历史数据库</small>
+      <small style="color:var(--muted)">正在调用 AI 大模型 + 历史数据库</small>
     </div>`;
 
   try {
@@ -1099,7 +1260,12 @@ async function showSmartDetail(fixtureId, withAI) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
-      body: JSON.stringify({ fixture_id: fixtureId, with_ai: withAI }),
+      body: JSON.stringify({
+        fixture_id: fixtureId,
+        with_ai: true,
+        override_engine: overrideEngine || undefined,
+        override_model:  overrideModel  || undefined,
+      }),
     });
     const data = await res.json();
 

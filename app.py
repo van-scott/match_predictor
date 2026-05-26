@@ -678,6 +678,10 @@ def ai_predict():
         if not matches:
             return jsonify({'success': False, 'message': '未提供比赛数据'}), 400
 
+        # 前端可临时覆盖引擎和模型（不更改用户保存的配置）
+        override_engine = data.get('override_engine') or None
+        override_model  = data.get('override_model')  or None
+
         COST_PER_MATCH = 3
         total_cost = len(matches) * COST_PER_MATCH
         credits = prediction_db.get_user_credits(current_user['id'])
@@ -690,7 +694,11 @@ def ai_predict():
 
         # 使用统一的 AIFootballPredictor 调用 AI（支持用户中心自定义的 API 或 CLI 引擎）
         try:
-            predictor = AIFootballPredictor(user_id=current_user['id'])
+            predictor = AIFootballPredictor(
+                user_id=current_user['id'],
+                override_engine=override_engine,
+                override_model=override_model,
+            )
         except Exception as e:
             return jsonify({'success': False, 'message': f'AI 服务初始化失败: {str(e)}'}), 500
 
@@ -2437,6 +2445,9 @@ def smart_predict():
         data       = request.get_json() or {}
         fixture_id = data.get('fixture_id', '').strip()
         with_ai    = bool(data.get('with_ai', False))
+        # 前端可临时覆盖引擎和模型
+        override_engine = data.get('override_engine') or None
+        override_model  = data.get('override_model')  or None
 
         if not fixture_id:
             return jsonify({'success': False, 'message': 'fixture_id 不能为空'}), 400
@@ -2534,9 +2545,11 @@ def smart_predict():
             if AIFootballPredictor:
                 try:
                     predictor = AIFootballPredictor(
-                        api_key    = gemini_key,
-                        model_name = os.environ.get('GEMINI_MODEL', 'gemini-2.0-flash-exp'),
-                        user_id    = current_user['id']
+                        api_key         = gemini_key,
+                        model_name      = os.environ.get('GEMINI_MODEL', 'gemini-2.0-flash-exp'),
+                        user_id         = current_user['id'],
+                        override_engine = override_engine,
+                        override_model  = override_model,
                     )
                     match_input = {
                         'match_id':    fix_id,
