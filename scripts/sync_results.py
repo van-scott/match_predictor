@@ -282,7 +282,9 @@ def backfill_results(matches: list, league_code: str, db) -> dict:
                         score_correct_val = (pred_hg == home_goals and pred_ag == away_goals)
                         if score_correct_val:
                             stats['score_hit'] += 1
-                        goal_diff_error = abs((pred_hg + pred_ag) - (home_goals + away_goals))
+                        # E3-fix: 计算净胜球预测误差（正确语义）
+                        # pred_goal_diff = pred_hg - pred_ag; actual_goal_diff = home_goals - away_goals
+                        goal_diff_error = abs((pred_hg - pred_ag) - (home_goals - away_goals))
 
                 if row is not None:
                     # fixture_id 已存在 → UPDATE
@@ -469,9 +471,12 @@ def print_accuracy_summary(db):
             cur = conn.cursor()
 
             # 总体统计
+            # A4-fix: total_finished 统一口径 — 同时要求有实际结果 AND ML 预测
             cur.execute("""
                 SELECT
-                    COUNT(*) FILTER (WHERE actual_result IS NOT NULL) AS total_finished,
+                    COUNT(*) FILTER (
+                        WHERE actual_result IS NOT NULL AND ml_predicted_result IS NOT NULL
+                    ) AS total_finished,
                     COUNT(*) FILTER (WHERE result_correct IS NOT NULL) AS total_predicted,
                     COUNT(*) FILTER (WHERE result_correct = true) AS correct,
                     COUNT(*) FILTER (WHERE score_correct = true) AS score_hit,
@@ -499,7 +504,7 @@ def print_accuracy_summary(db):
                     COUNT(*) FILTER (WHERE result_correct IS NOT NULL) AS predicted,
                     COUNT(*) FILTER (WHERE result_correct = true) AS correct
                 FROM upcoming_fixtures
-                WHERE actual_result IS NOT NULL
+                WHERE actual_result IS NOT NULL AND ml_predicted_result IS NOT NULL
                 GROUP BY league_name
                 ORDER BY league_name
             """)

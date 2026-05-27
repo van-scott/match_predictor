@@ -2,7 +2,23 @@
 """Builds prompts for AI prediction."""
 
 
-def build_analysis_prompt(home: str, away: str, league: str, match_time: str, ho: str, do_: str, ao: str, prob_str: str) -> str:
+def build_analysis_prompt(home: str, away: str, league: str, match_time: str,
+                          ho: str, do_: str, ao: str, prob_str: str,
+                          ml_probs: dict | None = None) -> str:
+    """
+    Args:
+        ml_probs: D2 — ML 模型预测概率 {'H': 0.45, 'D': 0.28, 'A': 0.27, 'confidence': 'high'}
+    """
+    ml_section = ""
+    if ml_probs and ml_probs.get('H') is not None:
+        conf = ml_probs.get('confidence', '')
+        conf_label = {'high': '高', 'medium': '中', 'low': '低'}.get(conf, conf)
+        ml_section = f"""
+机器学习统计模型预测（仅供参考，作为背景权重信号）：
+主胜概率 {ml_probs.get('H', 0)*100:.1f}% | 平局概率 {ml_probs.get('D', 0)*100:.1f}% | 客胜概率 {ml_probs.get('A', 0)*100:.1f}%
+置信度：{conf_label}（若统计模型与赔率信号一致，请加强对应方向；若明显相悖，请在分析中说明原因）
+"""
+
     return f"""你是一位专业足球分析师。请对以下足球比赛进行深度分析预测：
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -11,7 +27,7 @@ def build_analysis_prompt(home: str, away: str, league: str, match_time: str, ho
 联赛：{league}
 比赛时间：{match_time}
 当前赔率：主胜 {ho} | 平局 {do_} | 客胜 {ao}
-赔率隐含概率：{prob_str}
+赔率隐含概率：{prob_str}{ml_section}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 【⚠️ 核心指令：格式与术语标准】
