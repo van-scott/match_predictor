@@ -66,12 +66,7 @@ class AIPredictionService:
             t = m.get('match_time', '') or m.get('match_date', '')
 
             prob_str = calc_implied_probability_str(ho, do_, ao)
-            # D2: 传入 ML 预测概率（如有），让 AI 以统计模型结果为背景信号
-            ml_probs = m.get('ml_prediction') or m.get('ml_probs')
-            prompt = build_analysis_prompt(
-                home, away, league, t, str(ho), str(do_), str(ao), prob_str,
-                ml_probs=ml_probs,
-            )
+            prompt = build_analysis_prompt(home, away, league, t, str(ho), str(do_), str(ao), prob_str)
             try:
                 analysis = predictor._call_ai_model(prompt)
                 if not analysis:

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""match_predictor 应用包：控制层 / 业务层 / 数据层。"""
+"""MatchPredict 应用包：控制层 / 业务层 / 数据层。"""
 
 from matchpredict.app_factory import create_app
 

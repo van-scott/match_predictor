@@ -56,41 +56,6 @@ class SmartPredictService:
                 403,
             )
 
-        # ── D1: 置信度门控 ─────────────────────────────────────────────
-        ml_confidence = 'unknown'
-        value_edge = None
-        if ml_h and ml_d and ml_a:
-            max_ml_prob = max(float(ml_h), float(ml_d), float(ml_a))
-            if max_ml_prob >= 0.60:
-                ml_confidence = 'high'
-            elif max_ml_prob >= 0.45:
-                ml_confidence = 'medium'
-            else:
-                ml_confidence = 'low'
-
-            # ── D3: 赔率套利检测 (edge = ML概率 - 赔率隐含概率) ────────────
-            if h_odds and d_odds and a_odds:
-                ho, do, ao = float(h_odds), float(d_odds), float(a_odds)
-                total_inv = 1/ho + 1/do + 1/ao
-                imp_h = (1/ho) / total_inv
-                imp_d = (1/do) / total_inv
-                imp_a = (1/ao) / total_inv
-                edges = {
-                    'H': round(float(ml_h) - imp_h, 4),
-                    'D': round(float(ml_d) - imp_d, 4),
-                    'A': round(float(ml_a) - imp_a, 4),
-                }
-                best_edge_key = max(edges, key=edges.get)
-                best_edge_val = edges[best_edge_key]
-                if best_edge_val > 0.08 and max_ml_prob > 0.50:
-                    value_edge = {
-                        'outcome': best_edge_key,
-                        'edge': best_edge_val,
-                        'ml_prob': round(max_ml_prob, 4),
-                        'implied_prob': round({'H': imp_h, 'D': imp_d, 'A': imp_a}[best_edge_key], 4),
-                        'is_value': True,
-                    }
-
         result: dict[str, Any] = {
             'fixture_id': fix_id,
             'league': lg_name,
@@ -107,9 +72,7 @@ class SmartPredictService:
                 'draw_prob': float(ml_d) if ml_d else None,
                 'away_prob': float(ml_a) if ml_a else None,
                 'recommendation': ml_rec,
-                'confidence': ml_confidence,
             } if ml_h else None,
-            'value_edge': value_edge,
         }
 
         odds_mv = self._build_odds_movement(fix_id)

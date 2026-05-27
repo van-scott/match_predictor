@@ -4,14 +4,18 @@ import atexit
 import logging
 import subprocess
 import sys
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.interval import IntervalTrigger
 
-logger = logging.getLogger('match predictor.scheduler')
+logger = logging.getLogger('matchpredict.scheduler')
 
 
 def setup_scheduler(app) -> None:
     """在 Flask 进程内启动数据同步定时任务。"""
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+        from apscheduler.triggers.interval import IntervalTrigger
+    except ImportError:
+        app.logger.warning('⚠️ APScheduler 未安装，定时任务不可用')
+        return
 
     python_bin = sys.executable
     scheduler = BackgroundScheduler()
@@ -77,18 +81,6 @@ def setup_scheduler(app) -> None:
         except Exception as e:
             logger.error('❌ [定时] 彩票赛事同步异常: %s', e)
 
-    def job_eval_snapshot():
-        try:
-            result = _run_script(['scripts/eval_snapshot.py', '--days', '30'], 120)
-            if result.returncode == 0:
-                logger.info('✅ [定时] ML 评估快照已更新')
-            elif result.stderr.strip():
-                logger.error('❌ [定时] 评估快照失败: %s', result.stderr.strip()[:200])
-        except subprocess.TimeoutExpired:
-            pass
-        except Exception as e:
-            logger.error('❌ [定时] 评估快照异常: %s', e)
-
     scheduler.add_job(job_sync_results, IntervalTrigger(minutes=10),
                       id='sync_results', replace_existing=True)
     scheduler.add_job(job_sync_results_full, IntervalTrigger(minutes=60),
@@ -97,8 +89,6 @@ def setup_scheduler(app) -> None:
                       id='sync_upcoming', replace_existing=True)
     scheduler.add_job(job_sync_daily_matches, IntervalTrigger(minutes=10),
                       id='sync_daily_matches', replace_existing=True)
-    scheduler.add_job(job_eval_snapshot, IntervalTrigger(hours=6),
-                      id='eval_snapshot', replace_existing=True)
 
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown(wait=False))
@@ -108,7 +98,6 @@ def setup_scheduler(app) -> None:
     app.logger.info('   • sync_results_full  每60分钟 — 含取消/延期')
     app.logger.info('   • sync_upcoming      每60分钟 — 赛程+赔率')
     app.logger.info('   • sync_daily_matches 每10分钟 — 彩票赛事')
-    app.logger.info('   • eval_snapshot      每6小时  — ML 评估快照')
 
 
 def run_sync_upcoming_once(env: dict | None = None) -> subprocess.CompletedProcess:
