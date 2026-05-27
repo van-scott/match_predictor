@@ -608,10 +608,35 @@ body { background: var(--bg); color: var(--cream); font-family: 'Inter', sans-se
       </div>
       <button class="pf-refresh" onclick="location.reload()"><i class="fas fa-sync-alt"></i> 刷新</button>
     </div>
-    {% if history_html %}
+    {% if history_items %}
     <table class="pf-table">
       <thead><tr><th>时间</th><th>模式</th><th>比赛</th><th>联赛</th><th>赔率 (主/平/客)</th><th>操作</th></tr></thead>
-      <tbody>{{ history_html|safe }}</tbody>
+      <tbody>
+        {% for item in history_items %}
+        <tr>
+          <td style="color:var(--muted);font-size:.8rem;white-space:nowrap">{{ item.time_str }}</td>
+          <td>
+            {% if item.is_ai %}
+            <span style="background:var(--orange);color:#fff;padding:2px 8px;border-radius:4px;font-size:.7rem">AI</span>
+            {% else %}
+            <span style="background:var(--blue);color:#fff;padding:2px 8px;border-radius:4px;font-size:.7rem">{{ item.mode }}</span>
+            {% endif %}
+          </td>
+          <td><strong>{{ item.home_cn }}</strong> <span style="color:var(--muted)">vs</span> <strong>{{ item.away_cn }}</strong></td>
+          <td style="font-size:.8rem">{{ item.league }}</td>
+          <td style="font-size:.8rem">
+            {% if item.home_odds %}
+            <span style="color:var(--green);font-weight:700">{{ '%.2f'|format(item.home_odds) }}</span>
+            <span style="color:var(--muted);font-weight:700">{{ '%.2f'|format(item.draw_odds) }}</span>
+            <span style="color:var(--blue);font-weight:700">{{ '%.2f'|format(item.away_odds) }}</span>
+            {% else %}
+            <span style="color:var(--muted)">-</span>
+            {% endif %}
+          </td>
+          <td><button class="pf-refresh" onclick="showDetail({{ item.idx }})" style="font-size:.7rem;padding:.3rem .6rem">详情</button></td>
+        </tr>
+        {% endfor %}
+      </tbody>
     </table>
     {% else %}
     <div style="text-align:center;padding:2rem;color:var(--muted)"><i class="fas fa-inbox" style="font-size:2rem;margin-bottom:.5rem;display:block"></i>暂无预测记录<br><small>使用 AI 大模型分析比赛后，记录会显示在这里</small></div>
