@@ -20,12 +20,13 @@ warnings.filterwarnings('ignore')
 import numpy as np
 import pandas as pd
 
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, StackingClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedKFold, cross_val_score, TimeSeriesSplit
 from sklearn.metrics import (accuracy_score, classification_report,
-                              confusion_matrix, log_loss)
+                              confusion_matrix, log_loss, brier_score_loss)
 from sklearn.preprocessing import LabelEncoder
-from sklearn.calibration import CalibratedClassifierCV
+from sklearn.calibration import CalibratedClassifierCV, calibration_curve
 
 try:
     from xgboost import XGBClassifier
@@ -33,6 +34,13 @@ try:
 except ImportError:
     HAS_XGBOOST = False
     print("⚠️  xgboost 未安装，将跳过 XGBoost 模型。运行: pip install xgboost>=2.0.0")
+
+try:
+    from lightgbm import LGBMClassifier
+    HAS_LGBM = True
+except ImportError:
+    HAS_LGBM = False
+    print("⚠️  lightgbm 未安装，将跳过 LightGBM 模型。运行: pip install lightgbm")
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -88,125 +96,152 @@ def prepare_xy(feat_df: pd.DataFrame, league: str = None):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def train_models(X, y, feat_cols: list) -> dict:
-    """训练三个模型并返回最优模型包（使用时间序列分割）"""
-    
-    # 使用时间序列分割（数据已按时间排序）
+    """
+    训练 RF + GB + XGBoost + LightGBM，Stacking 集成，held-out 校准。
+    C1/C2/C3/C4 升级版。
+    """
     tscv = TimeSeriesSplit(n_splits=5)
-    # 同时保留 StratifiedKFold 作为对比
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-    
     results = {}
 
-    # ── RandomForest ──────────────────────────────────────────────────────────
+    # C4: held-out 校准集 — 时序上最后 20% 数据
+    n = len(X)
+    cal_split = int(n * 0.8)
+    X_train_cal, y_train_cal = X[:cal_split], y[:cal_split]
+    X_cal, y_cal_raw = X[cal_split:], y[cal_split:]
+
+    # ── RandomForest ─────────────────────────────────────────────────────────
     logger.info("🌲 训练 RandomForest ...")
     rf = RandomForestClassifier(
-        n_estimators=500,
-        max_depth=10,
-        min_samples_leaf=5,
-        min_samples_split=10,
-        class_weight='balanced',
-        random_state=42,
-        n_jobs=-1,
+        n_estimators=500, max_depth=10, min_samples_leaf=5,
+        min_samples_split=10, class_weight='balanced', random_state=42, n_jobs=-1,
     )
-    rf_ts_scores = cross_val_score(rf, X, y, cv=tscv, scoring='accuracy')
-    rf_sk_scores = cross_val_score(rf, X, y, cv=skf, scoring='accuracy')
-    logger.info(f"   RF TimeSeries CV: {rf_ts_scores.mean():.4f} ± {rf_ts_scores.std():.4f}")
-    logger.info(f"   RF Stratified CV: {rf_sk_scores.mean():.4f} ± {rf_sk_scores.std():.4f}")
+    rf_ts = cross_val_score(rf, X, y, cv=tscv, scoring='accuracy')
+    rf_sk = cross_val_score(rf, X, y, cv=skf, scoring='accuracy')
+    logger.info(f"   RF  TS-CV: {rf_ts.mean():.4f} ± {rf_ts.std():.4f}  SK-CV: {rf_sk.mean():.4f}")
     rf.fit(X, y)
-    results['RandomForest'] = {
-        'model': rf,
-        'ts_score': rf_ts_scores.mean(),
-        'sk_score': rf_sk_scores.mean(),
-        'ts_scores': rf_ts_scores.tolist(),
-    }
+    results['RandomForest'] = {'model': rf, 'ts_score': rf_ts.mean(), 'sk_score': rf_sk.mean()}
 
-    # ── GradientBoosting ──────────────────────────────────────────────────────
+    # ── GradientBoosting ─────────────────────────────────────────────────────
     logger.info("🚀 训练 GradientBoosting ...")
     gb = GradientBoostingClassifier(
-        n_estimators=300,
-        learning_rate=0.05,
-        max_depth=5,
-        subsample=0.8,
-        min_samples_leaf=5,
-        random_state=42,
+        n_estimators=300, learning_rate=0.05, max_depth=5,
+        subsample=0.8, min_samples_leaf=5, random_state=42,
     )
-    gb_ts_scores = cross_val_score(gb, X, y, cv=tscv, scoring='accuracy')
-    gb_sk_scores = cross_val_score(gb, X, y, cv=skf, scoring='accuracy')
-    logger.info(f"   GB TimeSeries CV: {gb_ts_scores.mean():.4f} ± {gb_ts_scores.std():.4f}")
-    logger.info(f"   GB Stratified CV: {gb_sk_scores.mean():.4f} ± {gb_sk_scores.std():.4f}")
+    gb_ts = cross_val_score(gb, X, y, cv=tscv, scoring='accuracy')
+    gb_sk = cross_val_score(gb, X, y, cv=skf, scoring='accuracy')
+    logger.info(f"   GB  TS-CV: {gb_ts.mean():.4f} ± {gb_ts.std():.4f}  SK-CV: {gb_sk.mean():.4f}")
     gb.fit(X, y)
-    results['GradientBoosting'] = {
-        'model': gb,
-        'ts_score': gb_ts_scores.mean(),
-        'sk_score': gb_sk_scores.mean(),
-        'ts_scores': gb_ts_scores.tolist(),
-    }
+    results['GradientBoosting'] = {'model': gb, 'ts_score': gb_ts.mean(), 'sk_score': gb_sk.mean()}
 
     # ── XGBoost ───────────────────────────────────────────────────────────────
+    le_xgb = LabelEncoder()
     if HAS_XGBOOST:
         logger.info("⚡ 训练 XGBoost ...")
-        # 将标签编码为数字
-        le = LabelEncoder()
-        y_encoded = le.fit_transform(y)
-        
+        le_xgb.fit(y)
+        y_enc = le_xgb.transform(y)
         xgb = XGBClassifier(
-            n_estimators=500,
-            max_depth=6,
-            learning_rate=0.05,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            min_child_weight=3,
-            reg_alpha=0.1,
-            reg_lambda=1.0,
-            use_label_encoder=False,
-            eval_metric='mlogloss',
-            random_state=42,
-            n_jobs=-1,
+            n_estimators=500, max_depth=6, learning_rate=0.05,
+            subsample=0.8, colsample_bytree=0.8, min_child_weight=3,
+            reg_alpha=0.1, reg_lambda=1.0,
+            eval_metric='mlogloss', random_state=42, n_jobs=-1,
         )
-        xgb_ts_scores = cross_val_score(xgb, X, y_encoded, cv=tscv, scoring='accuracy')
-        xgb_sk_scores = cross_val_score(xgb, X, y_encoded, cv=skf, scoring='accuracy')
-        logger.info(f"   XGB TimeSeries CV: {xgb_ts_scores.mean():.4f} ± {xgb_ts_scores.std():.4f}")
-        logger.info(f"   XGB Stratified CV: {xgb_sk_scores.mean():.4f} ± {xgb_sk_scores.std():.4f}")
-        xgb.fit(X, y_encoded)
+        xgb_ts = cross_val_score(xgb, X, y_enc, cv=tscv, scoring='accuracy')
+        xgb_sk = cross_val_score(xgb, X, y_enc, cv=skf, scoring='accuracy')
+        logger.info(f"   XGB TS-CV: {xgb_ts.mean():.4f} ± {xgb_ts.std():.4f}  SK-CV: {xgb_sk.mean():.4f}")
+        xgb.fit(X, y_enc)
         results['XGBoost'] = {
-            'model': xgb,
-            'ts_score': xgb_ts_scores.mean(),
-            'sk_score': xgb_sk_scores.mean(),
-            'ts_scores': xgb_ts_scores.tolist(),
-            'label_encoder': le,
+            'model': xgb, 'ts_score': xgb_ts.mean(), 'sk_score': xgb_sk.mean(),
+            'label_encoder': le_xgb,
         }
 
-    # ── 选最优（以 TimeSeries CV 为准，更接近实战）────────────────────────────
+    # ── C2: LightGBM ─────────────────────────────────────────────────────────
+    if HAS_LGBM:
+        logger.info("💡 训练 LightGBM ...")
+        lgbm = LGBMClassifier(
+            n_estimators=500, learning_rate=0.05, max_depth=6,
+            num_leaves=31, subsample=0.8, colsample_bytree=0.8,
+            min_child_samples=10, reg_alpha=0.1, reg_lambda=1.0,
+            class_weight='balanced', random_state=42, n_jobs=-1, verbose=-1,
+        )
+        lgbm_ts = cross_val_score(lgbm, X, y, cv=tscv, scoring='accuracy')
+        lgbm_sk = cross_val_score(lgbm, X, y, cv=skf, scoring='accuracy')
+        logger.info(f"   LGBM TS-CV: {lgbm_ts.mean():.4f} ± {lgbm_ts.std():.4f}  SK-CV: {lgbm_sk.mean():.4f}")
+        lgbm.fit(X, y)
+        results['LightGBM'] = {'model': lgbm, 'ts_score': lgbm_ts.mean(), 'sk_score': lgbm_sk.mean()}
+
+    # ── C3: Stacking 集成（以 RF/GB/LGBM 为 base，LR 为 meta）─────────────────
+    logger.info("🔗 训练 Stacking 集成 ...")
+    base_estimators = [('rf', results['RandomForest']['model']),
+                       ('gb', results['GradientBoosting']['model'])]
+    if HAS_LGBM:
+        base_estimators.append(('lgbm', results['LightGBM']['model']))
+    elif HAS_XGBOOST:
+        # XGB 需要 LabelEncoder，用 GB 替代以保持接口一致
+        base_estimators.append(('gb2', GradientBoostingClassifier(
+            n_estimators=200, learning_rate=0.08, max_depth=4, random_state=1)))
+
+    stacking = StackingClassifier(
+        estimators=base_estimators,
+        final_estimator=LogisticRegression(C=1.0, max_iter=500, random_state=42),
+        cv=tscv,
+        passthrough=False,
+        n_jobs=-1,
+    )
+    stack_ts = cross_val_score(stacking, X, y, cv=TimeSeriesSplit(n_splits=3), scoring='accuracy')
+    logger.info(f"   Stack TS-CV(3): {stack_ts.mean():.4f} ± {stack_ts.std():.4f}")
+    stacking.fit(X, y)
+    results['Stacking'] = {'model': stacking, 'ts_score': stack_ts.mean(), 'sk_score': stack_ts.mean()}
+
+    # ── 选最优 base（以 TS-CV 为准）─────────────────────────────────────────
     best_name = max(results, key=lambda k: results[k]['ts_score'])
     best_score = results[best_name]['ts_score']
     best_model = results[best_name]['model']
-    logger.info(f"🏆 最优模型: {best_name}  TimeSeries CV = {best_score:.4f}")
+    logger.info(f"\n🏆 最优模型: {best_name}  TS-CV = {best_score:.4f}")
+    for name, r in sorted(results.items(), key=lambda kv: kv[1]['ts_score'], reverse=True):
+        marker = " 🏆" if name == best_name else ""
+        logger.info(f"   {name:<20} TS: {r['ts_score']:.4f}  SK: {r['sk_score']:.4f}{marker}")
 
-    # ── 校准概率（Platt scaling）─────────────────────────────────────────────
-    # XGBoost 需要特殊处理（用编码后的标签）
-    if best_name == 'XGBoost':
-        le = results['XGBoost']['label_encoder']
-        y_cal = le.transform(y)
-        calibrated = CalibratedClassifierCV(best_model, method='sigmoid', cv=5)
-        calibrated.fit(X, y_cal)
-        classes = le.classes_.tolist()
-    else:
+    # ── C4: held-out isotonic 校准（在时序最后 20% 上）──────────────────────
+    logger.info("📐 概率校准 (held-out isotonic) ...")
+    try:
+        best_model.fit(X_train_cal, y_train_cal)
+        calibrated = CalibratedClassifierCV(best_model, method='isotonic', cv='prefit')
+        calibrated.fit(X_cal, y_cal_raw)
+        # 验证校准质量（Brier score 越低越好）
+        proba_cal = calibrated.predict_proba(X_cal)
+        classes_list = list(calibrated.classes_)
+        for cls_idx, cls in enumerate(classes_list):
+            y_bin = (y_cal_raw == cls).astype(int)
+            bs = brier_score_loss(y_bin, proba_cal[:, cls_idx])
+            logger.info(f"   Brier({cls}): {bs:.4f}")
+    except Exception as e:
+        logger.warning(f"held-out 校准失败，降级为全量 sigmoid: {e}")
         calibrated = CalibratedClassifierCV(best_model, method='sigmoid', cv=5)
         calibrated.fit(X, y)
-        classes = best_model.classes_.tolist()
+
+    # 用全量重训 best_model（校准完成后完整拟合）
+    best_model.fit(X, y)
+
+    if hasattr(calibrated, 'classes_'):
+        classes = list(calibrated.classes_)
+    elif best_name == 'XGBoost':
+        classes = le_xgb.classes_.tolist()
+    else:
+        classes = list(best_model.classes_)
 
     return {
-        'model':        calibrated,
-        'base_model':   best_model,
-        'model_name':   best_name,
-        'cv_accuracy':  best_score,
-        'sk_accuracy':  results[best_name]['sk_score'],
-        'feat_cols':    feat_cols,
-        'classes':      classes,
+        'model':         calibrated,
+        'base_model':    best_model,
+        'model_name':    best_name,
+        'cv_accuracy':   best_score,
+        'sk_accuracy':   results[best_name]['sk_score'],
+        'feat_cols':     feat_cols,
+        'classes':       classes,
         'label_encoder': results.get('XGBoost', {}).get('label_encoder'),
-        'all_results':  {k: {'ts_score': v['ts_score'], 'sk_score': v['sk_score']} for k, v in results.items()},
-        'rf':           {'model': results['RandomForest']['model'], 'cv_scores': results['RandomForest']['ts_scores']},
-        'gb':           {'model': results['GradientBoosting']['model'], 'cv_scores': results['GradientBoosting']['ts_scores']},
+        'all_results':   {k: {'ts_score': v['ts_score'], 'sk_score': v['sk_score']} for k, v in results.items()},
+        'has_lgbm':      HAS_LGBM,
+        'has_xgboost':   HAS_XGBOOST,
     }
 
 
@@ -410,7 +445,8 @@ def main():
     parser = argparse.ArgumentParser(description="训练足球比赛预测 ML 模型（增强版）")
     parser.add_argument('--league', default=None, help='只用指定联赛训练 (如: 英超)')
     parser.add_argument('--output', default=MODEL_DIR, help='模型保存目录')
-    parser.add_argument('--lookback', type=int, default=10, help='特征计算回看场次')
+    parser.add_argument('--lookback', type=int, default=0,
+                        help='特征计算回看场次（0=自动: 顶级联赛15, 其他8）')
     args = parser.parse_args()
 
     print("=" * 60)
@@ -427,8 +463,20 @@ def main():
     print(f"   共 {len(df)} 场  |  联赛: {df['league_name'].dropna().unique().tolist()}")
 
     # Step 2: 计算球队统计
-    print(f"\n⚙️  Step 2: 计算球队增强统计 (回看 {args.lookback} 场)...")
-    team_stats = compute_team_stats(df, lookback=args.lookback)
+    # B4: 自动选 lookback —— 顶级联赛样本充足用15，其他8
+    TOP_LEAGUES = {'英超', '西甲', '德甲', '意甲', '法甲', 'Premier League',
+                   'LaLiga', 'Bundesliga', 'Serie A', 'Ligue 1'}
+    if args.lookback == 0:
+        if args.league and args.league in TOP_LEAGUES:
+            effective_lookback = 15
+        elif args.league:
+            effective_lookback = 8
+        else:
+            effective_lookback = 10  # 混合训练时用 10
+    else:
+        effective_lookback = args.lookback
+    print(f"\n⚙️  Step 2: 计算球队增强统计 (回看 {effective_lookback} 场)...")
+    team_stats = compute_team_stats(df, lookback=effective_lookback)
     print(f"   共 {len(team_stats)} 支球队")
 
     # Step 3: 构建特征矩阵（含赔率隐含概率）
@@ -446,8 +494,13 @@ def main():
     except Exception as e:
         print(f"   ⚠️ 赔率数据加载失败: {e}")
 
-    feat_df = build_match_feature_matrix(df, team_stats, odds_df=odds_df)
+    # point_in_time=True: 每场只用赛前数据，避免数据泄露（A2/A3-fix）
+    feat_df = build_match_feature_matrix(
+        df, team_stats=None, odds_df=odds_df,
+        point_in_time=True, lookback=effective_lookback
+    )
     print(f"   特征矩阵: {feat_df.shape[0]} 场 × {feat_df.shape[1]} 列")
+    print(f"   ℹ️  point-in-time 特征，早期 (<5场历史) 比赛已跳过")
 
     # Step 4: 训练模型
     print("\n🤖 Step 4: 训练模型（RF + GB + XGB）...")
@@ -474,11 +527,32 @@ def main():
     print(f"   最优模型: {model_pkg['model_name']}")
     print(f"   TimeSeries CV 准确率: {model_pkg['cv_accuracy']:.4f}")
     print(f"   Stratified CV 准确率: {model_pkg.get('sk_accuracy', 0):.4f}")
-    if HAS_XGBOOST:
-        print(f"   XGBoost: ✅ 已启用")
-    else:
-        print(f"   XGBoost: ❌ 未安装")
+    print(f"   XGBoost:  {'✅' if HAS_XGBOOST else '❌ 未安装'}")
+    print(f"   LightGBM: {'✅' if HAS_LGBM else '❌ 未安装'}")
     print("=" * 60)
+
+    # ── C1: 如果是全联赛训练，自动为顶级联赛各训练一个专用模型 ──────────────
+    if not args.league:
+        TOP_LEAGUE_MAP = {
+            '英超': 'PL', '西甲': 'PD', '德甲': 'BL1', '意甲': 'SA', '法甲': 'FL1',
+        }
+        for lg_name, lg_code in TOP_LEAGUE_MAP.items():
+            lg_df = df[df['league_name'].isin([lg_name, lg_code])]
+            if len(lg_df) < 100:
+                print(f"   ⏭️  {lg_name}: 样本不足 ({len(lg_df)}场)，跳过专用模型")
+                continue
+            print(f"\n📦 训练 {lg_name} 专用模型 ({len(lg_df)}场)...")
+            lb = 15  # 顶级联赛用 15 lookback
+            lg_feat = build_match_feature_matrix(lg_df, point_in_time=True, lookback=lb)
+            if lg_feat.empty:
+                continue
+            Xl, yl, fc_l, _ = prepare_xy(lg_feat)
+            if len(Xl) < 80:
+                print(f"   ⏭️  特征矩阵过小 ({len(Xl)}行)，跳过")
+                continue
+            pkg_l = train_models(Xl, yl, fc_l)
+            save_model(pkg_l, args.output, lg_code.lower())
+            print(f"   ✅ {lg_name} 模型 TS-CV={pkg_l['cv_accuracy']:.4f}")
 
 
 if __name__ == "__main__":

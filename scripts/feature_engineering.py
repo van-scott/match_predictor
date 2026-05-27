@@ -164,50 +164,34 @@ def compute_team_stats(df: pd.DataFrame, lookback: int = 10) -> dict:
             scoring_trend = last5['team_score'].mean() if len(last5) > 0 else 0.0
             conceding_trend = last5['opp_score'].mean() if len(last5) > 0 else 0.0
 
-            # ── 新增：连胜/连败/不败 ─────────────────────────────────
-            win_streak = 0
-            loss_streak = 0
-            unbeaten_run = 0
-            # 从最近一场往前数
-            for _, r in combined.iloc[::-1].iterrows():
-                is_win = (r['is_home'] and r['result'] == 'H') or (not r['is_home'] and r['result'] == 'A')
-                is_loss = (r['is_home'] and r['result'] == 'A') or (not r['is_home'] and r['result'] == 'H')
-                # 连胜
-                if win_streak == (len(combined) - 1 - combined.iloc[::-1].index.get_loc(_)):
-                    pass  # 已经中断
-                # 简化：直接计算
-                break
-
-            # 重新计算连胜/连败/不败（从最近往前）
-            win_streak = 0
-            loss_streak = 0
-            unbeaten_run = 0
+            # ── 连胜/连败/不败（从最近往前逐场计数）──────────────────────
+            outcomes = []
             for idx in range(len(combined) - 1, -1, -1):
                 r = combined.iloc[idx]
                 is_win = (r['is_home'] and r['result'] == 'H') or (not r['is_home'] and r['result'] == 'A')
                 is_loss = (r['is_home'] and r['result'] == 'A') or (not r['is_home'] and r['result'] == 'H')
-                is_draw = r['result'] == 'D'
+                outcomes.append((is_win, is_loss))
 
-                if idx == len(combined) - 1:
-                    # 最近一场
-                    if is_win:
-                        win_streak = 1
-                        unbeaten_run = 1
-                    elif is_loss:
-                        loss_streak = 1
-                    else:
-                        unbeaten_run = 1
+            win_streak = 0
+            for is_win, _ in outcomes:
+                if is_win:
+                    win_streak += 1
                 else:
-                    # 连胜
-                    if is_win and win_streak > 0:
-                        win_streak += 1
-                        unbeaten_run += 1
-                    elif not is_loss and unbeaten_run > 0 and win_streak == 0:
-                        unbeaten_run += 1
-                    elif is_loss and loss_streak > 0:
-                        loss_streak += 1
-                    else:
-                        break
+                    break
+
+            loss_streak = 0
+            for _, is_loss in outcomes:
+                if is_loss:
+                    loss_streak += 1
+                else:
+                    break
+
+            unbeaten_run = 0
+            for _, is_loss in outcomes:
+                if not is_loss:
+                    unbeaten_run += 1
+                else:
+                    break
         else:
             overall_win_rate = goal_diff_avg = recent_form = 0.0
             recent_form_3 = recent_form_5 = 0.0
@@ -287,16 +271,25 @@ def compute_h2h(df: pd.DataFrame, home_team: str, away_team: str, n: int = 5) ->
 # 为每场比赛组装特征向量（用于 ML 训练）
 # ─────────────────────────────────────────────────────────────────────────────
 
-def build_match_feature_matrix(df: pd.DataFrame, team_stats: dict, odds_df: pd.DataFrame = None) -> pd.DataFrame:
+def build_match_feature_matrix(df: pd.DataFrame, team_stats: dict = None,
+                                odds_df: pd.DataFrame = None,
+                                opening_odds_df: pd.DataFrame = None,
+                                standings_df: pd.DataFrame = None,
+                                point_in_time: bool = True,
+                                lookback: int = 10) -> pd.DataFrame:
     """
     为每场已完赛比赛构建特征矩阵，每行对应一场比赛。
-    特征 = 主队统计 + 客队统计 + H2H 统计 + 泊松期望 + 赔率隐含概率（如有）
-    标签 = full_time_result (H/D/A)
-    
+    特征 = 主队统计 + 客队统计 + H2H 统计 + 泊松期望 + 赔率隐含概率
+         + 赔率变动信号（B1）+ 赛程密集度（B2）+ 联赛排名差（B3）
+
     Args:
-        df: 历史比赛 DataFrame
-        team_stats: compute_team_stats 返回的球队统计字典
-        odds_df: 可选，赔率 DataFrame（含 home_team, away_team, match_date, home_odds, draw_odds, away_odds）
+        df: 历史比赛 DataFrame（按 match_datetime 排序）
+        team_stats: compute_team_stats 返回的字典（point_in_time=False 时使用）
+        odds_df: 赔率 DataFrame（赛前盘口）
+        opening_odds_df: 开盘赔率 DataFrame，含相同 key（B1 特征用）
+        standings_df: 排名 DataFrame，含 (league, team, position, points) (B3 特征用)
+        point_in_time: True 时对每场比赛只用赛前数据（防数据泄露）
+        lookback: 球队状态回看场次
     """
     rows = []
     feat_cols = [
@@ -305,7 +298,6 @@ def build_match_feature_matrix(df: pd.DataFrame, team_stats: dict, odds_df: pd.D
         'away_win_rate', 'away_draw_rate', 'away_loss_rate',
         'away_goals_scored_avg', 'away_goals_conceded_avg',
         'overall_win_rate', 'recent_form', 'goal_diff_avg',
-        # 新增特征
         'recent_form_3', 'recent_form_5',
         'scoring_trend', 'conceding_trend',
         'home_attack_strength', 'home_defense_strength',
@@ -313,27 +305,57 @@ def build_match_feature_matrix(df: pd.DataFrame, team_stats: dict, odds_df: pd.D
         'win_streak', 'loss_streak', 'unbeaten_run',
     ]
 
-    # 联赛平均进球（用于泊松期望计算）
-    league_home_avg = df['home_score'].mean() if not df.empty else 1.3
-    league_away_avg = df['away_score'].mean() if not df.empty else 1.1
+    df_sorted = df.sort_values('match_datetime').reset_index(drop=True)
 
-    # 构建赔率查找表（如果有赔率数据）
+    # 全局联赛平均进球（用于泊松期望，用全量没问题—只是分母）
+    league_home_avg = df_sorted['home_score'].mean() if not df_sorted.empty else 1.3
+    league_away_avg = df_sorted['away_score'].mean() if not df_sorted.empty else 1.1
+
+    # 构建赔率查找表（赛前盘口）
     odds_lookup = {}
     if odds_df is not None and not odds_df.empty:
         for _, o in odds_df.iterrows():
             key = (str(o.get('home_team', '')), str(o.get('away_team', '')), str(o.get('match_date', '')))
             odds_lookup[key] = (o.get('home_odds'), o.get('draw_odds'), o.get('away_odds'))
 
-    for _, match in df.iterrows():
+    # B1: 开盘赔率查找表（用于计算赔率变动方向）
+    opening_odds_lookup = {}
+    if opening_odds_df is not None and not opening_odds_df.empty:
+        for _, o in opening_odds_df.iterrows():
+            key = (str(o.get('home_team', '')), str(o.get('away_team', '')), str(o.get('match_date', '')))
+            opening_odds_lookup[key] = (o.get('home_odds'), o.get('draw_odds'), o.get('away_odds'))
+
+    # B3: 联赛排名查找表 {(league, team): (position, points)}
+    standings_lookup = {}
+    if standings_df is not None and not standings_df.empty:
+        for _, s in standings_df.iterrows():
+            standings_lookup[(str(s.get('league', '')), str(s.get('team', '')))] = (
+                int(s.get('position', 0)), int(s.get('points', 0))
+            )
+
+    for i, match in df_sorted.iterrows():
         ht = match['home_team']
         at = match['away_team']
 
-        if ht not in team_stats or at not in team_stats:
-            continue
+        if point_in_time:
+            # A2/A3 fix: 只用该场比赛之前的历史数据
+            match_dt = match['match_datetime']
+            df_before = df_sorted[df_sorted['match_datetime'] < match_dt]
+            if len(df_before) < 5:
+                continue  # 数据太少，跳过（避免早期比赛噪声）
+            team_stats_pit = compute_team_stats(df_before, lookback=lookback)
+            h2h = compute_h2h(df_before, ht, at)
+            hs = team_stats_pit.get(ht)
+            as_ = team_stats_pit.get(at)
+        else:
+            if team_stats is None:
+                raise ValueError("team_stats must be provided when point_in_time=False")
+            h2h = compute_h2h(df_sorted, ht, at)
+            hs = team_stats.get(ht)
+            as_ = team_stats.get(at)
 
-        hs = team_stats[ht]
-        as_ = team_stats[at]
-        h2h = compute_h2h(df, ht, at)
+        if hs is None or as_ is None:
+            continue
 
         row = {
             'match_id':   match['match_id'],
@@ -406,6 +428,69 @@ def build_match_feature_matrix(df: pd.DataFrame, team_stats: dict, odds_df: pd.D
             row['odds_overround'] = 0.0
             row['odds_favorite_overbet'] = 0
             row['has_odds'] = 0
+
+        # ── B1: 赔率变动信号（开盘 vs 赛前，market movement）──────────
+        match_date_str = str(match.get('match_date', ''))
+        o_key = (ht, at, match_date_str)
+        if o_key in opening_odds_lookup and o_key in odds_lookup:
+            op_h, op_d, op_a = opening_odds_lookup[o_key]
+            cl_h, cl_d, cl_a = odds_lookup[o_key]
+            if op_h and cl_h and op_d and cl_d and op_a and cl_a:
+                op_h, op_d, op_a = float(op_h), float(op_d), float(op_a)
+                cl_h, cl_d, cl_a = float(cl_h), float(cl_d), float(cl_a)
+                # 正数 = 赔率上升（弱化），负数 = 赔率下降（强化/看好）
+                row['odds_move_home'] = round(cl_h - op_h, 3)
+                row['odds_move_draw'] = round(cl_d - op_d, 3)
+                row['odds_move_away'] = round(cl_a - op_a, 3)
+                # 市场资金方向信号：-1=看好主队, 0=中性, 1=看好客队
+                home_shortened = cl_h < op_h - 0.05
+                away_shortened = cl_a < op_a - 0.05
+                row['market_signal'] = -1 if home_shortened and not away_shortened else (
+                    1 if away_shortened and not home_shortened else 0
+                )
+            else:
+                row['odds_move_home'] = 0.0
+                row['odds_move_draw'] = 0.0
+                row['odds_move_away'] = 0.0
+                row['market_signal'] = 0
+        else:
+            row['odds_move_home'] = 0.0
+            row['odds_move_draw'] = 0.0
+            row['odds_move_away'] = 0.0
+            row['market_signal'] = 0
+
+        # ── B2: 赛程密集度（过去7天已踢场次）───────────────────────────
+        if point_in_time:
+            df_ref = df_before
+        else:
+            df_ref = df_sorted
+        match_dt_val = match.get('match_datetime')
+        if match_dt_val is not None:
+            seven_days_ago = match_dt_val - pd.Timedelta(days=7)
+            home_load = len(df_ref[
+                (df_ref['match_datetime'] >= seven_days_ago) &
+                (df_ref['match_datetime'] < match_dt_val) &
+                ((df_ref['home_team'] == ht) | (df_ref['away_team'] == ht))
+            ])
+            away_load = len(df_ref[
+                (df_ref['match_datetime'] >= seven_days_ago) &
+                (df_ref['match_datetime'] < match_dt_val) &
+                ((df_ref['home_team'] == at) | (df_ref['away_team'] == at))
+            ])
+        else:
+            home_load = away_load = 0
+        row['home_schedule_load'] = home_load
+        row['away_schedule_load'] = away_load
+        row['diff_schedule_load'] = home_load - away_load
+
+        # ── B3: 联赛内排名差（主队排名 - 客队排名，负数 = 主队领先）─────
+        league_name = match.get('league_name', '')
+        h_pos, h_pts = standings_lookup.get((league_name, ht), (0, 0))
+        a_pos, a_pts = standings_lookup.get((league_name, at), (0, 0))
+        row['home_league_position'] = h_pos
+        row['away_league_position'] = a_pos
+        row['diff_league_position'] = h_pos - a_pos   # 负数 = 主队名次更高
+        row['diff_league_points']   = h_pts - a_pts   # 正数 = 主队积分更多
 
         rows.append(row)
 

@@ -1629,25 +1629,33 @@ function renderRecordMatchCard(m) {
   const predScoreDisplay = predScore || '-';
   const actualScoreDisplay = m.actual_score || '-';
 
+  // A5-fix: 三态展示 true=命中 false=未命中 null=未评估
   const resultHit = m.result_correct === true;
+  const resultEvaluated = m.result_correct !== null && m.result_correct !== undefined;
   // 比分命中：后端有就用，没有就前端算
   let scoreHit = m.score_correct;
   if (scoreHit == null && predScore && m.actual_score) {
     scoreHit = (predScore === m.actual_score);
   }
   // 总进球误差
+  // E3-fix: goal_diff_error = 净胜球预测误差（|pred_diff - actual_diff|）
   let goalErr = m.goal_diff_error;
   if (goalErr == null && realTotal != null && predTotal != null) {
-    goalErr = Math.abs(realTotal - predTotal);
+    // 前端 fallback：用总进球差估算（精度低，仅显示用）
+    const predH = m.predicted_home_goals, predA = m.predicted_away_goals;
+    const actH  = m.actual_home_goals,    actA  = m.actual_away_goals;
+    if (predH != null && predA != null && actH != null && actA != null) {
+      goalErr = Math.abs((predH - predA) - (actH - actA));
+    }
   }
 
   const timeStr = m.match_time ? formatTime(m.match_time) : '-';
 
-  // 总进球命中显示
+  // 净胜球误差展示
   let goalHitDisplay = '-', goalHitClass = 'pr-hit-diff';
   if (goalErr != null) {
     if (goalErr === 0) { goalHitDisplay = '✅ 准确'; goalHitClass = 'pr-hit-ok'; }
-    else { goalHitDisplay = '差' + goalErr + '球'; }
+    else { goalHitDisplay = '净差' + goalErr + '球'; }
   }
 
   // 比分命中显示
@@ -1680,7 +1688,7 @@ function renderRecordMatchCard(m) {
           <td class="pr-td-label">胜平负</td>
           <td class="pr-td-actual">${escapeHtml(m.actual_result || '-')}</td>
           <td class="pr-td-pred">${escapeHtml(m.predicted_result || '-')}</td>
-          <td class="pr-td-hit"><span class="pr-hit-mark ${resultHit ? 'pr-hit-ok' : 'pr-hit-no'}">${resultHit ? '✅' : '❌'}</span></td>
+          <td class="pr-td-hit"><span class="pr-hit-mark ${!resultEvaluated ? 'pr-hit-diff' : (resultHit ? 'pr-hit-ok' : 'pr-hit-no')}">${!resultEvaluated ? '—' : (resultHit ? '✅' : '❌')}</span></td>
         </tr>
         <tr>
           <td class="pr-td-label">比分</td>
