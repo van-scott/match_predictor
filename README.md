@@ -134,8 +134,8 @@ python scripts/sync_daily_matches.py --test        # 测试数据库连接
 ### 定时任务（生产环境）
 
 ```bash
-0 8 * * *  cd /path/to/MatchPredict && python scripts/sync_daily_matches.py --days 3
-0 2 * * 0  cd /path/to/MatchPredict && python scripts/sync_daily_matches.py --cleanup 30
+0 8 * * *  cd /path/to/match_predictor && python scripts/sync_daily_matches.py --days 3
+0 2 * * 0  cd /path/to/match_predictor && python scripts/sync_daily_matches.py --cleanup 30
 ```
 
 ### 故障排除

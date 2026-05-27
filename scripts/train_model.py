@@ -450,7 +450,7 @@ def main():
     args = parser.parse_args()
 
     print("=" * 60)
-    print("🚀 MatchPredict ML 训练管道（增强版）")
+    print("🚀 match_predictor ML 训练管道（增强版）")
     print("   模型: RF + GB + XGBoost | 评估: TimeSeriesSplit")
     print("=" * 60)
 

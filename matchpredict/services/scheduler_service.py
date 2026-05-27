@@ -4,18 +4,14 @@ import atexit
 import logging
 import subprocess
 import sys
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.interval import IntervalTrigger
 
-logger = logging.getLogger('matchpredict.scheduler')
+logger = logging.getLogger('match predictor.scheduler')
 
 
 def setup_scheduler(app) -> None:
     """在 Flask 进程内启动数据同步定时任务。"""
-    try:
-        from apscheduler.schedulers.background import BackgroundScheduler
-        from apscheduler.triggers.interval import IntervalTrigger
-    except ImportError:
-        app.logger.warning('⚠️ APScheduler 未安装，定时任务不可用')
-        return
 
     python_bin = sys.executable
     scheduler = BackgroundScheduler()

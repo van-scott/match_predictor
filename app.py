@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-MatchPredict 入口 — 仅负责创建 Flask 应用并启动服务。
+match_predictor 入口 — 仅负责创建 Flask 应用并启动服务。
 
 架构：
   app.py                      控制层入口
@@ -20,5 +20,5 @@ app = create_app()
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8000))
     debug = os.environ.get('FLASK_DEBUG', '0') == '1'
-    app.logger.info('🚀 MatchPredict 启动 → http://0.0.0.0:%s', port)
+    app.logger.info('🚀 match_predictor 启动 → http://0.0.0.0:%s', port)
     app.run(debug=debug, host='0.0.0.0', port=port, use_reloader=False)
