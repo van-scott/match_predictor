@@ -159,7 +159,10 @@ def upsert_fixtures(fixtures: list, db) -> int:
                         CURRENT_TIMESTAMP
                     )
                     ON CONFLICT (fixture_id) DO UPDATE SET
-                        status      = EXCLUDED.status,
+                        status      = CASE
+                                        WHEN upcoming_fixtures.status = 'FINISHED' THEN upcoming_fixtures.status
+                                        ELSE EXCLUDED.status
+                                      END,
                         home_odds   = COALESCE(EXCLUDED.home_odds, upcoming_fixtures.home_odds),
                         draw_odds   = COALESCE(EXCLUDED.draw_odds, upcoming_fixtures.draw_odds),
                         away_odds   = COALESCE(EXCLUDED.away_odds, upcoming_fixtures.away_odds),

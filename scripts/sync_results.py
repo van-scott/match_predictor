@@ -47,36 +47,152 @@ HEADERS  = {"X-Auth-Token": API_KEY}
 LEAGUE_NAMES = {
     "PL":  "英超", "PD":  "西甲", "SA":  "意甲",
     "BL1": "德甲", "FL1": "法甲",
+    "CL":  "欧冠", "CLI": "解放者杯", "BSA": "巴甲",
 }
-DEFAULT_LEAGUES = ["PL", "PD", "SA", "BL1", "FL1"]
+DEFAULT_LEAGUES = ["PL", "PD", "SA", "BL1", "FL1", "CL", "CLI", "BSA"]
 
 
-def fetch_finished_matches(league_id: str, days_back: int = 7) -> list:
-    """拉取指定联赛最近 N 天已结束的比赛"""
+def fetch_finished_matches(league_id: str, days_back: int = 7,
+                           include_cancelled: bool = False) -> list:
+    """拉取指定联赛最近 N 天已结束（以及可选的取消/延期）的比赛"""
     now = datetime.now(timezone.utc)
     start = now - timedelta(days=days_back)
     url = f"{BASE_URL}/competitions/{league_id}/matches"
-    params = {
-        "status":   "FINISHED",
-        "dateFrom": start.strftime("%Y-%m-%d"),
-        "dateTo":   now.strftime("%Y-%m-%d"),
-    }
+    status_filters = ["FINISHED"]
+    if include_cancelled:
+        status_filters += ["CANCELLED", "POSTPONED"]
+
+    all_matches = []
+    for status_filter in status_filters:
+        params = {
+            "status":   status_filter,
+            "dateFrom": start.strftime("%Y-%m-%d"),
+            "dateTo":   now.strftime("%Y-%m-%d"),
+        }
+        try:
+            resp = requests.get(url, headers=HEADERS, params=params, timeout=15)
+            if resp.status_code == 200:
+                all_matches.extend(resp.json().get("matches", []))
+            elif resp.status_code == 429:
+                logger.warning("限速，等待60秒...")
+                time.sleep(60)
+                resp2 = requests.get(url, headers=HEADERS, params=params, timeout=15)
+                if resp2.status_code == 200:
+                    all_matches.extend(resp2.json().get("matches", []))
+            # 403/404 → skip silently (league not on free plan)
+        except Exception as e:
+            logger.error(f"拉取 {league_id} ({status_filter}) 失败: {e}")
+    logger.info(f"  {league_id}: 获取到 {len(all_matches)} 场比赛")
+    return all_matches
+
+
+def _sync_cancelled_postponed(matches: list, db) -> int:
+    """将取消/延期比赛的状态更新到数据库（无需计算准确率）"""
+    updated = 0
     try:
-        resp = requests.get(url, headers=HEADERS, params=params, timeout=15)
-        if resp.status_code == 200:
-            matches = resp.json().get("matches", [])
-            logger.info(f"  {league_id}: 获取到 {len(matches)} 场已结束比赛")
-            return matches
-        elif resp.status_code == 429:
-            logger.warning("限速，等待60秒...")
-            time.sleep(60)
-            return fetch_finished_matches(league_id, days_back)
-        else:
-            logger.warning(f"{league_id} HTTP {resp.status_code}: {resp.text[:200]}")
-            return []
+        with db.get_db_connection() as conn:
+            cur = conn.cursor()
+            for m in matches:
+                status = m.get("status", "")
+                if status not in ("CANCELLED", "POSTPONED"):
+                    continue
+                fixture_id = str(m.get("id", ""))
+                cur.execute("""
+                    UPDATE upcoming_fixtures SET status = %s, updated_at = CURRENT_TIMESTAMP
+                    WHERE fixture_id = %s AND status NOT IN ('FINISHED')
+                """, (status, fixture_id))
+                if cur.rowcount > 0:
+                    updated += 1
+            conn.commit()
     except Exception as e:
-        logger.error(f"拉取 {league_id} 失败: {e}")
-        return []
+        logger.error(f"更新取消/延期比赛失败: {e}")
+    return updated
+
+
+def sync_dm_results(db) -> int:
+    """
+    同步 dm_ 前缀（彩票来源）的已过时间比赛的实际结果。
+    优先用 OpenLigaDB（德国各级联赛免费）匹配，未来可扩展其他来源。
+    仅更新 status='SCHEDULED'/'TIMED' 且 match_time < NOW() 的比赛。
+    """
+    updated = 0
+    try:
+        with db.get_db_connection() as conn:
+            cur = conn.cursor()
+            # 查所有 dm_ 且已过时间但无实际结果的比赛
+            cur.execute("""
+                SELECT fixture_id, league_code, home_team, away_team, match_time
+                FROM upcoming_fixtures
+                WHERE fixture_id LIKE 'dm_%'
+                  AND actual_result IS NULL
+                  AND match_time < NOW() - INTERVAL '3 hours'
+                ORDER BY match_time DESC LIMIT 50
+            """)
+            pending = cur.fetchall()
+            if not pending:
+                return 0
+
+            # 从 OpenLigaDB 拉取近期德国联赛结果（免费，覆盖 BL1/BL2/BL3/rel）
+            ol_results = {}  # (team1_norm, team2_norm) -> (s1, s2)
+            for league_shortcut in ('bl1', 'bl2', 'bl3', 'rel'):
+                try:
+                    resp = requests.get(
+                        f"https://api.openligadb.de/getmatchdata/{league_shortcut}/2025",
+                        timeout=10
+                    )
+                    if resp.status_code != 200:
+                        continue
+                    for m in resp.json():
+                        if not m.get('matchIsFinished'):
+                            continue
+                        t1 = m.get('team1', {}).get('teamName', '').lower()
+                        t2 = m.get('team2', {}).get('teamName', '').lower()
+                        results = m.get('matchResults', [])
+                        final = next((r for r in results if r.get('resultTypeID') == 2), None)
+                        if final:
+                            ol_results[(t1, t2)] = (final['pointsTeam1'], final['pointsTeam2'])
+                except Exception:
+                    pass
+
+            def _norm(name: str) -> str:
+                import unicodedata
+                s = unicodedata.normalize('NFKD', name)
+                s = ''.join(c for c in s if not unicodedata.combining(c))
+                # Remove common prefixes/suffixes
+                import re
+                s = re.sub(r'^(FC|SC|VfB|VfL|SpVgg|SSV|SV|TSV|RB|1\.|Rot.Weiss)\s+', '', s, flags=re.I)
+                s = re.sub(r'\s+(FC|SC|e\.V\.)$', '', s, flags=re.I)
+                return s.strip().lower()
+
+            for fid, lc, home, away, match_time in pending:
+                home_n, away_n = _norm(home), _norm(away)
+                score = None
+                # Try exact match in OpenLigaDB results
+                for (t1, t2), (s1, s2) in ol_results.items():
+                    if (home_n in t1 or t1 in home_n) and (away_n in t2 or t2 in away_n):
+                        score = (s1, s2)
+                        break
+                    if (away_n in t1 or t1 in away_n) and (home_n in t2 or t2 in home_n):
+                        score = (s2, s1)  # reversed
+                        break
+                if score is None:
+                    continue
+                hg, ag = score
+                ar = 'H' if hg > ag else ('D' if hg == ag else 'A')
+                cur.execute("""
+                    UPDATE upcoming_fixtures SET
+                        status = 'FINISHED', actual_home_goals = %s, actual_away_goals = %s,
+                        actual_result = %s, finished_at = CURRENT_TIMESTAMP,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE fixture_id = %s
+                """, (hg, ag, ar, fid))
+                if cur.rowcount > 0:
+                    logger.info(f"  ✅ dm 结果 {home} {hg}-{ag} {away}")
+                    updated += 1
+            conn.commit()
+    except Exception as e:
+        logger.error(f"同步 dm_ 比赛结果失败: {e}", exc_info=True)
+    return updated
 
 
 def backfill_results(matches: list, league_code: str, db) -> dict:
@@ -92,6 +208,8 @@ def backfill_results(matches: list, league_code: str, db) -> dict:
             cur = conn.cursor()
 
             for m in matches:
+                if m.get("status") in ("CANCELLED", "POSTPONED"):
+                    continue  # 取消/延期由 _sync_cancelled_postponed 处理
                 fixture_id = str(m.get("id", ""))
                 score = m.get("score", {})
                 ft = score.get("fullTime", {})
@@ -229,11 +347,14 @@ def backfill_results(matches: list, league_code: str, db) -> dict:
 
 def generate_predicted_scores(db):
     """
-    为有 ML 概率但无预测比分的比赛，用泊松模型推算预测比分。
+    为有 ML 概率（或赔率）但无预测比分/概率的比赛，推算 ML 概率和预测比分。
+    对于 dm_ 前缀的彩票来源比赛，从赔率推算隐含概率，使其能进入预测回顾。
     """
     try:
         with db.get_db_connection() as conn:
             cur = conn.cursor()
+
+            # 1. 有 ML 概率但无预测比分 → 推算比分
             cur.execute("""
                 SELECT fixture_id, ml_home_prob, ml_away_prob
                 FROM upcoming_fixtures
@@ -244,23 +365,101 @@ def generate_predicted_scores(db):
             updated = 0
             for fix_id, ml_h, ml_a in rows:
                 ph, pa = float(ml_h), float(ml_a)
-                # 简单泊松均值 → 预测比分
                 lam_h = max(-math.log(max(1 - ph, 0.01)) * 1.5, 0.3)
                 lam_a = max(-math.log(max(1 - pa, 0.01)) * 1.5, 0.3)
                 pred_h = min(round(lam_h), 5)
                 pred_a = min(round(lam_a), 5)
                 cur.execute("""
                     UPDATE upcoming_fixtures SET
-                        predicted_home_goals = %s,
-                        predicted_away_goals = %s
+                        predicted_home_goals = %s, predicted_away_goals = %s
                     WHERE fixture_id = %s
                 """, (pred_h, pred_a, fix_id))
                 updated += 1
+
+            # 2. 无 ML 概率但有赔率 → 从赔率推算隐含概率（用于彩票来源 dm_ 比赛）
+            cur.execute("""
+                SELECT fixture_id, home_odds, draw_odds, away_odds
+                FROM upcoming_fixtures
+                WHERE ml_home_prob IS NULL
+                  AND home_odds IS NOT NULL AND draw_odds IS NOT NULL AND away_odds IS NOT NULL
+                  AND match_time < NOW()
+            """)
+            odds_rows = cur.fetchall()
+            for fix_id, ho, do_, ao in odds_rows:
+                try:
+                    rh, rd, ra = 1/float(ho), 1/float(do_), 1/float(ao)
+                    total = rh + rd + ra
+                    ph, pd, pa = rh/total, rd/total, ra/total
+                    lam_h = max(-math.log(max(1-ph, 0.01))*1.5, 0.3)
+                    lam_a = max(-math.log(max(1-pa, 0.01))*1.5, 0.3)
+                    pred_h = min(round(lam_h), 5)
+                    pred_a = min(round(lam_a), 5)
+                    cur.execute("""
+                        UPDATE upcoming_fixtures SET
+                            ml_home_prob = %s, ml_draw_prob = %s, ml_away_prob = %s,
+                            predicted_home_goals = COALESCE(predicted_home_goals, %s),
+                            predicted_away_goals = COALESCE(predicted_away_goals, %s)
+                        WHERE fixture_id = %s
+                    """, (ph, pd, pa, pred_h, pred_a, fix_id))
+                    updated += 1
+                except Exception:
+                    pass
+
             conn.commit()
             if updated:
-                logger.info(f"📊 为 {updated} 场比赛生成了预测比分")
+                logger.info(f"📊 为 {updated} 场比赛生成/补全了预测概率和比分")
     except Exception as e:
         logger.error(f"生成预测比分失败: {e}")
+
+
+def _backfill_ml_predicted_result(db):
+    """补全：有实际结果 + 有 ML 概率但缺 ml_predicted_result 的比赛"""
+    try:
+        with db.get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT fixture_id, ml_home_prob, ml_draw_prob, ml_away_prob,
+                       predicted_home_goals, predicted_away_goals,
+                       actual_home_goals, actual_away_goals, actual_result
+                FROM upcoming_fixtures
+                WHERE actual_result IS NOT NULL
+                  AND ml_home_prob IS NOT NULL
+                  AND ml_predicted_result IS NULL
+            """)
+            rows = cur.fetchall()
+            fixed = 0
+            for r in rows:
+                fid, mlh, mld, mla, phg, pag, ahg, aag, ar = r
+                mlh, mld, mla = float(mlh), float(mld), float(mla)
+                if mlh >= mld and mlh >= mla:
+                    ml_pred = 'H'
+                elif mld >= mlh and mld >= mla:
+                    ml_pred = 'D'
+                else:
+                    ml_pred = 'A'
+                if phg is None:
+                    lam_h = max(-math.log(max(1-mlh, 0.01))*1.5, 0.3)
+                    phg = min(round(lam_h), 5)
+                if pag is None:
+                    lam_a = max(-math.log(max(1-mla, 0.01))*1.5, 0.3)
+                    pag = min(round(lam_a), 5)
+                rc = (ml_pred == ar)
+                sc = (phg == int(ahg) and pag == int(aag)) if ahg is not None else None
+                gde = abs((phg + pag) - (int(ahg) + int(aag))) if ahg is not None else None
+                cur.execute("""
+                    UPDATE upcoming_fixtures SET
+                        ml_predicted_result = %s, result_correct = %s,
+                        score_correct = %s, goal_diff_error = %s,
+                        predicted_home_goals = COALESCE(predicted_home_goals, %s),
+                        predicted_away_goals = COALESCE(predicted_away_goals, %s)
+                    WHERE fixture_id = %s
+                """, (ml_pred, rc, sc, gde, phg, pag, fid))
+                fixed += 1
+            conn.commit()
+            if fixed:
+                logger.info(f"📊 补全 {fixed} 场比赛的 ml_predicted_result")
+    except Exception as e:
+        logger.error(f"补全 ml_predicted_result 失败: {e}")
 
 
 def print_accuracy_summary(db):
@@ -321,6 +520,8 @@ def main():
     parser = argparse.ArgumentParser(description="同步已结束比赛真实比分 + 计算预测准确率")
     parser.add_argument("--leagues", default=",".join(DEFAULT_LEAGUES))
     parser.add_argument("--days", type=int, default=7, help="回溯天数")
+    parser.add_argument("--with-cancelled", action="store_true",
+                        help="同时同步取消/延期比赛状态（每小时跑一次即可）")
     args = parser.parse_args()
 
     from scripts.database import prediction_db as db
@@ -332,19 +533,32 @@ def main():
     print(f"   联赛: {', '.join(leagues)}  |  回溯 {args.days} 天")
     print("=" * 60)
 
-    # 先生成预测比分
+    # 先生成预测比分（含从赔率推算概率）
     generate_predicted_scores(db)
+
+    # 同步彩票来源(dm_)的比赛结果（OpenLigaDB for German leagues）
+    dm_updated = sync_dm_results(db)
+    if dm_updated:
+        logger.info(f"✅ dm_ 比赛结果同步: {dm_updated} 场")
+
+    # 补全：有实际结果 + 有概率 但缺 ml_predicted_result 的比赛
+    _backfill_ml_predicted_result(db)
 
     total_stats = {'updated': 0, 'inserted': 0, 'correct': 0, 'score_hit': 0, 'total_checked': 0}
 
     for league_id in leagues:
         logger.info(f"📥 {LEAGUE_NAMES.get(league_id, league_id)} ({league_id})")
-        raw = fetch_finished_matches(league_id, args.days)
+        raw = fetch_finished_matches(league_id, args.days,
+                                     include_cancelled=args.with_cancelled)
         if raw:
+            if args.with_cancelled:
+                cancelled = _sync_cancelled_postponed(raw, db)
+                if cancelled:
+                    logger.info(f"  {league_id}: 标记 {cancelled} 场取消/延期")
             s = backfill_results(raw, league_id, db)
             for k in total_stats:
                 total_stats[k] += s[k]
-        time.sleep(7)  # 免费版限速
+        time.sleep(6)  # 免费版限速（8联赛 × 6s ≈ 48s，节省API额度）
 
     print(f"\n✅ 同步完成: 更新 {total_stats['updated']} 场, 新插入 {total_stats['inserted']} 场")
     if total_stats['total_checked'] > 0:

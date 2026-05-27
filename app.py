@@ -2415,8 +2415,6 @@ def get_upcoming_matches():
                 'away_team_display': f"{at_cn}({at})" if at_cn else at,
                 'match_time':        mt.isoformat() if mt else None,
                 'matchday':          matchday,
-                'predicted_home_goals': int(pred_hg) if pred_hg is not None else None,
-                'predicted_away_goals': int(pred_ag) if pred_ag is not None else None,
                 'current_odds': {
                     'home': float(h_odds) if h_odds else None,
                     'draw': float(d_odds) if d_odds else None,
@@ -2430,6 +2428,9 @@ def get_upcoming_matches():
                 'odds_movement': odds_movement,
                 'ml_prediction': ml_pred,
             }
+            pg_home, pg_away = _calc_predicted_goals(pred_hg, pred_ag, ml_pred, h_odds, d_odds, a_odds)
+            match_info['predicted_home_goals'] = pg_home
+            match_info['predicted_away_goals'] = pg_away
             matches.append(match_info)
 
         return jsonify({
@@ -2443,6 +2444,33 @@ def get_upcoming_matches():
     except Exception as e:
         app.logger.error(f"获取未开赛比赛失败: {e}", exc_info=True)
         return jsonify({'success': False, 'message': str(e)}), 500
+
+
+def _calc_predicted_goals(db_home, db_away, ml_pred, h_odds, d_odds, a_odds):
+    """
+    推算预测比分（整数进球数），优先级：
+    1. DB 已有预测比分（ML 泊松推算）
+    2. ML 概率（来自 odds_fallback 或真实 ML）→ 泊松推算
+    3. 无数据 → (None, None)
+    """
+    import math
+    if db_home is not None and db_away is not None:
+        return int(db_home), int(db_away)
+    # 从概率用简单泊松均值推算
+    ph = pa = None
+    if ml_pred:
+        ph = ml_pred.get('home_prob')
+        pa = ml_pred.get('away_prob')
+    elif h_odds and d_odds and a_odds:
+        rh = 1 / float(h_odds)
+        ra = 1 / float(a_odds)
+        tot = rh + 1 / float(d_odds) + ra
+        ph, pa = rh / tot, ra / tot
+    if ph and pa:
+        lam_h = max(-math.log(max(1 - float(ph), 0.01)) * 1.5, 0.3)
+        lam_a = max(-math.log(max(1 - float(pa), 0.01)) * 1.5, 0.3)
+        return min(round(lam_h), 5), min(round(lam_a), 5)
+    return None, None
 
 
 def _interpret_odds_signal(open_odds: float, current_odds: float) -> str:
@@ -2705,14 +2733,14 @@ def accuracy_summary():
                         'accuracy': round(corr / pred * 100, 1),
                     })
 
-            # 最近趋势（按天聚合）
+            # 最近趋势（按比赛日期聚合，转北京时间）
             cur.execute("""
-                SELECT DATE(finished_at) AS day,
+                SELECT DATE(match_time AT TIME ZONE 'Asia/Shanghai') AS day,
                     COUNT(*) AS total,
                     COUNT(*) FILTER (WHERE result_correct = true) AS correct
                 FROM upcoming_fixtures
-                WHERE actual_result IS NOT NULL AND ml_predicted_result IS NOT NULL AND finished_at IS NOT NULL
-                GROUP BY DATE(finished_at)
+                WHERE actual_result IS NOT NULL AND ml_predicted_result IS NOT NULL
+                GROUP BY DATE(match_time AT TIME ZONE 'Asia/Shanghai')
                 ORDER BY day DESC LIMIT 14
             """)
             trend = [{'date': str(r[0]), 'total': r[1], 'correct': r[2],
@@ -3005,32 +3033,49 @@ def _setup_scheduler():
         PYTHON_BIN = sys.executable
 
         def job_sync_results():
-            """每10分钟检查比赛结果是否出来，同步到数据库"""
+            """每10分钟检查比赛结果（PL/PD/SA/BL1/FL1/CL/CLI/BSA 8联赛，回溯7天）"""
             try:
                 import subprocess
                 result = subprocess.run(
-                    [PYTHON_BIN, 'scripts/sync_results.py', '--days', '3'],
+                    [PYTHON_BIN, 'scripts/sync_results.py', '--days', '7'],
                     capture_output=True, text=True, timeout=300
                 )
                 if result.returncode == 0:
-                    if '更新 0 场' not in result.stdout and '新插入 0 场' not in result.stdout:
+                    stdout = result.stdout
+                    if '更新 0 场' not in stdout or '新插入 0 场' not in stdout:
                         app.logger.info(f"✅ [定时] 比赛结果已同步")
                 else:
-                    # 只在真正出错时打印，忽略"无新数据"的情况
                     stderr = result.stderr.strip()
                     if stderr and 'No matches' not in stderr:
                         app.logger.error(f"❌ [定时] 同步失败: {stderr[:200]}")
             except subprocess.TimeoutExpired:
-                pass  # 超时静默跳过
+                pass
             except Exception as e:
                 app.logger.error(f"❌ [定时] 同步异常: {e}")
 
-        def job_sync_upcoming():
-            """每60分钟同步未来赛程 + 赔率（含巴甲/解放者杯等全年联赛）"""
+        def job_sync_results_full():
+            """每60分钟完整同步，含取消/延期状态"""
             try:
                 import subprocess
                 result = subprocess.run(
-                    [PYTHON_BIN, 'scripts/sync_upcoming.py', '--days', '14', '--no-ml'],
+                    [PYTHON_BIN, 'scripts/sync_results.py', '--days', '7', '--with-cancelled'],
+                    capture_output=True, text=True, timeout=360
+                )
+                if result.returncode != 0:
+                    stderr = result.stderr.strip()
+                    if stderr:
+                        app.logger.error(f"❌ [定时] 结果完整同步失败: {stderr[:200]}")
+            except subprocess.TimeoutExpired:
+                pass
+            except Exception as e:
+                app.logger.error(f"❌ [定时] 结果完整同步异常: {e}")
+
+        def job_sync_upcoming():
+            """每60分钟同步未来赛程 + 赔率 + ML预测比分（含巴甲/解放者杯等全年联赛）"""
+            try:
+                import subprocess
+                result = subprocess.run(
+                    [PYTHON_BIN, 'scripts/sync_upcoming.py', '--days', '14'],
                     capture_output=True, text=True, timeout=600
                 )
                 if result.returncode == 0:
@@ -3067,13 +3112,13 @@ def _setup_scheduler():
             except Exception as e:
                 app.logger.error(f"❌ [定时] 彩票赛事同步异常: {e}")
 
-        # 每 10 分钟检查比赛结果
+        # 每 10 分钟检查比赛结果（8大联赛，回溯7天）
         scheduler.add_job(job_sync_results, IntervalTrigger(minutes=10),
                           id='sync_results', replace_existing=True)
 
-        # 每 10 分钟检查比赛结果
-        scheduler.add_job(job_sync_results, IntervalTrigger(minutes=10),
-                          id='sync_results', replace_existing=True)
+        # 每 60 分钟完整同步（含取消/延期状态清理）
+        scheduler.add_job(job_sync_results_full, IntervalTrigger(minutes=60),
+                          id='sync_results_full', replace_existing=True)
 
         # 每 60 分钟同步未来赛程 + 赔率
         scheduler.add_job(job_sync_upcoming, IntervalTrigger(minutes=60),
@@ -3085,8 +3130,9 @@ def _setup_scheduler():
 
         scheduler.start()
         app.logger.info("📅 定时任务已启动:")
-        app.logger.info(f"   • sync_results       每10分钟 — 比赛结果（使用 {PYTHON_BIN}）")
-        app.logger.info("   • sync_upcoming      每60分钟 — 未来赛程 + 赔率（五大联赛+巴甲/解放者杯等）")
+        app.logger.info(f"   • sync_results       每10分钟 — 比赛结果（8联赛，使用 {PYTHON_BIN}）")
+        app.logger.info("   • sync_results_full  每60分钟 — 含取消/延期状态清理")
+        app.logger.info("   • sync_upcoming      每60分钟 — 未来赛程 + 赔率")
         app.logger.info("   • sync_daily_matches 每10分钟 — 彩票模式当日赛事")
 
         # 注册 Flask 退出时关闭 scheduler
