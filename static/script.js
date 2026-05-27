@@ -8,7 +8,7 @@ let aiCart = [];
 let recordState = {
   page: 1, perPage: 20, league: '', result: '',
   loading: false, loaded: false,
-  summary: null, matchesPayload: null,
+  summary: null, matchesPayload: null, evalPayload: null,
 };
 
 // ── INIT ──────────────────────────────────────────────────────────────────
@@ -1465,13 +1465,15 @@ async function loadRecord() {
   if (contentEl) contentEl.hidden = true;
 
   try {
-    const [summaryData, matchesData] = await Promise.all([
+    const [summaryData, matchesData, evalData] = await Promise.all([
       loadRecordSummary(),
-      loadRecordMatchesInternal()
+      loadRecordMatchesInternal(),
+      loadRecordEval(),
     ]);
     recordState.summary = summaryData;
     recordState.matchesPayload = matchesData;
-    renderRecord(summaryData, matchesData);
+    recordState.evalPayload = evalData;
+    renderRecord(summaryData, matchesData, evalData);
   } catch (err) {
     renderRecordError(err.message || '加载失败');
   } finally {
@@ -1486,6 +1488,17 @@ async function loadRecordSummary() {
   const data = await res.json();
   if (!data.success) throw new Error(data.message || '获取统计失败');
   return data;
+}
+
+async function loadRecordEval() {
+  try {
+    const res = await fetch('/api/accuracy/eval?days=30');
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.success ? data : null;
+  } catch (_) {
+    return null;
+  }
 }
 
 async function loadRecordMatchesInternal() {
@@ -1518,7 +1531,7 @@ function escapeHtml(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function renderRecord(summaryData, matchesData) {
+function renderRecord(summaryData, matchesData, evalData) {
   const statusEl = document.getElementById('pr-status');
   const contentEl = document.getElementById('pr-content');
   const summary = summaryData.summary || {};
@@ -1534,6 +1547,7 @@ function renderRecord(summaryData, matchesData) {
   renderRecordStats(summary);
   renderRecordLeagues(summaryData.league_stats || []);
   renderRecordTrend(summaryData.trend || []);
+  renderRecordEval(evalData);
   renderRecordList(matchesData.matches || []);
   renderRecordPagination(matchesData.total || 0, matchesData.page || 1, matchesData.per_page || 20);
 }
@@ -1592,6 +1606,77 @@ function renderRecordTrend(trend) {
       const h = Math.max(((t.correct||0)/maxTotal)*100, 5);
       return `<div class="pr-trend-bar" style="height:${h}%" title="${t.date}: ${t.correct}/${t.total} (${t.accuracy}%)"><span class="pr-trend-label">${t.date?t.date.slice(5):''}</span></div>`;
     }).join('') + '</div>';
+}
+
+function renderRecordEval(evalData) {
+  const el = document.getElementById('pr-eval');
+  if (!el) return;
+  const latest = evalData && evalData.latest;
+  if (!latest) { el.hidden = true; return; }
+  el.hidden = false;
+
+  const snapTime = latest.snapshot_at
+    ? new Date(latest.snapshot_at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : '-';
+  const periodLabel = latest.period_days ? `最近 ${latest.period_days} 天` : '全量';
+
+  const clsRows = ['H', 'D', 'A'].map(cls => {
+    const m = latest.metrics[cls] || {};
+    const label = cls === 'H' ? '主胜' : cls === 'D' ? '平局' : '客胜';
+    const brier = latest.brier && latest.brier[cls] != null ? latest.brier[cls].toFixed(3) : '-';
+    return `<tr>
+      <td class="pr-eval-cls">${label}</td>
+      <td>${m.precision != null ? (m.precision * 100).toFixed(1) + '%' : '-'}</td>
+      <td>${m.recall != null ? (m.recall * 100).toFixed(1) + '%' : '-'}</td>
+      <td><strong>${m.f1 != null ? (m.f1 * 100).toFixed(1) + '%' : '-'}</strong></td>
+      <td class="pr-eval-brier">${brier}</td>
+    </tr>`;
+  }).join('');
+
+  const relH = (latest.reliability && latest.reliability.H) || [];
+  const relChart = relH.length ? relH.map(b => {
+    const predH = Math.max(b.pred_prob * 100, 2);
+    const actH = Math.max(b.actual_rate * 100, 2);
+    const ok = Math.abs(b.actual_rate - b.pred_prob) < 0.05;
+    return `<div class="pr-rel-bin" title="预测 ${(b.pred_prob*100).toFixed(0)}% / 实际 ${(b.actual_rate*100).toFixed(0)}% (n=${b.count})">
+      <div class="pr-rel-bars">
+        <div class="pr-rel-bar pr-rel-pred" style="height:${predH}%"></div>
+        <div class="pr-rel-bar pr-rel-act ${ok ? 'pr-rel-ok' : ''}" style="height:${actH}%"></div>
+      </div>
+      <span class="pr-rel-label">${Math.round(b.bin_mid * 100)}%</span>
+    </div>`;
+  }).join('') : '<p class="pr-eval-muted">样本不足，暂无校准数据</p>';
+
+  const history = (evalData.history || []).filter(h => h.accuracy != null);
+  const histChart = history.length > 1 ? history.map(h => {
+    const hPct = Math.max(h.accuracy, 8);
+    const t = h.snapshot_at ? h.snapshot_at.slice(5, 10) : '';
+    return `<div class="pr-eval-hist-bar" style="height:${hPct}%" title="${t}: ${h.accuracy}% (${h.total}场)"><span>${t}</span></div>`;
+  }).join('') : '';
+
+  el.innerHTML = `
+    <div class="pr-eval-head">
+      <h3><i class="fas fa-microscope"></i> ML 模型质量评估</h3>
+      <span class="pr-eval-meta">${periodLabel} · ${latest.total} 场 · 更新 ${snapTime}</span>
+    </div>
+    <div class="pr-eval-grid">
+      <div class="pr-eval-panel">
+        <div class="pr-eval-acc">${latest.accuracy != null ? latest.accuracy + '%' : '-'}</div>
+        <div class="pr-eval-acc-label">评估窗口命中率</div>
+      </div>
+      <div class="pr-eval-panel pr-eval-table-wrap">
+        <table class="pr-eval-table">
+          <thead><tr><th></th><th>精确率</th><th>召回率</th><th>F1</th><th>Brier↓</th></tr></thead>
+          <tbody>${clsRows}</tbody>
+        </table>
+      </div>
+    </div>
+    <div class="pr-eval-section">
+      <h4>主胜概率校准 <span class="pr-eval-hint">橙=预测概率 · 绿=实际命中率</span></h4>
+      <div class="pr-reliability">${relChart}</div>
+    </div>
+    ${histChart ? `<div class="pr-eval-section"><h4>评估快照趋势</h4><div class="pr-eval-history">${histChart}</div></div>` : ''}
+  `;
 }
 
 // ── 核心：比赛对比卡片（表格式布局，表头为"实际比分"和"预测比分"）──
