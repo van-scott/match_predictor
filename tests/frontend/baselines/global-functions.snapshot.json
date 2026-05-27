@@ -1,0 +1,26 @@
+{
+  "switchTab": {
+    "exists": true,
+    "length": 1
+  },
+  "fetchTeams": {
+    "exists": true,
+    "length": 0
+  },
+  "runClassic": {
+    "exists": true,
+    "length": 0
+  },
+  "runAI": {
+    "exists": true,
+    "length": 0
+  },
+  "loadLotteryMatches": {
+    "exists": true,
+    "length": 0
+  },
+  "loadSmartMatches": {
+    "exists": true,
+    "length": 0
+  }
+}

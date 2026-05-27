@@ -1,0 +1,2233 @@
+{
+  "rules": [
+    {
+      "selector": ":root",
+      "context": "",
+      "bodyHash": "34d8960ef9c9901d47595b784441f7ee2b94d2e25e7c2cab761656552b63e00c",
+      "bodyLength": 963
+    },
+    {
+      "selector": "*",
+      "context": "",
+      "bodyHash": "173a55de6b85d94314b81f89149de5457b3561ed9a0ec24849ce73ee9779c893",
+      "bodyLength": 60
+    },
+    {
+      "selector": "body",
+      "context": "",
+      "bodyHash": "ae9d13937d5a5e2c6bb638cc006520da372474f2517ca867dbf076ad5b3b566d",
+      "bodyLength": 275
+    },
+    {
+      "selector": ".navbar",
+      "context": "",
+      "bodyHash": "3434c3ef28c5b44ac1717382f5c5209d33774bef734d1ece0dcd96aa110f69ed",
+      "bodyLength": 217
+    },
+    {
+      "selector": ".nav-container",
+      "context": "",
+      "bodyHash": "3bb423bf90dbcd12490dbf390fb22f49206c7cca2e090a3ceca061453e109160",
+      "bodyLength": 163
+    },
+    {
+      "selector": ".nav-brand",
+      "context": "",
+      "bodyHash": "f537d5d17ab2b204738ec218eecb9b4519529da31b1355229a95ce347ae4883e",
+      "bodyLength": 141
+    },
+    {
+      "selector": ".nav-brand i",
+      "context": "",
+      "bodyHash": "da94905b738e651dce68c23589d17d277854195cd2cadf3992f46479ce64a0a9",
+      "bodyLength": 24
+    },
+    {
+      "selector": ".nav-menu",
+      "context": "",
+      "bodyHash": "325add22566a74b43c8c0276167afc205e5e938acff27fc28a7d23293ed23e75",
+      "bodyLength": 80
+    },
+    {
+      "selector": ".nav-btn",
+      "context": "",
+      "bodyHash": "92c8c96393115fdb4743086ac5b4c79feb704c4b87387467ec9cf000c093380c",
+      "bodyLength": 318
+    },
+    {
+      "selector": ".nav-btn:hover",
+      "context": "",
+      "bodyHash": "42a73cd6cd1d90c3babb80c38ff23c25cef357852cf8f6d9fb837b995e1001bf",
+      "bodyLength": 110
+    },
+    {
+      "selector": ".nav-btn.active",
+      "context": "",
+      "bodyHash": "f8ec02c50c880c01f1f578e7e97980c8d18c3c0ffbf478cb872915f55944c3d3",
+      "bodyLength": 97
+    },
+    {
+      "selector": ".nav-btn i",
+      "context": "",
+      "bodyHash": "a44ab4f1ceca7c28954e74de9de792e70b884ee26e99c43b814de5719e19bfc3",
+      "bodyLength": 22
+    },
+    {
+      "selector": ".container",
+      "context": "",
+      "bodyHash": "fc5722d57e710b96cdffda706028cf65d282f96faf3e4a9778fb22382de853ac",
+      "bodyLength": 101
+    },
+    {
+      "selector": ".main-header",
+      "context": "",
+      "bodyHash": "335496b4d252c660fd950954fa64f68353d2236856119357d8b746dd45b2a57a",
+      "bodyLength": 26
+    },
+    {
+      "selector": ".header-layout",
+      "context": "",
+      "bodyHash": "3c57ceb6820eddf8bd817a0eac28e54831d180bda17edc3e5267ff8dc254aa23",
+      "bodyLength": 251
+    },
+    {
+      "selector": ".hero-section",
+      "context": "",
+      "bodyHash": "21b19f186951343a4233a99eb0f1e670be45a64068178b69bd410b940703c27e",
+      "bodyLength": 231
+    },
+    {
+      "selector": ".hero-section h1",
+      "context": "",
+      "bodyHash": "4f76bedf1daa2e4468c857cb836dc729e0e09807f9818cb3f640cce61820c737",
+      "bodyLength": 215
+    },
+    {
+      "selector": ".hero-section .subtitle",
+      "context": "",
+      "bodyHash": "f7b53067593162b65d7c9a38be113b379a119c18b6a52efd0d4cfaf6c3e0cfad",
+      "bodyLength": 117
+    },
+    {
+      "selector": ".success-cases",
+      "context": "",
+      "bodyHash": "7757f71fbedacedcb12f0b1e383939a84bcbe2d777f316249697343c6841206b",
+      "bodyLength": 127
+    },
+    {
+      "selector": ".success-cases h2",
+      "context": "",
+      "bodyHash": "f15ed2e2e2790e333b981b0cbcc2a0f10311a8c34bf49b5e2c54a2b381daf805",
+      "bodyLength": 218
+    },
+    {
+      "selector": ".success-cases h2 i",
+      "context": "",
+      "bodyHash": "2a225eb5da16f3fa2ba94e778aa4c454a0b97c97aa769efd9a840752a8665831",
+      "bodyLength": 44
+    },
+    {
+      "selector": ".cases-table-container",
+      "context": "",
+      "bodyHash": "4f9a8ee3cf7c6eb8578b482a09eb26acbc9d5f0302485f4565b687f02cbc1784",
+      "bodyLength": 116
+    },
+    {
+      "selector": ".cases-table",
+      "context": "",
+      "bodyHash": "ac32846e5526631e32130c25c266d88ae8e330fe57a8ec384df3f19f6e54e320",
+      "bodyLength": 104
+    },
+    {
+      "selector": ".cases-table th",
+      "context": "",
+      "bodyHash": "c15b62950048c0117e6ad0a60d95c2ac73bf0e2b5a26b6e35efad1c55adf8b61",
+      "bodyLength": 217
+    },
+    {
+      "selector": ".cases-table td",
+      "context": "",
+      "bodyHash": "79e79e28a2924c9190404917d7ff2b0a3c30b56597a6f65cc49c162b41bf27b0",
+      "bodyLength": 102
+    },
+    {
+      "selector": ".success-row:hover",
+      "context": "",
+      "bodyHash": "84552495323b40765973251774f0e07d0531bb6d07d9474fbc5bb98191be4ef8",
+      "bodyLength": 38
+    },
+    {
+      "selector": ".accuracy",
+      "context": "",
+      "bodyHash": "11cf30576433f91f52e3cc7b3d38c39c49e957b9a4b08b5908e7cbc519ab2e34",
+      "bodyLength": 77
+    },
+    {
+      "selector": ".match-code",
+      "context": "",
+      "bodyHash": "5a159dc28515b31b4c6816ca6073294ab11ad0b1fb3c27a3f4c3a091e36fe1f2",
+      "bodyLength": 154
+    },
+    {
+      "selector": ".prediction",
+      "context": "",
+      "bodyHash": "4c5e5986db903710d247a41b448e4c574ecb5936b15d6063eafd62091983dbf1",
+      "bodyLength": 99
+    },
+    {
+      "selector": ".prediction.win",
+      "context": "",
+      "bodyHash": "2dafee74de1edc221479717e442a7bcb9003c61c48d44519fc96d7e132825f1d",
+      "bodyLength": 74
+    },
+    {
+      "selector": ".prediction.draw",
+      "context": "",
+      "bodyHash": "83e1351d87478a1559c94ec21a046758b6794815d0b0a7e31a3183a7b4a018a1",
+      "bodyLength": 75
+    },
+    {
+      "selector": ".prediction.lose",
+      "context": "",
+      "bodyHash": "0272d1369da4ad9a3f97b4c246c96fcf4ba17524c7a050fec83037ce104d8ce3",
+      "bodyLength": 73
+    },
+    {
+      "selector": ".score",
+      "context": "",
+      "bodyHash": "b0e2c7d90ef59f260d54f48559cabc93b8c4bc290049a31b872867baa4de62dd",
+      "bodyLength": 144
+    },
+    {
+      "selector": ".odds",
+      "context": "",
+      "bodyHash": "449b8d9c01d3e4d41ef7651d5a52ddce6f1f239f91535bfdf47e43d69bb5495e",
+      "bodyLength": 148
+    },
+    {
+      "selector": ".cases-stats",
+      "context": "",
+      "bodyHash": "9bbf0d3fff8bb7ec63f7d0e2f548bbada9d0d5ad869119a6f97929ba362ef2d4",
+      "bodyLength": 100
+    },
+    {
+      "selector": ".stat-item",
+      "context": "",
+      "bodyHash": "bd64c4e42beef072b80e42a5e00374ebfe6360dce6e7b6f480db56841c55dfec",
+      "bodyLength": 216
+    },
+    {
+      "selector": ".stat-number",
+      "context": "",
+      "bodyHash": "e87e0dd9f3b9e5361dde4850d00fb9a5f8721dd1963b3cca471c3fbb1740308d",
+      "bodyLength": 105
+    },
+    {
+      "selector": ".stat-label",
+      "context": "",
+      "bodyHash": "092944fa6f118bcdf5e7fdc2cdcaec9b8fbc5baad1347885c0ab2207c36ba50a",
+      "bodyLength": 80
+    },
+    {
+      "selector": "main",
+      "context": "",
+      "bodyHash": "923bbf2353e0fe526af3699d3b96f4243b7ec19c2be0ca8fd992924615625ab0",
+      "bodyLength": 38
+    },
+    {
+      "selector": ".match-input-section",
+      "context": "",
+      "bodyHash": "9b50375ccc4e2ffd01ef8b07ab2c57438400de7e3f065cb37318c256d799b8a1",
+      "bodyLength": 186
+    },
+    {
+      "selector": ".match-input-section h2",
+      "context": "",
+      "bodyHash": "6cb02b2ca33d6eb605663980ca2297587bb927bb2b8d38a676a5807ff5c63c7a",
+      "bodyLength": 106
+    },
+    {
+      "selector": ".match-input-section.hidden",
+      "context": "",
+      "bodyHash": "ea0b3b474616b378fbab96d3f8afbd1dfcf5aba4cfd5d66dc05cabdbb6caadbc",
+      "bodyLength": 20
+    },
+    {
+      "selector": ".classic-layout",
+      "context": "",
+      "bodyHash": "77fee1ed3b2aa1c8e37d08efc1b74e737a6049df36b84b4491d11d4d9a0dcd48",
+      "bodyLength": 93
+    },
+    {
+      "selector": ".match-selection-panel,\n.selected-matches-panel",
+      "context": "",
+      "bodyHash": "1bcd48781bd0123434890bb70463e885b1b4e72052eab63111dfc56f09c1074b",
+      "bodyLength": 127
+    },
+    {
+      "selector": ".match-selection-panel h3,\n.selected-matches-panel h3",
+      "context": "",
+      "bodyHash": "1190d4776b5bf62ed0cd7865af3677673c9a079796d129b6fe3d099406912f04",
+      "bodyLength": 162
+    },
+    {
+      "selector": ".classic-actions",
+      "context": "",
+      "bodyHash": "ca5b434e3036be9d5670b4a1bcf65276017f716274acd7016832bc266ed5ad74",
+      "bodyLength": 107
+    },
+    {
+      "selector": ".empty-cart-message",
+      "context": "",
+      "bodyHash": "f8f4c02e4873b4cb8be27917bfd467d138dc68f19419a1b0b3a117e876fdc8c1",
+      "bodyLength": 190
+    },
+    {
+      "selector": ".empty-cart-message i",
+      "context": "",
+      "bodyHash": "cf2e20b6753254114914302a9f29c6177f543998c571b6368ef05f86865822fb",
+      "bodyLength": 54
+    },
+    {
+      "selector": ".empty-cart-message small",
+      "context": "",
+      "bodyHash": "69c32e8477ec3a76e3163561f50176adcb55f43392b47d56c49ee25e1bfd6a6e",
+      "bodyLength": 42
+    },
+    {
+      "selector": ".match-form,\n.ai-match-form",
+      "context": "",
+      "bodyHash": "78e04c4168c78bcf92104bb1e5382a3e0ffa03d921044db1d9b86d0948b6e6d3",
+      "bodyLength": 37
+    },
+    {
+      "selector": ".form-row",
+      "context": "",
+      "bodyHash": "f6b89edeea1aa44c7dd4359dfd29d6c28447d2da2c3ef0b7fb5cb52e97e27d71",
+      "bodyLength": 128
+    },
+    {
+      "selector": ".form-group",
+      "context": "",
+      "bodyHash": "413f2295fee742f58f829c9fdd46ac9522ef9f7862ad1040b0e88731fc037780",
+      "bodyLength": 48
+    },
+    {
+      "selector": ".form-group label",
+      "context": "",
+      "bodyHash": "c356566a39d22cf22e0c9326dac08d74d5e5d4544756d0f9568f2972f493f6d4",
+      "bodyLength": 106
+    },
+    {
+      "selector": ".form-group input,\n.form-group select",
+      "context": "",
+      "bodyHash": "39f8c4e14359b4b7d69f18700f381b34f6f35a6c5959eb417c689c07a0d0ee0b",
+      "bodyLength": 176
+    },
+    {
+      "selector": ".form-group input:focus,\n.form-group select:focus",
+      "context": "",
+      "bodyHash": "30d6492764c5b519ad3f66294304503a55b31cd2b35b1ec97f8974bd03e521de",
+      "bodyLength": 110
+    },
+    {
+      "selector": ".btn",
+      "context": "",
+      "bodyHash": "e2ee73e25c304f22ba4f1788098a7a4ddf47c95dbb6d5fb869e8a9f8211c41bf",
+      "bodyLength": 264
+    },
+    {
+      "selector": ".btn:disabled",
+      "context": "",
+      "bodyHash": "be41f188836378f66072a6024f1af771a899ca2f3857ecaa4c9a6b3417262fbf",
+      "bodyLength": 76
+    },
+    {
+      "selector": ".primary-btn",
+      "context": "",
+      "bodyHash": "191163e4b7e7b05acebe0bf04905d7449a930c5792f4540e3b3fa1a5cfe0434a",
+      "bodyLength": 97
+    },
+    {
+      "selector": ".primary-btn:hover:not(:disabled)",
+      "context": "",
+      "bodyHash": "865d4e1e719d272cbaacdeddfa88876ad976d146e32a1f339cb2b53ed95814e9",
+      "bodyLength": 72
+    },
+    {
+      "selector": ".secondary-btn",
+      "context": "",
+      "bodyHash": "ff3ae33fe0ce1df6c772a9e5c059e913bb917088696f88e81789eb93cea489d4",
+      "bodyLength": 108
+    },
+    {
+      "selector": ".secondary-btn:hover:not(:disabled)",
+      "context": "",
+      "bodyHash": "b0f065c68e115589f1b08a5f6aa060ef401e19b8abc6b71fcd2535e3280271ff",
+      "bodyLength": 78
+    },
+    {
+      "selector": ".lottery-layout",
+      "context": "",
+      "bodyHash": "77fee1ed3b2aa1c8e37d08efc1b74e737a6049df36b84b4491d11d4d9a0dcd48",
+      "bodyLength": 93
+    },
+    {
+      "selector": ".lottery-matches-panel,\n.lottery-cart-panel",
+      "context": "",
+      "bodyHash": "1bcd48781bd0123434890bb70463e885b1b4e72052eab63111dfc56f09c1074b",
+      "bodyLength": 127
+    },
+    {
+      "selector": ".lottery-matches-panel h3,\n.lottery-cart-panel h3",
+      "context": "",
+      "bodyHash": "1190d4776b5bf62ed0cd7865af3677673c9a079796d129b6fe3d099406912f04",
+      "bodyLength": 162
+    },
+    {
+      "selector": ".lottery-controls",
+      "context": "",
+      "bodyHash": "94d215a0480b366c1a3e3f8b03b22928ab85ffddfd21c1fe6b37d6bfccc5d41a",
+      "bodyLength": 28
+    },
+    {
+      "selector": ".controls-row",
+      "context": "",
+      "bodyHash": "8137bd860db95784a807637d53cc6058f116674bcbd44affaa821a00e3fd5776",
+      "bodyLength": 139
+    },
+    {
+      "selector": ".filter-controls",
+      "context": "",
+      "bodyHash": "b56f2fc410a7e228788e797dadb854477476a6c4508c4eaaedab8c2311b1a93e",
+      "bodyLength": 62
+    },
+    {
+      "selector": ".matches-section",
+      "context": "",
+      "bodyHash": "9b50375ccc4e2ffd01ef8b07ab2c57438400de7e3f065cb37318c256d799b8a1",
+      "bodyLength": 186
+    },
+    {
+      "selector": ".matches-section h2",
+      "context": "",
+      "bodyHash": "6cb02b2ca33d6eb605663980ca2297587bb927bb2b8d38a676a5807ff5c63c7a",
+      "bodyLength": 106
+    },
+    {
+      "selector": ".matches-container",
+      "context": "",
+      "bodyHash": "1f42d99880d5a42ef7e2abfa5906ca05e5175d9d67a76e2ad965e9f4a17bf61c",
+      "bodyLength": 73
+    },
+    {
+      "selector": ".empty-message",
+      "context": "",
+      "bodyHash": "68e0ad5a0f4aba7da31f23b948c48528eef463e6eb447ad3007ad3a5b8730d77",
+      "bodyLength": 191
+    },
+    {
+      "selector": ".empty-message i",
+      "context": "",
+      "bodyHash": "c790fa32c46b4337eece463455fb1fe7f93c5eddb9f6535c25fc6a482b46be30",
+      "bodyLength": 52
+    },
+    {
+      "selector": ".empty-message p",
+      "context": "",
+      "bodyHash": "31d659899ac6024d22bdfc73b7ba4254499baae0d921496f3b9e122e1150f2c9",
+      "bodyLength": 16
+    },
+    {
+      "selector": ".match-card,\n.lottery-match-card",
+      "context": "",
+      "bodyHash": "e75b8592792dbc4dde985a7c57932d2543f6255e63cc43c9a9cfff9e2d95e5c0",
+      "bodyLength": 199
+    },
+    {
+      "selector": ".match-card:hover,\n.lottery-match-card:hover",
+      "context": "",
+      "bodyHash": "6a27e026d11c539896833c79d1336d5a180e63360f8b07638d12d85208c6fbbe",
+      "bodyLength": 112
+    },
+    {
+      "selector": ".match-card.selected,\n.lottery-match-card.selected",
+      "context": "",
+      "bodyHash": "ac81848b8b2165b9ccb6589a5832f50ed36ce12502ebdef16046b4f65b0a514a",
+      "bodyLength": 82
+    },
+    {
+      "selector": ".match-info",
+      "context": "",
+      "bodyHash": "4ae9a67e040556663055a50850fe247f678c4a603c8885a6061b09ef0c317d2b",
+      "bodyLength": 26
+    },
+    {
+      "selector": ".teams",
+      "context": "",
+      "bodyHash": "9a65f77cdab7813a664c8d6f3ebe7d337a6a59a06b00ac75a8650e125536dd59",
+      "bodyLength": 123
+    },
+    {
+      "selector": ".home-team,\n.away-team",
+      "context": "",
+      "bodyHash": "6ae1b1a5db712d158d2be0f36402a806c8b4314d35777ce722f9c5c82bd8bd7f",
+      "bodyLength": 197
+    },
+    {
+      "selector": ".vs",
+      "context": "",
+      "bodyHash": "25ef0e007a8076c0fd0a8379a8e5b152471e29bf199cb5060a6bc0c372cbc96c",
+      "bodyLength": 100
+    },
+    {
+      "selector": ".league",
+      "context": "",
+      "bodyHash": "585af64496bcce183df9f4b6e3691d21893f7e9857bcab5ddee4fe250e535735",
+      "bodyLength": 104
+    },
+    {
+      "selector": ".odds-info",
+      "context": "",
+      "bodyHash": "4ae9a67e040556663055a50850fe247f678c4a603c8885a6061b09ef0c317d2b",
+      "bodyLength": 26
+    },
+    {
+      "selector": ".odds-group",
+      "context": "",
+      "bodyHash": "3d57231b65953df4ed86f04dd421f2461bbc9e41e3dabb2f35aa2a88ed6e3ee7",
+      "bodyLength": 164
+    },
+    {
+      "selector": ".odds-label",
+      "context": "",
+      "bodyHash": "ffdb4464a11470b4ab27a0647d447e8fb740feaff217dc587eb7a3960bbda634",
+      "bodyLength": 81
+    },
+    {
+      "selector": ".odds-values",
+      "context": "",
+      "bodyHash": "9b27f1769d2b763b39c0b895917d5e70d2c5de2d5d9dc92c3ff2fec6ed23a7e1",
+      "bodyLength": 78
+    },
+    {
+      "selector": ".match-actions",
+      "context": "",
+      "bodyHash": "4556dbfaddff9b20e1a98884347bb0dcdcd6cb0b2d42d3743ceb92486c850cd5",
+      "bodyLength": 51
+    },
+    {
+      "selector": ".remove-match-btn",
+      "context": "",
+      "bodyHash": "8843eeda8b20a212edafb622e8f344197f7cd59b4882979a7972b84338026989",
+      "bodyLength": 194
+    },
+    {
+      "selector": ".remove-match-btn:hover",
+      "context": "",
+      "bodyHash": "1ba64ec38c4f6273db000cb14f23c73a7684e6e46ad8770e2365c504c5494cf4",
+      "bodyLength": 54
+    },
+    {
+      "selector": ".action-buttons",
+      "context": "",
+      "bodyHash": "7771be4d4ee2704216120ff9ca68dbe8aff7bc8572713b7bfe6b5563b69e1dc1",
+      "bodyLength": 85
+    },
+    {
+      "selector": ".results-section",
+      "context": "",
+      "bodyHash": "62360662986a9e64532a63ebffa141746b7a1876edc64608d0d6311feddde8fa",
+      "bodyLength": 159
+    },
+    {
+      "selector": ".results-section h2",
+      "context": "",
+      "bodyHash": "6cb02b2ca33d6eb605663980ca2297587bb927bb2b8d38a676a5807ff5c63c7a",
+      "bodyLength": 106
+    },
+    {
+      "selector": ".results-section.hidden",
+      "context": "",
+      "bodyHash": "ea0b3b474616b378fbab96d3f8afbd1dfcf5aba4cfd5d66dc05cabdbb6caadbc",
+      "bodyLength": 20
+    },
+    {
+      "selector": ".tabs",
+      "context": "",
+      "bodyHash": "fa990f1ac1c1568fa821dea0808f8eba3b11f6bf09798854f6c0767fc6f40b6c",
+      "bodyLength": 134
+    },
+    {
+      "selector": ".tab-btn",
+      "context": "",
+      "bodyHash": "b9ad841062887bdd41920bb18aa2fd9afefd2e7da5fd29aafac7409b2926dadf",
+      "bodyLength": 252
+    },
+    {
+      "selector": ".tab-btn:hover,\n.tab-btn.active",
+      "context": "",
+      "bodyHash": "015acbbcd8c3213152bc04ce0eac901d0eff8310aadc230d3ed5881f50ffa268",
+      "bodyLength": 81
+    },
+    {
+      "selector": ".tab-btn.hidden",
+      "context": "",
+      "bodyHash": "ea0b3b474616b378fbab96d3f8afbd1dfcf5aba4cfd5d66dc05cabdbb6caadbc",
+      "bodyLength": 20
+    },
+    {
+      "selector": ".tab-content",
+      "context": "",
+      "bodyHash": "ea0b3b474616b378fbab96d3f8afbd1dfcf5aba4cfd5d66dc05cabdbb6caadbc",
+      "bodyLength": 20
+    },
+    {
+      "selector": ".tab-content.active",
+      "context": "",
+      "bodyHash": "e3099c8c72976a46dafaf4668fd5640241d6c47474c9e7995835794022fa543b",
+      "bodyLength": 21
+    },
+    {
+      "selector": ".simple-ai-results",
+      "context": "",
+      "bodyHash": "eb3ce2923e4d3a7aec8e1ab1a11da80eb055d831f9c52b5b2e667508089e036c",
+      "bodyLength": 63
+    },
+    {
+      "selector": ".ai-result-card",
+      "context": "",
+      "bodyHash": "b61f6cdc4da7394e7d137f95c24f5042de6f212267351e3f05afc3552e8fa867",
+      "bodyLength": 188
+    },
+    {
+      "selector": ".ai-result-card:hover",
+      "context": "",
+      "bodyHash": "6126b2777b5e17792376804150cb1e987ee3c34e31bd8ebb68c2332847c4be8b",
+      "bodyLength": 71
+    },
+    {
+      "selector": ".match-header",
+      "context": "",
+      "bodyHash": "b030c87e25880ae08e12e2784668234101658394a5696e61624604633deb74d5",
+      "bodyLength": 128
+    },
+    {
+      "selector": ".match-title",
+      "context": "",
+      "bodyHash": "b3bdb2170e9ba3345e46423b4232d4a361c2430f735593d57920b4218273079f",
+      "bodyLength": 161
+    },
+    {
+      "selector": ".league-info",
+      "context": "",
+      "bodyHash": "5b847a2e05898cfc0b3d0618176ab05a61e1ea116326b383bef1b24813a07da3",
+      "bodyLength": 57
+    },
+    {
+      "selector": ".odds-display",
+      "context": "",
+      "bodyHash": "960e5ddbe46ca612e6dd6bd7f5d3a7715129b6caf8113803e212d0d60e706b47",
+      "bodyLength": 260
+    },
+    {
+      "selector": ".odds-item",
+      "context": "",
+      "bodyHash": "52d90172bb9f9e55a9edf499677147770638e0e16a20bcd7afab13abc6dd28fa",
+      "bodyLength": 165
+    },
+    {
+      "selector": ".ai-analysis-content",
+      "context": "",
+      "bodyHash": "83f6cfed09da08b36da70bb825241e9630c35333799ea859c3e8e18c24e67692",
+      "bodyLength": 198
+    },
+    {
+      "selector": ".ai-analysis-content h4",
+      "context": "",
+      "bodyHash": "bf99a62f9f775b2e7764d23ee2210e13adcb8f91ab06c5ac0afbc89dcb295581",
+      "bodyLength": 142
+    },
+    {
+      "selector": ".ai-analysis-content h4 i",
+      "context": "",
+      "bodyHash": "bb61904fb300a5e5953f778c8c73765d7334cd0fec19e121f7a122df5896596c",
+      "bodyLength": 36
+    },
+    {
+      "selector": ".ai-analysis-content h5",
+      "context": "",
+      "bodyHash": "a057f4a03c495343bffdef2972f1e45215bd13d5dd6ffe7a30436f8bc8fcc759",
+      "bodyLength": 207
+    },
+    {
+      "selector": ".ai-analysis-content ul",
+      "context": "",
+      "bodyHash": "2a38e9062aae81d18b4d7145a650484278d5cd6f0186956f6f3bca20b3c71a54",
+      "bodyLength": 47
+    },
+    {
+      "selector": ".ai-analysis-content li",
+      "context": "",
+      "bodyHash": "30c13c98d78ab1c8129cdb7d2466463a80a79b67c9ec62482ded2885632be64d",
+      "bodyLength": 100
+    },
+    {
+      "selector": ".ai-analysis-content strong",
+      "context": "",
+      "bodyHash": "c3a28d00c1927a968cb721119be2776ae61628770bdb3deb484ebffec45857e5",
+      "bodyLength": 79
+    },
+    {
+      "selector": ".ai-analysis-content p",
+      "context": "",
+      "bodyHash": "8cc8ccb59acb4842db013a5139246819d65fb42837ad7697a6122985e398974c",
+      "bodyLength": 100
+    },
+    {
+      "selector": ".analysis-text",
+      "context": "",
+      "bodyHash": "040a163ea9d728c7e6b9ca518925f9e22dda685f2c01baff80d5a9b6041a0305",
+      "bodyLength": 194
+    },
+    {
+      "selector": ".analysis-text::-webkit-scrollbar",
+      "context": "",
+      "bodyHash": "51d12e5f9f81629a402c7b69df02cccaa0fab04c50c435f3a025b5e8c0f910fb",
+      "bodyLength": 17
+    },
+    {
+      "selector": ".analysis-text::-webkit-scrollbar-track",
+      "context": "",
+      "bodyHash": "c34878f0d6c337cd079c310cdc819aaeafca878198ec5b85c472a6cfb6b45a46",
+      "bodyLength": 62
+    },
+    {
+      "selector": ".analysis-text::-webkit-scrollbar-thumb",
+      "context": "",
+      "bodyHash": "2e3e87d8811e4511257b8744637b5171ed18dae9da2dcb15d3dcf770eda9c51b",
+      "bodyLength": 62
+    },
+    {
+      "selector": ".analysis-text::-webkit-scrollbar-thumb:hover",
+      "context": "",
+      "bodyHash": "c73b6e064a76dbaf54efcf9cb524aa720843218882b1b2e095a5abaf7e7a8a76",
+      "bodyLength": 41
+    },
+    {
+      "selector": ".analysis-text",
+      "context": "",
+      "bodyHash": "9863edae66a70d4314fac907ed30a59ab5a05e0dd30f4da98e1a85939bfeb3be",
+      "bodyLength": 76
+    },
+    {
+      "selector": ".match-source",
+      "context": "",
+      "bodyHash": "d4f62c7d289888e64a5ebc801874a7def81d8a883f6f08abe08463cd815dbb8e",
+      "bodyLength": 46
+    },
+    {
+      "selector": ".source-tag",
+      "context": "",
+      "bodyHash": "441159572791dc7a7a5e2452b8cfedc0f744d6c2fbb4ad65898323515b4f191c",
+      "bodyLength": 195
+    },
+    {
+      "selector": ".lottery-selected-card",
+      "context": "",
+      "bodyHash": "6148e393f55ffc07442755369ef8909d7a6407d87b080eb9bcdeb0315e0633f2",
+      "bodyLength": 52
+    },
+    {
+      "selector": ".lottery-selected-card .match-source",
+      "context": "",
+      "bodyHash": "d6456b87363bcbd86bbf210eb2e0f3a8c732eabeafdceb8a8c7ddcd6ece906e5",
+      "bodyLength": 19
+    },
+    {
+      "selector": ".message",
+      "context": "",
+      "bodyHash": "8695fcb9275b7588d45c1fbd27f1f59388742e0a86c9302102edae2d07582005",
+      "bodyLength": 297
+    },
+    {
+      "selector": ".message.success",
+      "context": "",
+      "bodyHash": "8f5a63e0b476f4d8127acadf0b46719d7791c29309634b35c47c56cb9a46491e",
+      "bodyLength": 42
+    },
+    {
+      "selector": ".message.error",
+      "context": "",
+      "bodyHash": "9f25e48b4fc83b37baf43f626a3f6d9191e3a4581da78ee401e9b65ec1f5e99f",
+      "bodyLength": 41
+    },
+    {
+      "selector": ".message.info",
+      "context": "",
+      "bodyHash": "53480b2e49ac280efb86d3ce5888ab99923d668e341d0488acd0f88d0f9830c6",
+      "bodyLength": 42
+    },
+    {
+      "selector": "@keyframes slideIn",
+      "context": "",
+      "bodyHash": "05336e38efd34ecf4b33a986399a287a1d350dbc3647bfd61d2f8675c718e829",
+      "bodyLength": 144
+    },
+    {
+      "selector": ".loading-overlay",
+      "context": "",
+      "bodyHash": "e569b4b17b0ea51237aaed3538e2d33c4781c11f0a875b85e12c930cc687319e",
+      "bodyLength": 242
+    },
+    {
+      "selector": ".loading-overlay.hidden",
+      "context": "",
+      "bodyHash": "ea0b3b474616b378fbab96d3f8afbd1dfcf5aba4cfd5d66dc05cabdbb6caadbc",
+      "bodyLength": 20
+    },
+    {
+      "selector": ".loading-spinner",
+      "context": "",
+      "bodyHash": "0ad4d5b716174f343e2f28551c5bdcfabebdb4014c6d8725b9e7ffbb3254a886",
+      "bodyLength": 181
+    },
+    {
+      "selector": "@keyframes spin",
+      "context": "",
+      "bodyHash": "dad5d55f11b8bdab6b3bdbd1d901b4c6ab693942cf07976c5b115d0aab1c9a7b",
+      "bodyLength": 51
+    },
+    {
+      "selector": "footer",
+      "context": "",
+      "bodyHash": "f3946d0c5584c27a4aa8b9eadc7db90260343e5741c0e1feefd9cdcad5dfe72a",
+      "bodyLength": 205
+    },
+    {
+      "selector": "body",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "8ce9f1c33be9a3405dd8d7b6550a7c12b3d1e99c2f7c8dc7309037c3ce4c62f8",
+      "bodyLength": 50
+    },
+    {
+      "selector": ".navbar",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "b304d2d84f09f6fc5b2b6ae5e38e6b1531c229e4167d1dd6c740c314b70aba55",
+      "bodyLength": 28
+    },
+    {
+      "selector": ".nav-container",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "7ec1b713e40021c75cd7ae25ddddd6aea83c2aa1cc0c41c840b6dd3a7923d0ba",
+      "bodyLength": 89
+    },
+    {
+      "selector": ".nav-brand",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "e59636bfef143c542f9fac5f5b3f2eaa1708cfa39c09ae09d9ac00a5f65624eb",
+      "bodyLength": 33
+    },
+    {
+      "selector": ".nav-menu",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "193d07260f5ef84083952bdbc50029061616ada5bf618b394d3cb2fc6d9a5c9c",
+      "bodyLength": 59
+    },
+    {
+      "selector": ".nav-btn",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "663e7414e14849ad4f63ea3388798727a20e9a9916ebe6b5237d3ee3d43792db",
+      "bodyLength": 112
+    },
+    {
+      "selector": ".container",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "5ff3ced9fa128a6ae8fcd646cb353d91a5ce1d356733e54fa9699f0aaa59b48c",
+      "bodyLength": 71
+    },
+    {
+      "selector": ".hero-section h1",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "c59e9dfc789312dd0ecb7c07ea5b34fcb32799b1e501ca9a15d8b1c977507ea7",
+      "bodyLength": 30
+    },
+    {
+      "selector": ".hero-section .subtitle",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "9d66748f12972bc01271f8db2271a51d38316b4100214d26bc1b7dcaa5ebaf49",
+      "bodyLength": 30
+    },
+    {
+      "selector": ".success-cases",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "25f25d1fd613ad1fdda1d4a335cb17b4b1d9dc1edf125fec7c7882ccaf852a8f",
+      "bodyLength": 28
+    },
+    {
+      "selector": ".success-cases h2",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "766fa8dd8d656b9cc777171a864a4e78ff92d216965e91bec2b29ac874c6a8a4",
+      "bodyLength": 85
+    },
+    {
+      "selector": ".cases-stats",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "b2b19d4e7c959e5c27666ad29c77378ca014ef62d9a59e0bce1c62be138ead90",
+      "bodyLength": 60
+    },
+    {
+      "selector": ".stat-number",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "c59e9dfc789312dd0ecb7c07ea5b34fcb32799b1e501ca9a15d8b1c977507ea7",
+      "bodyLength": 30
+    },
+    {
+      "selector": ".cases-table",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "9d2669c89349508489902d3beff22a98e17397a4207afbfb4f669876906a8137",
+      "bodyLength": 32
+    },
+    {
+      "selector": ".cases-table th,\n    .cases-table td",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "f52e2f49564137615bd1eaba73a7ad54f61b9b7c1d7ff5b77bb2eb6f7a6d51e5",
+      "bodyLength": 38
+    },
+    {
+      "selector": ".header-layout",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "b2b19d4e7c959e5c27666ad29c77378ca014ef62d9a59e0bce1c62be138ead90",
+      "bodyLength": 60
+    },
+    {
+      "selector": ".hero-section h1",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "c59e9dfc789312dd0ecb7c07ea5b34fcb32799b1e501ca9a15d8b1c977507ea7",
+      "bodyLength": 30
+    },
+    {
+      "selector": ".individual-results",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "73955ad76b753356493b80f2704a381572f34203e2248a63e22d59ea54652e45",
+      "bodyLength": 41
+    },
+    {
+      "selector": ".classic-layout",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "b2b19d4e7c959e5c27666ad29c77378ca014ef62d9a59e0bce1c62be138ead90",
+      "bodyLength": 60
+    },
+    {
+      "selector": ".match-selection-panel,\n    .selected-matches-panel",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "25f25d1fd613ad1fdda1d4a335cb17b4b1d9dc1edf125fec7c7882ccaf852a8f",
+      "bodyLength": 28
+    },
+    {
+      "selector": ".lottery-layout",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "b2b19d4e7c959e5c27666ad29c77378ca014ef62d9a59e0bce1c62be138ead90",
+      "bodyLength": 60
+    },
+    {
+      "selector": ".lottery-matches-panel,\n    .lottery-cart-panel",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "25f25d1fd613ad1fdda1d4a335cb17b4b1d9dc1edf125fec7c7882ccaf852a8f",
+      "bodyLength": 28
+    },
+    {
+      "selector": ".form-row",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "73955ad76b753356493b80f2704a381572f34203e2248a63e22d59ea54652e45",
+      "bodyLength": 41
+    },
+    {
+      "selector": ".teams",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "81f0141349c976400d5ac5762487aba507a61e3c40de9a6fa6fee5cd72eef17b",
+      "bodyLength": 58
+    },
+    {
+      "selector": ".vs",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "cbaa851c4342ec2c63d984f22a193bb4187f1d89057c664b15798080834a722d",
+      "bodyLength": 39
+    },
+    {
+      "selector": ".action-buttons,\n    .classic-actions",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "9aa394d60fe7f52e3ab08cc131261aeaa0f5793abe550f25cd5211a6efda3fe0",
+      "bodyLength": 37
+    },
+    {
+      "selector": ".message",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "ca51f94382d2b52bd81c6d5373153d5e7777dd1c42751e26fe6111515ed973fb",
+      "bodyLength": 65
+    },
+    {
+      "selector": "header",
+      "context": "@media (max-width: 480px)",
+      "bodyHash": "10b550fd28c48ad2a78f6ec256364d26c2bc84a66d3a0b36c77914d81512a077",
+      "bodyLength": 32
+    },
+    {
+      "selector": ".match-input-section,\n    .matches-section,\n    .results-section,\n    .mode-selection",
+      "context": "@media (max-width: 480px)",
+      "bodyHash": "301157191869efc4d0a5b609149655012e3f11016bac48b535f3db58bc5ea32a",
+      "bodyLength": 56
+    },
+    {
+      "selector": ".mode-btn",
+      "context": "@media (max-width: 480px)",
+      "bodyHash": "439b824608f87088d34566aac742a51e75b1262b46175eba99ead1327bb7af5f",
+      "bodyLength": 31
+    },
+    {
+      "selector": ".btn",
+      "context": "@media (max-width: 480px)",
+      "bodyHash": "29a09cfb9e69a896664e54bf1c37683f9f282263d7e46c7c4798673c73b579ba",
+      "bodyLength": 63
+    },
+    {
+      "selector": ".ai-intro",
+      "context": "",
+      "bodyHash": "a81607e526c129d2a5cb4286c35e5cce5750da7c883fe848619f992cfbbff92f",
+      "bodyLength": 221
+    },
+    {
+      "selector": ".ai-intro p",
+      "context": "",
+      "bodyHash": "7aa0b07384aee7e6e049606255b6bfdcd96aa0b8e02638b8076563971f66acf3",
+      "bodyLength": 132
+    },
+    {
+      "selector": ".ai-intro i",
+      "context": "",
+      "bodyHash": "bb61904fb300a5e5953f778c8c73765d7334cd0fec19e121f7a122df5896596c",
+      "bodyLength": 36
+    },
+    {
+      "selector": ".loading-message",
+      "context": "",
+      "bodyHash": "e36d237f0230ab7679eb71a3936a6be75ff4bded7374d8ab892fe7c3e1fc7c27",
+      "bodyLength": 188
+    },
+    {
+      "selector": ".loading-message i",
+      "context": "",
+      "bodyHash": "ee44cb26b2df65f99ecde3047e140e3ee4149ffceb19f63c2db4dfd78bf0d510",
+      "bodyLength": 55
+    },
+    {
+      "selector": ".selected-matches-section",
+      "context": "",
+      "bodyHash": "19b6901be906083ccf46417415662f7995672652534a005903777a910bc40680",
+      "bodyLength": 149
+    },
+    {
+      "selector": ".selected-matches-section h3",
+      "context": "",
+      "bodyHash": "1190d4776b5bf62ed0cd7865af3677673c9a079796d129b6fe3d099406912f04",
+      "bodyLength": 162
+    },
+    {
+      "selector": ".selected-matches-container",
+      "context": "",
+      "bodyHash": "69c0c9936a3bcf0673a0aa859ab3fb10467c9627dcc6c9bf89d3eb38cf7f273a",
+      "bodyLength": 71
+    },
+    {
+      "selector": ".lottery-actions",
+      "context": "",
+      "bodyHash": "7771be4d4ee2704216120ff9ca68dbe8aff7bc8572713b7bfe6b5563b69e1dc1",
+      "bodyLength": 85
+    },
+    {
+      "selector": ".lottery-matches-list",
+      "context": "",
+      "bodyHash": "2979e6823c49a687641dddac143cd94615cf040979d8c7b8c395a9420b8e5e01",
+      "bodyLength": 142
+    },
+    {
+      "selector": ".lottery-cart-container",
+      "context": "",
+      "bodyHash": "6c31729a94c72480321215294363cf9143785e53d4bfa85d6d00fa0debd02ffd",
+      "bodyLength": 187
+    },
+    {
+      "selector": ".lottery-match-card",
+      "context": "",
+      "bodyHash": "f4272d5c6b0d476af6140ab08d11b0f8a01c445988220895e2bb0f5689381632",
+      "bodyLength": 225
+    },
+    {
+      "selector": ".lottery-match-card:hover",
+      "context": "",
+      "bodyHash": "528e3d04f2e23e5dafaed11cedf02aef4b48458007bc8f4c998c5293e76b7a5e",
+      "bodyLength": 111
+    },
+    {
+      "selector": ".lottery-match-card.selected",
+      "context": "",
+      "bodyHash": "ac81848b8b2165b9ccb6589a5832f50ed36ce12502ebdef16046b4f65b0a514a",
+      "bodyLength": 82
+    },
+    {
+      "selector": ".lottery-match-card .match-header",
+      "context": "",
+      "bodyHash": "190e0e056627f4e3cd05c59cccd41832b6b01552ee34a1253ec4c6e4f4f86152",
+      "bodyLength": 132
+    },
+    {
+      "selector": ".lottery-match-card .match-time",
+      "context": "",
+      "bodyHash": "06f28b5aa3ec5c123e9ba0cc8b4c981def41cfe3beaa1c8cfeaa30de8c23bc91",
+      "bodyLength": 57
+    },
+    {
+      "selector": ".lottery-match-card .match-status",
+      "context": "",
+      "bodyHash": "98c6e7c5d78b22b5bfcc7d5e65c960b954849b08f8661c45394447902782b038",
+      "bodyLength": 154
+    },
+    {
+      "selector": ".lottery-match-card .match-teams",
+      "context": "",
+      "bodyHash": "ba5b5319fa30eac2b86543e46d822304b9b3de803522b80f13df7c2d6ea055bc",
+      "bodyLength": 126
+    },
+    {
+      "selector": ".lottery-match-card .team",
+      "context": "",
+      "bodyHash": "27180e414c0674c7982612fd4b16c297db614968602f95693641b271615816c9",
+      "bodyLength": 38
+    },
+    {
+      "selector": ".lottery-match-card .team-name",
+      "context": "",
+      "bodyHash": "e2471acfc21c9583ec7509d2c05aa7cf2eec3a2b2b96ed5ad900eabe0e5a9445",
+      "bodyLength": 187
+    },
+    {
+      "selector": ".lottery-match-card .vs",
+      "context": "",
+      "bodyHash": "d3bbfd18768ff4988b83fc2b3b79dfd7dadf5d139437ce04abf83b874085a024",
+      "bodyLength": 100
+    },
+    {
+      "selector": ".lottery-match-card .odds-section",
+      "context": "",
+      "bodyHash": "84f9d74cb8f4767980fe3de508f1b45a0fd1c58b82b29571bc3ef3cc213c0889",
+      "bodyLength": 28
+    },
+    {
+      "selector": ".lottery-match-card .odds-group",
+      "context": "",
+      "bodyHash": "44d8df3788fb03378c2decab1d73aabc8bf5a077b732a97eb9e3c6ffb48de168",
+      "bodyLength": 28
+    },
+    {
+      "selector": ".lottery-match-card .odds-title",
+      "context": "",
+      "bodyHash": "b87fe476ec7ebc2f28e4d9a9498e14a7afce1a4fb71216ca192bec83849b0553",
+      "bodyLength": 105
+    },
+    {
+      "selector": ".lottery-match-card .odds-values",
+      "context": "",
+      "bodyHash": "7ae9d5244d61e0f72ec96fb9be467958570e13ed755dff2c672a0603f7d6f4ff",
+      "bodyLength": 58
+    },
+    {
+      "selector": ".lottery-match-card .odds-item",
+      "context": "",
+      "bodyHash": "12263c324a4f8a058765afb260792e0f8e82f798dab2dcb55135d1c8a7e26622",
+      "bodyLength": 148
+    },
+    {
+      "selector": ".lottery-match-card .match-actions",
+      "context": "",
+      "bodyHash": "4556dbfaddff9b20e1a98884347bb0dcdcd6cb0b2d42d3743ceb92486c850cd5",
+      "bodyLength": 51
+    },
+    {
+      "selector": ".lottery-match-card .select-match-btn",
+      "context": "",
+      "bodyHash": "a33cc789819de911069b84f7b88f3cff319c07a1c0dbe0c2612bd400098152c8",
+      "bodyLength": 225
+    },
+    {
+      "selector": ".lottery-match-card .select-match-btn:hover",
+      "context": "",
+      "bodyHash": "81b4b7a941bd815ba9cbcae545ec6b8a52b81dcb30816b1c2c91deda054d2274",
+      "bodyLength": 54
+    },
+    {
+      "selector": ".lottery-match-card .select-match-btn.selected",
+      "context": "",
+      "bodyHash": "5036982d1538ba2edde8ac8613c5cd675b6c99904eb5f5edd21f750bc6acf2e8",
+      "bodyLength": 39
+    },
+    {
+      "selector": ".league-section",
+      "context": "",
+      "bodyHash": "4ae9a67e040556663055a50850fe247f678c4a603c8885a6061b09ef0c317d2b",
+      "bodyLength": 26
+    },
+    {
+      "selector": ".league-title",
+      "context": "",
+      "bodyHash": "5e782204a37fb45ee5e6fb6b8366ea30a7ac6b9da109a6838394095225f9a221",
+      "bodyLength": 248
+    },
+    {
+      "selector": ".league-title .match-count",
+      "context": "",
+      "bodyHash": "f80b8c6cb85506331511429bee45d8b09842ae75f85e1798c14f4765a6fedf0d",
+      "bodyLength": 80
+    },
+    {
+      "selector": ".league-matches",
+      "context": "",
+      "bodyHash": "12080dd58300586d4ecd8ed66d783a35455367864f0c5f7c4c16fa77bde28f9d",
+      "bodyLength": 65
+    },
+    {
+      "selector": ".individual-results",
+      "context": "",
+      "bodyHash": "3f623aaa6a943c221cb58c47c0c236f5b63d7771eb88ed44932ff621bf67defc",
+      "bodyLength": 78
+    },
+    {
+      "selector": ".classic-prediction",
+      "context": "",
+      "bodyHash": "616cc7f9257c28a3e03ab6c8f0c47cefa38f1cb2204a4d6b10b83dafb42a69c7",
+      "bodyLength": 252
+    },
+    {
+      "selector": ".classic-prediction .match-header",
+      "context": "",
+      "bodyHash": "c502113c3b8d1a24b72c463f641ea15ada6c9f7ee8debc1dabf7ddd6795134d3",
+      "bodyLength": 186
+    },
+    {
+      "selector": ".classic-prediction .match-header h3",
+      "context": "",
+      "bodyHash": "d94eaa4514be4652155dcf0e20db8616249009281e1620c26ebd7a2ac52d0eeb",
+      "bodyLength": 115
+    },
+    {
+      "selector": ".league-badge",
+      "context": "",
+      "bodyHash": "6963cb2c35b4886c6181cd30fabd8d8785e4bc3ca0397c887246f43c1bb6e810",
+      "bodyLength": 155
+    },
+    {
+      "selector": ".probabilities-section",
+      "context": "",
+      "bodyHash": "cc60483d14d70024c019767f84d9d27ca4a01ac6f1e0bacde8384cdccf37dc90",
+      "bodyLength": 41
+    },
+    {
+      "selector": ".probabilities-section h4",
+      "context": "",
+      "bodyHash": "dd423eb56829af76b027a2668e43ba30b3d16cafc2ea25c7188a08ee02906fd8",
+      "bodyLength": 105
+    },
+    {
+      "selector": ".probability-bars",
+      "context": "",
+      "bodyHash": "12080dd58300586d4ecd8ed66d783a35455367864f0c5f7c4c16fa77bde28f9d",
+      "bodyLength": 65
+    },
+    {
+      "selector": ".prob-bar",
+      "context": "",
+      "bodyHash": "6174b90d561007b8e2a0266011cc5740128bee4cd40684eb74855351e448aa37",
+      "bodyLength": 62
+    },
+    {
+      "selector": ".prob-label",
+      "context": "",
+      "bodyHash": "cbda7a60cbc84554b0aa35a8e04374ba96d5408d2a5debd5fe920cc375d7905b",
+      "bodyLength": 97
+    },
+    {
+      "selector": ".prob-value",
+      "context": "",
+      "bodyHash": "2dc8fcc2c9e6a59f863da48635f0f305f5633ab9ee6e7703774628a2dbbcf66f",
+      "bodyLength": 119
+    },
+    {
+      "selector": ".prob-visual",
+      "context": "",
+      "bodyHash": "647f7fe57219c6c7d1b818279404bd606fa7d2fda42cd294f43b152dadf4cfa4",
+      "bodyLength": 114
+    },
+    {
+      "selector": ".prob-fill",
+      "context": "",
+      "bodyHash": "c028d0ce396df3937bfeaa735ecb6588ccd742b4c8a02249759543258b0839cf",
+      "bodyLength": 117
+    },
+    {
+      "selector": ".prediction-details",
+      "context": "",
+      "bodyHash": "991c25c8cb7d7d2478093b7c246bf40795a985803611f52ee9d5c0ddeaef16b3",
+      "bodyLength": 110
+    },
+    {
+      "selector": ".detail-item",
+      "context": "",
+      "bodyHash": "e3c2be33da883f6866465bdc2040f3e7d52ee72d80e2521f2bf3ca1dd599bb15",
+      "bodyLength": 106
+    },
+    {
+      "selector": ".detail-item:last-child",
+      "context": "",
+      "bodyHash": "42e504025807335eb965d84f7e21483b1c700c4b13dcfd06bc5b01fe7fc2d968",
+      "bodyLength": 23
+    },
+    {
+      "selector": ".recommendation",
+      "context": "",
+      "bodyHash": "c9489335efad16c6425d15ce17c4195bbd8eaa610f16b5a196e49391c30f5b92",
+      "bodyLength": 149
+    },
+    {
+      "selector": ".odds-comparison",
+      "context": "",
+      "bodyHash": "3e0722970e02896c362521de2156f7801c0c9a504891750228ff35d8f1c137a0",
+      "bodyLength": 105
+    },
+    {
+      "selector": ".odds-comparison h4",
+      "context": "",
+      "bodyHash": "0d4667b5b2b73ce8ce7258e76b7559301781795c00d84c38f02ace3e76c45652",
+      "bodyLength": 105
+    },
+    {
+      "selector": ".odds-row",
+      "context": "",
+      "bodyHash": "19235bcffea88c6c04fb4abcd808fd1f92538ff43391f3f324bd6b7b2c8e3908",
+      "bodyLength": 127
+    },
+    {
+      "selector": ".odds-row span",
+      "context": "",
+      "bodyHash": "53cffa37fefc9f712a8e19ed0eb3f988677dbf63d55f6c0e78d3babdd729a047",
+      "bodyLength": 182
+    },
+    {
+      "selector": ".best-parlay-card",
+      "context": "",
+      "bodyHash": "a3ce0b25f697005917a46c1050fb77af8a08455778e406b4eab8840ec7851b32",
+      "bodyLength": 213
+    },
+    {
+      "selector": ".best-parlay-card h3",
+      "context": "",
+      "bodyHash": "5b0419275ca2134914fea08001f8742fe8dc45c647d913824ad3b3f09e448523",
+      "bodyLength": 81
+    },
+    {
+      "selector": ".parlay-details",
+      "context": "",
+      "bodyHash": "539368070efecd075269be2f0ac2f50123eac8132b9ad1322cc1ae653c624a9e",
+      "bodyLength": 63
+    },
+    {
+      "selector": ".parlay-info",
+      "context": "",
+      "bodyHash": "b4e89b0ebe938cd4fe418692b7ba72bbb306b1711604a36035178d73c04c20a9",
+      "bodyLength": 192
+    },
+    {
+      "selector": ".parlay-odds, .parlay-prob",
+      "context": "",
+      "bodyHash": "f18f19e9e356577588f9d39e9dee09f2fee6ffcf8c63951251cb436d1d7ff206",
+      "bodyLength": 55
+    },
+    {
+      "selector": ".parlay-ev",
+      "context": "",
+      "bodyHash": "3f477891472091508efe4c34705726fcd1115b976e75c8ca7169c635f7e5b569",
+      "bodyLength": 99
+    },
+    {
+      "selector": ".parlay-ev.positive",
+      "context": "",
+      "bodyHash": "9d9ff5d1036e3db20758dd4cb43ab69262df258fdd39f4d80b8b4365b920de04",
+      "bodyLength": 57
+    },
+    {
+      "selector": ".parlay-ev.negative",
+      "context": "",
+      "bodyHash": "7e7ce402112186a43dc4309e3e4f4c12c8d54dbd227339b6aba0319eccf860f3",
+      "bodyLength": 56
+    },
+    {
+      "selector": ".parlay-selections",
+      "context": "",
+      "bodyHash": "44f6066d570236f2705f7d90e376e994d1dc6af2c23ec439f43a52f131266bcb",
+      "bodyLength": 65
+    },
+    {
+      "selector": ".selection-item",
+      "context": "",
+      "bodyHash": "18650d1584f8738cb84e81e36eb1a69cb1e3ab4af2f02dcbcb40ed3d86122ada",
+      "bodyLength": 201
+    },
+    {
+      "selector": ".match-name",
+      "context": "",
+      "bodyHash": "7d5080e4b9193d7fe45e8cea57a1c52ccb3b10809cfe7ae9743abf3d74ad70e2",
+      "bodyLength": 68
+    },
+    {
+      "selector": ".pick-type",
+      "context": "",
+      "bodyHash": "36e1bb181d8bc558e7d984248087ae64881b507390ecd95b2e3578f5c13cbf0d",
+      "bodyLength": 155
+    },
+    {
+      "selector": ".pick-odds",
+      "context": "",
+      "bodyHash": "9c5093196adfe1d535b4feb7a9a63beb06bfcc5c4cfc9fd085810569cdab631b",
+      "bodyLength": 80
+    },
+    {
+      "selector": ".parlays-list h3",
+      "context": "",
+      "bodyHash": "bcd817b603dbbd8ca59ab2e1d362206b5a835965e6a2dd84858ec528d2c7a0a4",
+      "bodyLength": 81
+    },
+    {
+      "selector": ".parlay-item",
+      "context": "",
+      "bodyHash": "6f921462385f16119b62c4ef7cd3ae8e4687dbb9eaa3c4d2c2605a43f43e2a18",
+      "bodyLength": 177
+    },
+    {
+      "selector": ".parlay-item:hover",
+      "context": "",
+      "bodyHash": "871791ad0fe6439d2502fa14a415dbca513e89635a7bc7f2280f5c645eb999a6",
+      "bodyLength": 78
+    },
+    {
+      "selector": ".parlay-header",
+      "context": "",
+      "bodyHash": "1b2d501ef71b76e59fb39a0362b0e87b65e95d7be5ebc7fb41d483310738aaa6",
+      "bodyLength": 108
+    },
+    {
+      "selector": ".parlay-rank",
+      "context": "",
+      "bodyHash": "5c6bc570ae9efe7d01d63b071a85c8ff3f0f72b155ede893da28f10f0e2db585",
+      "bodyLength": 201
+    },
+    {
+      "selector": ".parlay-picks",
+      "context": "",
+      "bodyHash": "7ae9d5244d61e0f72ec96fb9be467958570e13ed755dff2c672a0603f7d6f4ff",
+      "bodyLength": 58
+    },
+    {
+      "selector": ".pick-chip",
+      "context": "",
+      "bodyHash": "69fba1b3fda8a2c4a15cf841579d4d7b656ee129dc31931dab0c831f85a2bcb0",
+      "bodyLength": 189
+    },
+    {
+      "selector": ".ai-layout",
+      "context": "",
+      "bodyHash": "082fbfe660d623dcbc57888f6141e68c1232331ad63fcfcd660693555361d2ce",
+      "bodyLength": 93
+    },
+    {
+      "selector": ".ai-input-panel,\n.ai-cart-panel",
+      "context": "",
+      "bodyHash": "f56f10e6c996661ee805b78fb24b148f80dd3fc2689f5ddba7e36c8d24756d7f",
+      "bodyLength": 157
+    },
+    {
+      "selector": ".ai-input-panel h3,\n.ai-cart-panel h3",
+      "context": "",
+      "bodyHash": "585d31b6583333c954786a0bba6a36c0380bead887e9c5536bc5d59f28d62a33",
+      "bodyLength": 144
+    },
+    {
+      "selector": ".ai-input-panel h3 i,\n.ai-cart-panel h3 i",
+      "context": "",
+      "bodyHash": "bb61904fb300a5e5953f778c8c73765d7334cd0fec19e121f7a122df5896596c",
+      "bodyLength": 36
+    },
+    {
+      "selector": ".ai-cart-container",
+      "context": "",
+      "bodyHash": "9ca24ed6fd15a86b3148ec9286a3d5ad643c09ae1d953740c19dbc31891b5b1a",
+      "bodyLength": 221
+    },
+    {
+      "selector": ".ai-cart-container:empty::before",
+      "context": "",
+      "bodyHash": "972eaec96ed73d031189e7d8a9d870aeb4cc91e2029302917368876a82db4832",
+      "bodyLength": 146
+    },
+    {
+      "selector": ".ai-selected-card",
+      "context": "",
+      "bodyHash": "899fc371c400418c689f73e7559eeaa5290f784847cdc255737c85da8a051da0",
+      "bodyLength": 197
+    },
+    {
+      "selector": ".ai-selected-card:last-child",
+      "context": "",
+      "bodyHash": "42e504025807335eb965d84f7e21483b1c700c4b13dcfd06bc5b01fe7fc2d968",
+      "bodyLength": 23
+    },
+    {
+      "selector": ".ai-selected-card .match-header",
+      "context": "",
+      "bodyHash": "f519cd45fdc50d9502ce124685f6f0291d5a0104d0799ac427d3458090c52fc9",
+      "bodyLength": 108
+    },
+    {
+      "selector": ".ai-selected-card .match-title",
+      "context": "",
+      "bodyHash": "982e7577b22f07741753a4b47568eac7e1cc3c130fe0facd8d55bdd0be05a412",
+      "bodyLength": 76
+    },
+    {
+      "selector": ".ai-selected-card .remove-btn",
+      "context": "",
+      "bodyHash": "572acb9703ac694b28d39dd70ae355a9e4ac5cf0f5df814430c3e67a1e391885",
+      "bodyLength": 250
+    },
+    {
+      "selector": ".ai-selected-card .remove-btn:hover",
+      "context": "",
+      "bodyHash": "c9c698f4615567324c7cf6a808294b46d19b7a82d25c3cdf563d692380af6f27",
+      "bodyLength": 53
+    },
+    {
+      "selector": ".ai-selected-card .match-info",
+      "context": "",
+      "bodyHash": "b81aa6c355b7aacc644d9c81dc33907291680f0e0f7a70f95643de8f0a5974e1",
+      "bodyLength": 130
+    },
+    {
+      "selector": ".ai-selected-card .odds-info",
+      "context": "",
+      "bodyHash": "bee22573dc7529084d843eb65d327bf80d4e83bfd2713be57d13cff442f2972d",
+      "bodyLength": 84
+    },
+    {
+      "selector": ".ai-selected-card .odds-info span",
+      "context": "",
+      "bodyHash": "7069a47fedd225f08d2d7e77e77d2e60ad838ee17883e11a438d4ffe0170a2b9",
+      "bodyLength": 133
+    },
+    {
+      "selector": ".ai-actions",
+      "context": "",
+      "bodyHash": "d18a919248913ebf3b8ebff66b22280f8b9ba31dd0c43394d0d9efbc7dd603e4",
+      "bodyLength": 71
+    },
+    {
+      "selector": ".ai-actions .btn",
+      "context": "",
+      "bodyHash": "2f83bc375f6ea59438754b55f4bc42244ffdbe7dbc1c0e2f5e9174ea07e1bb85",
+      "bodyLength": 14
+    },
+    {
+      "selector": "#ai-match-count",
+      "context": "",
+      "bodyHash": "86248da9a8d2aefa0416c5a6632d8b54787449dd575a00eb5211a04bebd863b5",
+      "bodyLength": 58
+    },
+    {
+      "selector": ".ai-layout",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "91278a5c965b3292d1a59e16d8a3f520fb841f29cca72561afb58d3d8fb968c8",
+      "bodyLength": 62
+    },
+    {
+      "selector": ".ai-input-panel,\n    .ai-cart-panel",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "4e6d9ad0d68b6236cc39c3fec744ffd216f25e2ff7926ff724325582ffa607ae",
+      "bodyLength": 30
+    },
+    {
+      "selector": ".ai-actions",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "81f0141349c976400d5ac5762487aba507a61e3c40de9a6fa6fee5cd72eef17b",
+      "bodyLength": 58
+    },
+    {
+      "selector": ".modal-overlay",
+      "context": "",
+      "bodyHash": "c8c6b9486392a3b1d560657ae43433931147cb4ef55f4a5d37b27b498a34a66f",
+      "bodyLength": 211
+    },
+    {
+      "selector": ".modal-content",
+      "context": "",
+      "bodyHash": "1f911318f30db3a815b247458bf33cb6eaa17f743103eb6895ab7114af6d2fd9",
+      "bodyLength": 237
+    },
+    {
+      "selector": "@keyframes modalSlideIn",
+      "context": "",
+      "bodyHash": "00562953775e24167a68b8982cdbf0b24db61d7a780ffa1931f5aaec0e9f6d53",
+      "bodyLength": 165
+    },
+    {
+      "selector": ".modal-header",
+      "context": "",
+      "bodyHash": "2597495e3880f5a58faf13958d54d9f13f88638b7b97ec7e45210bf96e2483fd",
+      "bodyLength": 152
+    },
+    {
+      "selector": ".modal-header h3",
+      "context": "",
+      "bodyHash": "54e26ba11af9232f123b260b69009466710c4eff61c8a183d7dda426e172e512",
+      "bodyLength": 72
+    },
+    {
+      "selector": ".modal-close",
+      "context": "",
+      "bodyHash": "06b7e56a33f001f71d300d1871e6afff67e06f0c58879a2de9ff48acf6d660f6",
+      "bodyLength": 195
+    },
+    {
+      "selector": ".modal-close:hover",
+      "context": "",
+      "bodyHash": "94141443c04281b8fe81b8177c3357d19a3069560803173b4cbfa455956d02f5",
+      "bodyLength": 70
+    },
+    {
+      "selector": ".modal-body",
+      "context": "",
+      "bodyHash": "03efabead9177082558e75690bdbf17c263a88dffb633872d3da4a5b9daa56ab",
+      "bodyLength": 22
+    },
+    {
+      "selector": ".modal-body p",
+      "context": "",
+      "bodyHash": "f1872e26bdaf87b38c022c80e70157acf789ce409472295051892ad626d49bae",
+      "bodyLength": 75
+    },
+    {
+      "selector": ".code-block",
+      "context": "",
+      "bodyHash": "e56509e1f577faaf25183a88d8e70e9b8ca3e3b42caf212a01ed66629140c809",
+      "bodyLength": 230
+    },
+    {
+      "selector": ".code-block code",
+      "context": "",
+      "bodyHash": "3ff428d4d8e0a6c3a77ec8d83e4c28f614e1bc1cbc7a40468d6f4265500de9aa",
+      "bodyLength": 126
+    },
+    {
+      "selector": ".copy-btn",
+      "context": "",
+      "bodyHash": "e5cd66598e667f66ba222d69489812850423ec1807ae26486a5ff27430d822aa",
+      "bodyLength": 262
+    },
+    {
+      "selector": ".copy-btn:hover",
+      "context": "",
+      "bodyHash": "c18be35e0d86e7cd4478c0314b0d2c42b5b6f037de64b54af890162b9ccb828d",
+      "bodyLength": 54
+    },
+    {
+      "selector": ".help-text",
+      "context": "",
+      "bodyHash": "e218d574be3a3dada17fd1b620b5329528ec41e9d780499189e5218b82d3114a",
+      "bodyLength": 191
+    },
+    {
+      "selector": ".modal-footer",
+      "context": "",
+      "bodyHash": "7b6b7d23be31823fb2c422abe976a28e16bd4f56ad9a96a0e88c46fc1b9a70a4",
+      "bodyLength": 134
+    },
+    {
+      "selector": ".modal-footer .btn",
+      "context": "",
+      "bodyHash": "4d44f48b267d8c4254c391263b014dc5b05b7cb4bfce13a74918a627f15347a3",
+      "bodyLength": 106
+    },
+    {
+      "selector": ".modal-content",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "02eec9863c8bfd33d1a20b0000f419ead613636bd4b3a7ef0865cfbebe8bf1c7",
+      "bodyLength": 77
+    },
+    {
+      "selector": ".modal-header,\n    .modal-body,\n    .modal-footer",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "25f25d1fd613ad1fdda1d4a335cb17b4b1d9dc1edf125fec7c7882ccaf852a8f",
+      "bodyLength": 28
+    },
+    {
+      "selector": ".modal-footer",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "9aa394d60fe7f52e3ab08cc131261aeaa0f5793abe550f25cd5211a6efda3fe0",
+      "bodyLength": 37
+    },
+    {
+      "selector": ".modal-footer .btn",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "4c088b9326ae96082f917847d620fe2d31ff7478b17d5d56ac6142e2e6f9eb3b",
+      "bodyLength": 26
+    },
+    {
+      "selector": ".matches-summary",
+      "context": "",
+      "bodyHash": "179c4ba76d96ac5a8dc09b3b2c3beb4f8112d410d604a159b3600738f33dd9b2",
+      "bodyLength": 233
+    },
+    {
+      "selector": ".matches-count",
+      "context": "",
+      "bodyHash": "092944fa6f118bcdf5e7fdc2cdcaec9b8fbc5baad1347885c0ab2207c36ba50a",
+      "bodyLength": 80
+    },
+    {
+      "selector": ".matches-count span",
+      "context": "",
+      "bodyHash": "6da7d45471b29fd430851c0a5fd0a67ce66b3cec85bedbba968963eec6e10e1e",
+      "bodyLength": 56
+    },
+    {
+      "selector": ".matches-separator",
+      "context": "",
+      "bodyHash": "6af5ee1f1f719100f7636ac05123ae697d04988c2094f52900d641441bee2f4b",
+      "bodyLength": 55
+    },
+    {
+      "selector": ".compact-btn",
+      "context": "",
+      "bodyHash": "6b792d598df2814a8c26f35ed42791458e86b99526faf59cc8cbeca4d6d43747",
+      "bodyLength": 129
+    },
+    {
+      "selector": ".lottery-match-card",
+      "context": "",
+      "bodyHash": "5de274443ebc558a527eb45da6549c13b17a54e7add6df79cae34225497e4f1c",
+      "bodyLength": 52
+    },
+    {
+      "selector": ".lottery-match-card.hidden-match",
+      "context": "",
+      "bodyHash": "8028a11851de32552504dfbeba1cdb3161a1618592bde3a24988852c3b8eaab0",
+      "bodyLength": 31
+    },
+    {
+      "selector": ".matches-fade-overlay",
+      "context": "",
+      "bodyHash": "459c07c8bc18a78ba65e9209a51cabc9f65f4b19ed42ab3b0ead06625490a454",
+      "bodyLength": 335
+    },
+    {
+      "selector": ".best-parlay-section",
+      "context": "",
+      "bodyHash": "4233df190dd552462fb081e55ce4f918bfbc36956ad7c4cf26564781c7a7574d",
+      "bodyLength": 283
+    },
+    {
+      "selector": "@keyframes parlaySlideIn",
+      "context": "",
+      "bodyHash": "4b2eb8191d025059d5f89987add202c1022abe0d9e55fb438390ecb88f4bb4e6",
+      "bodyLength": 145
+    },
+    {
+      "selector": ".parlay-header",
+      "context": "",
+      "bodyHash": "69ac80707cdacba494d6560d24cfb678922e21257e712d7026afe2cef5cebe38",
+      "bodyLength": 156
+    },
+    {
+      "selector": ".parlay-header h4",
+      "context": "",
+      "bodyHash": "60318402588cb946bede5b1586c28e8cd87dd6aa5408fa50ac15b70040bff8ee",
+      "bodyLength": 59
+    },
+    {
+      "selector": ".parlay-header .compact-btn",
+      "context": "",
+      "bodyHash": "03993f570f4e3f6282e7b9d88e6249eb0196a0f802adf1d4e79d60886d55012a",
+      "bodyLength": 109
+    },
+    {
+      "selector": ".parlay-header .compact-btn:hover",
+      "context": "",
+      "bodyHash": "3a44cbacc6c8cec565a7100e6e915ea71908fff2b76c6c183e0b2bd5b2e0c2ec",
+      "bodyLength": 71
+    },
+    {
+      "selector": ".parlay-content",
+      "context": "",
+      "bodyHash": "95fced23e2420285f185f036873a1968acef8b0c624cf775f8aeb59b7ec5b442",
+      "bodyLength": 91
+    },
+    {
+      "selector": ".parlay-loading",
+      "context": "",
+      "bodyHash": "a55ca5d5772c8463a3e22492730b80297ac913e8c9be19d395c63ec25986570c",
+      "bodyLength": 78
+    },
+    {
+      "selector": ".parlay-loading i",
+      "context": "",
+      "bodyHash": "5b989c6ca4b1a733e43c27a2713214678d5592a18cb16334ae10594d0a43ce63",
+      "bodyLength": 60
+    },
+    {
+      "selector": ".parlay-recommendation",
+      "context": "",
+      "bodyHash": "9c5b6698304073bb8809c73db33e40f98191c078033c243ebc3f1965cebd3298",
+      "bodyLength": 69
+    },
+    {
+      "selector": ".parlay-title",
+      "context": "",
+      "bodyHash": "e3ed0892b6173dfb03ecad5a4b7e4f899242954ca6fe97dcc07e6815a108d588",
+      "bodyLength": 107
+    },
+    {
+      "selector": ".parlay-matches",
+      "context": "",
+      "bodyHash": "4ae9a67e040556663055a50850fe247f678c4a603c8885a6061b09ef0c317d2b",
+      "bodyLength": 26
+    },
+    {
+      "selector": ".parlay-match-item",
+      "context": "",
+      "bodyHash": "76aee908e131995c8abd54d1bc7df39b264381f9f359924369778ff71f6dc256",
+      "bodyLength": 214
+    },
+    {
+      "selector": ".parlay-match-info",
+      "context": "",
+      "bodyHash": "2f83bc375f6ea59438754b55f4bc42244ffdbe7dbc1c0e2f5e9174ea07e1bb85",
+      "bodyLength": 14
+    },
+    {
+      "selector": ".parlay-prediction",
+      "context": "",
+      "bodyHash": "5f97692364fffef874e32b3e23b79a3dcef22dc487eb796662b61355d43f8624",
+      "bodyLength": 155
+    },
+    {
+      "selector": ".parlay-stats",
+      "context": "",
+      "bodyHash": "40a2d437bce1fd96543728f4e2cdffa591f2cf5901da5803cbe86d6c2bfbce0a",
+      "bodyLength": 97
+    },
+    {
+      "selector": ".parlay-stat",
+      "context": "",
+      "bodyHash": "1c084c297acf8449cb87864532941c32e560247ab3230f8fde4e40f94717cd00",
+      "bodyLength": 107
+    },
+    {
+      "selector": ".parlay-stat-value",
+      "context": "",
+      "bodyHash": "c1e4c213127ef78226b5576cafa08ef04e69fc58bcd8eba92f225d1f0a77815e",
+      "bodyLength": 100
+    },
+    {
+      "selector": ".parlay-stat-label",
+      "context": "",
+      "bodyHash": "4fcc3b8d4f28896deb2529d7d1de10e9b965603c2d3113708ba7a2859f54d49a",
+      "bodyLength": 82
+    },
+    {
+      "selector": ".parlay-reasoning",
+      "context": "",
+      "bodyHash": "7d7f6471742a689c8919c2ef5a6af482af31460b61e3d8516e4cf6c33e95bb35",
+      "bodyLength": 247
+    },
+    {
+      "selector": ".lottery-matches-list",
+      "context": "",
+      "bodyHash": "f9aeaf4f4b40e896f8c4d82c110ae219047f79fc967ebe7f31d710e27ccb4865",
+      "bodyLength": 65
+    },
+    {
+      "selector": ".matches-fade-indicator",
+      "context": "",
+      "bodyHash": "2730d1afdc4c6a7a3d73d0810caf5335331e49bc130eacdf47472c50b9db232c",
+      "bodyLength": 205
+    },
+    {
+      "selector": ".parlay-header",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "0b173cd222506dfbe9df6df9f46ae6b1f61457fcd16e793325881f66165538d3",
+      "bodyLength": 86
+    },
+    {
+      "selector": ".parlay-stats",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "73955ad76b753356493b80f2704a381572f34203e2248a63e22d59ea54652e45",
+      "bodyLength": 41
+    },
+    {
+      "selector": ".matches-summary",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "0b173cd222506dfbe9df6df9f46ae6b1f61457fcd16e793325881f66165538d3",
+      "bodyLength": 86
+    },
+    {
+      "selector": ".usage-guide",
+      "context": "",
+      "bodyHash": "05734390658804811b87522921a4661063d6f676fa882788db96de724e4efc50",
+      "bodyLength": 181
+    },
+    {
+      "selector": ".usage-guide h3",
+      "context": "",
+      "bodyHash": "c9818dfe2bcb955d83af5dd17afbd7e92c1f147e108902ee0c16d1dadd1357a1",
+      "bodyLength": 167
+    },
+    {
+      "selector": ".usage-guide h3 i",
+      "context": "",
+      "bodyHash": "bb61904fb300a5e5953f778c8c73765d7334cd0fec19e121f7a122df5896596c",
+      "bodyLength": 36
+    },
+    {
+      "selector": ".guide-steps",
+      "context": "",
+      "bodyHash": "335496b4d252c660fd950954fa64f68353d2236856119357d8b746dd45b2a57a",
+      "bodyLength": 26
+    },
+    {
+      "selector": ".step-item",
+      "context": "",
+      "bodyHash": "65f3214d6ec8f6561fe73ca9179fc251133776e2d2afd09b222283f0fa5a6668",
+      "bodyLength": 251
+    },
+    {
+      "selector": ".step-item:hover",
+      "context": "",
+      "bodyHash": "af19545b160a707865ba0d79ed6e4f899539a24e27a490128dc34542d8a89f9b",
+      "bodyLength": 75
+    },
+    {
+      "selector": ".step-number",
+      "context": "",
+      "bodyHash": "034177d1713b368c143b76184cee3559e2b13f1cbc40373d22d407e497997d06",
+      "bodyLength": 254
+    },
+    {
+      "selector": ".step-content h4",
+      "context": "",
+      "bodyHash": "47b7b9d4eb1eca8aaadc94582164b338ec8c9f60e18b7c7483cc4aeeceed0f05",
+      "bodyLength": 102
+    },
+    {
+      "selector": ".step-content p",
+      "context": "",
+      "bodyHash": "4e7f26b8db6c2b76979900542f80834146f4bd72604e684a2c4b8555a1a834fc",
+      "bodyLength": 95
+    },
+    {
+      "selector": ".step-content strong",
+      "context": "",
+      "bodyHash": "6da7d45471b29fd430851c0a5fd0a67ce66b3cec85bedbba968963eec6e10e1e",
+      "bodyLength": 56
+    },
+    {
+      "selector": ".features-highlight",
+      "context": "",
+      "bodyHash": "3ef1ea5a516dc72b9e52420d8ed7719eb8b6241e06e6b70001824b8572ae9fc6",
+      "bodyLength": 148
+    },
+    {
+      "selector": ".feature-item",
+      "context": "",
+      "bodyHash": "20254a32a28d2604b14f319af3d1a847d60fd26729d77e718473eef4556717e4",
+      "bodyLength": 257
+    },
+    {
+      "selector": ".feature-item:hover",
+      "context": "",
+      "bodyHash": "1b064b9efc383f9f70d228505134cffd71a55e7a0f3df7bb95b9786dc38f06b7",
+      "bodyLength": 71
+    },
+    {
+      "selector": ".feature-item i",
+      "context": "",
+      "bodyHash": "af0e824df946ee1d45057d04592864e2c6e1708564fa40d4031a1517f2b1a20d",
+      "bodyLength": 59
+    },
+    {
+      "selector": ".usage-guide",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "825324dad77727710ab3a3b32ada81457a0b3461afb69ea0133b17a253f65885",
+      "bodyLength": 54
+    },
+    {
+      "selector": ".step-item",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "09a0beda64cf6c9c0b5fe9a1a5cccd781b0191eb4ac2fa93b089010cd273d581",
+      "bodyLength": 86
+    },
+    {
+      "selector": ".step-number",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "e8399df5f1ccb7b50cfa23e46932a30400b53ef6bd61bec346674cad08c5e833",
+      "bodyLength": 33
+    },
+    {
+      "selector": ".features-highlight",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "73955ad76b753356493b80f2704a381572f34203e2248a63e22d59ea54652e45",
+      "bodyLength": 41
+    },
+    {
+      "selector": ".usage-guide h3",
+      "context": "@media (max-width: 768px)",
+      "bodyHash": "3e98898235f1e31bafbff29e079967eb8d5572a8561981034eca5086e52d9a14",
+      "bodyLength": 32
+    },
+    {
+      "selector": ".auth-modal",
+      "context": "",
+      "bodyHash": "aa040e87fd2d1cb56a9ccbe91a5b1e17bb06061ac8e268ad504d1e4adb3a9911",
+      "bodyLength": 211
+    },
+    {
+      "selector": ".auth-modal.hidden",
+      "context": "",
+      "bodyHash": "8028a11851de32552504dfbeba1cdb3161a1618592bde3a24988852c3b8eaab0",
+      "bodyLength": 31
+    },
+    {
+      "selector": ".modal-content",
+      "context": "",
+      "bodyHash": "971bde33d80bcaf8925b4a15576602ad5843fb9939bf5febe13e5eca12289b1a",
+      "bodyLength": 187
+    },
+    {
+      "selector": ".modal-header",
+      "context": "",
+      "bodyHash": "654d229392f7bcd1cfbd4acf1f3ba7085d0517a58c228ec73eed6913bcd87e6d",
+      "bodyLength": 171
+    },
+    {
+      "selector": ".modal-header h3",
+      "context": "",
+      "bodyHash": "d7eb9c27e9d2a29c1b8652f6a44f3059b61d126a7bd188d5fec6450fb59f62ce",
+      "bodyLength": 110
+    },
+    {
+      "selector": ".modal-close",
+      "context": "",
+      "bodyHash": "06b7e56a33f001f71d300d1871e6afff67e06f0c58879a2de9ff48acf6d660f6",
+      "bodyLength": 195
+    },
+    {
+      "selector": ".modal-close:hover",
+      "context": "",
+      "bodyHash": "94141443c04281b8fe81b8177c3357d19a3069560803173b4cbfa455956d02f5",
+      "bodyLength": 70
+    },
+    {
+      "selector": ".modal-body",
+      "context": "",
+      "bodyHash": "03efabead9177082558e75690bdbf17c263a88dffb633872d3da4a5b9daa56ab",
+      "bodyLength": 22
+    },
+    {
+      "selector": ".auth-form",
+      "context": "",
+      "bodyHash": "539368070efecd075269be2f0ac2f50123eac8132b9ad1322cc1ae653c624a9e",
+      "bodyLength": 63
+    },
+    {
+      "selector": ".form-group",
+      "context": "",
+      "bodyHash": "44f6066d570236f2705f7d90e376e994d1dc6af2c23ec439f43a52f131266bcb",
+      "bodyLength": 65
+    },
+    {
+      "selector": ".form-group label",
+      "context": "",
+      "bodyHash": "a403c076430e2a1d595b38f74b51138d4c5a22eb732064eb51d97ca03f4fde42",
+      "bodyLength": 55
+    },
+    {
+      "selector": ".form-group input",
+      "context": "",
+      "bodyHash": "3e16dce43b69c87be4ce728ab009c7692b6d6b8223083a6554f1272718c3e8b8",
+      "bodyLength": 217
+    },
+    {
+      "selector": ".form-group input:focus",
+      "context": "",
+      "bodyHash": "7f230ccd1e3b033b26678f28b5834737f6089c31f6e21a42f900315c096526ca",
+      "bodyLength": 60
+    },
+    {
+      "selector": ".form-actions",
+      "context": "",
+      "bodyHash": "fedca044df7526bbdc1e424368b6722427fa7e1a6c086d9aa8c94fe3e3e0eae2",
+      "bodyLength": 25
+    },
+    {
+      "selector": ".full-width",
+      "context": "",
+      "bodyHash": "05029fd946bf1995aa1c83977146da9eb706b4ab39b0af78403c7a4d0185769d",
+      "bodyLength": 18
+    },
+    {
+      "selector": ".auth-switch",
+      "context": "",
+      "bodyHash": "167c0df7155dce6194ea84a221a1284d032f8e3c7d6cb9df5e3e6841db3acc20",
+      "bodyLength": 81
+    },
+    {
+      "selector": ".auth-switch a",
+      "context": "",
+      "bodyHash": "968e126743c3ef72b8348a5d9009b1557c1141efee474e7f187132851b16cc11",
+      "bodyLength": 83
+    },
+    {
+      "selector": ".auth-switch a:hover",
+      "context": "",
+      "bodyHash": "50876e3c7599cfd1640e2a6b99414531f5bfa979c1d50e8ac4ab72017a7cee0f",
+      "bodyLength": 33
+    },
+    {
+      "selector": ".nav-user",
+      "context": "",
+      "bodyHash": "d9d9f235753fe18732f24093651a9f88439a8c20537abc647b53335f528f698b",
+      "bodyLength": 68
+    },
+    {
+      "selector": ".user-info",
+      "context": "",
+      "bodyHash": "c570f8d1946bad89703d4a62dfa83c8c218834fb6b3d4d1a76e0cd03fe7449f7",
+      "bodyLength": 185
+    },
+    {
+      "selector": ".user-avatar",
+      "context": "",
+      "bodyHash": "56a91946c111326880bd6327e16b2802f1aaa944e640f92c4d141a72b35c1b74",
+      "bodyLength": 189
+    },
+    {
+      "selector": ".user-details",
+      "context": "",
+      "bodyHash": "717b2370f8f6a2a37ad09d345cfa6e9c1cf34ea3ace69106ca840c7ecd5aa2f0",
+      "bodyLength": 65
+    },
+    {
+      "selector": ".username",
+      "context": "",
+      "bodyHash": "f18f19e9e356577588f9d39e9dee09f2fee6ffcf8c63951251cb436d1d7ff206",
+      "bodyLength": 55
+    },
+    {
+      "selector": ".user-type-badge",
+      "context": "",
+      "bodyHash": "261ccd8f3c1862aa3385710d2e61359f65f5ad92bfe5c0b5e9158be2987070ed",
+      "bodyLength": 98
+    },
+    {
+      "selector": ".user-type-badge.free",
+      "context": "",
+      "bodyHash": "5575147b964167bad64212cf3e0a90e2c94e53ec27eaf1ae3246c4f139d4ed39",
+      "bodyLength": 72
+    },
+    {
+      "selector": ".user-type-badge.premium",
+      "context": "",
+      "bodyHash": "9e6caee78c617444a2aef70db9cc1d16bc0499eb31acb510d8938c2389e80a76",
+      "bodyLength": 90
+    },
+    {
+      "selector": ".predictions-remaining",
+      "context": "",
+      "bodyHash": "8b7ae0ac4bc23704324420401615cbdb494cff08970a0155c9163915d38b121e",
+      "bodyLength": 58
+    },
+    {
+      "selector": ".auth-buttons",
+      "context": "",
+      "bodyHash": "c1f972d1ae96633c3361a39665beed8d5ac97c541e793dafae5504e84f57ce42",
+      "bodyLength": 37
+    },
+    {
+      "selector": ".auth-message",
+      "context": "",
+      "bodyHash": "62ad44976d265f5b6980f506b562f73681338ca09376e42eda7622dbb821003b",
+      "bodyLength": 165
+    },
+    {
+      "selector": ".auth-message.success",
+      "context": "",
+      "bodyHash": "8f5a63e0b476f4d8127acadf0b46719d7791c29309634b35c47c56cb9a46491e",
+      "bodyLength": 42
+    },
+    {
+      "selector": ".auth-message.error",
+      "context": "",
+      "bodyHash": "9f25e48b4fc83b37baf43f626a3f6d9191e3a4581da78ee401e9b65ec1f5e99f",
+      "bodyLength": 41
+    },
+    {
+      "selector": ".auth-message.warning",
+      "context": "",
+      "bodyHash": "01ce25d62f8bc5c9eee4f5f91cf56fc008b4c094f41b6010c60e881f7c384c82",
+      "bodyLength": 39
+    },
+    {
+      "selector": ".auth-message.info",
+      "context": "",
+      "bodyHash": "53480b2e49ac280efb86d3ce5888ab99923d668e341d0488acd0f88d0f9830c6",
+      "bodyLength": 42
+    },
+    {
+      "selector": ".message-content",
+      "context": "",
+      "bodyHash": "b56f2fc410a7e228788e797dadb854477476a6c4508c4eaaedab8c2311b1a93e",
+      "bodyLength": 62
+    },
+    {
+      "selector": ".btn.disabled",
+      "context": "",
+      "bodyHash": "1d5ef9f9fe9be63fc0f0759366b0a0fe4af4b97a3daa5d34fc724185007d551c",
+      "bodyLength": 111
+    },
+    {
+      "selector": ".btn.disabled:hover",
+      "context": "",
+      "bodyHash": "fac6cc1714359a73a20c082509892194db09ef78b16a84636553565af5ad2cf9",
+      "bodyLength": 59
+    },
+    {
+      "selector": ".btn:disabled",
+      "context": "",
+      "bodyHash": "51ad8d8c04c6da0d1a31f7deab941be27f4d6bedc795be17cdc98794225181a1",
+      "bodyLength": 137
+    },
+    {
+      "selector": ".btn:disabled:hover",
+      "context": "",
+      "bodyHash": "fac6cc1714359a73a20c082509892194db09ef78b16a84636553565af5ad2cf9",
+      "bodyLength": 59
+    }
+  ],
+  "total": 371,
+  "file_sha256": "d1d9573c5f3a37867d4262b23a4f80e2b3183a4c418ea4ea35359ea9a4c54129",
+  "file_length": 49743
+}

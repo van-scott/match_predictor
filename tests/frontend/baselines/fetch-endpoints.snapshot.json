@@ -1,0 +1,21 @@
+{
+  "endpoints": [
+    "/api/ai/predict",
+    "/api/ai/save",
+    "/api/analyze/classic",
+    "/api/login",
+    "/api/logout",
+    "/api/lottery/matches",
+    "/api/register",
+    "/api/smart-predict",
+    "/api/sync/status",
+    "/api/teams",
+    "/api/upcoming-matches",
+    "/api/user/checkin",
+    "/api/user/credits",
+    "/api/wc/predict",
+    "/api/wc/simulate"
+  ],
+  "count": 15,
+  "source_sha256": "1ceb11245751e954052125ee28df8bc99ec9f3cd65c178c691496ae9b4618b55"
+}

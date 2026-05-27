@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>AI 模型配置 - 管理后台</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<link rel="stylesheet" href="/static/style.css">
+<style>
+body { background:var(--bg); color:var(--cream); font-family:'Inter',sans-serif; padding:2rem; }
+.ac-wrap { max-width:700px; margin:0 auto; }
+.ac-card { background:var(--card); border-radius:16px; padding:1.5rem; border:1px solid var(--border); margin-bottom:1.2rem; }
+.ac-title { font-size:1.3rem; font-weight:800; margin-bottom:1.5rem; }
+.ac-field { margin-bottom:1.2rem; }
+.ac-field label { display:block; font-size:.8rem; color:var(--muted); margin-bottom:.4rem; font-weight:600; }
+.ac-field input, .ac-field select { width:100%; padding:.7rem 1rem; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--cream); font-size:.9rem; }
+.ac-field input:focus, .ac-field select:focus { border-color:var(--orange); outline:none; }
+.ac-btn { padding:.7rem 1.5rem; border-radius:8px; border:none; font-weight:700; font-size:.85rem; cursor:pointer; }
+.ac-btn-primary { background:var(--orange); color:#fff; }
+.ac-btn-secondary { background:var(--surface); color:var(--cream); border:1px solid var(--border); }
+.ac-btn:hover { opacity:.9; }
+.ac-actions { display:flex; gap:.8rem; margin-top:1.5rem; }
+.ac-status { margin-top:1rem; padding:.8rem; border-radius:8px; font-size:.82rem; display:none; }
+.ac-status.success { display:block; background:rgba(74,222,128,.1); color:var(--green); border:1px solid rgba(74,222,128,.2); }
+.ac-status.error { display:block; background:rgba(248,113,113,.1); color:var(--red); border:1px solid rgba(248,113,113,.2); }
+.ac-models { margin-top:1rem; }
+.ac-model-item { padding:.5rem .8rem; border-radius:6px; border:1px solid var(--border); margin-bottom:.4rem; cursor:pointer; font-size:.82rem; }
+.ac-model-item:hover { border-color:var(--orange); background:rgba(232,146,74,.05); }
+.ac-model-item.selected { border-color:var(--orange); background:rgba(232,146,74,.1); }
+.back-link { display:block; text-align:center; margin-top:1.5rem; color:var(--muted); text-decoration:none; font-size:.85rem; }
+.back-link:hover { color:var(--orange); }
+</style>
+</head>
+<body>
+<div class="ac-wrap">
+  <div class="ac-card">
+    <h2 class="ac-title"><i class="fas fa-cog"></i> AI 模型配置</h2>
+    <div class="ac-field">
+      <label>API 服务地址（Base URL）</label>
+      <input type="text" id="ai-url" value="{{ config.ai_api_url }}" placeholder="https://openrouter.ai/api/v1">
+    </div>
+    <div class="ac-field">
+      <label>API Key</label>
+      <input type="password" id="ai-key" value="{{ config.ai_api_key }}" placeholder="sk-...">
+      <small style="color:var(--muted);font-size:.7rem">当前: {{ masked_key or '未配置' }}</small>
+    </div>
+    <div class="ac-field">
+      <label>当前模型</label>
+      <input type="text" id="ai-model" value="{{ config.ai_model }}" placeholder="openrouter/owl-alpha">
+    </div>
+    <div class="ac-actions">
+      <button class="ac-btn ac-btn-secondary" onclick="detectModels()"><i class="fas fa-search"></i> 检测可用模型</button>
+      <button class="ac-btn ac-btn-primary" onclick="saveConfig()"><i class="fas fa-save"></i> 保存配置</button>
+    </div>
+    <div id="ac-status" class="ac-status"></div>
+    <div id="ac-models" class="ac-models"></div>
+  </div>
+</div>
+<a class="back-link" href="/">← 返回首页</a>
+<script>
+async function detectModels() {
+  const url = document.getElementById('ai-url').value.trim();
+  const key = document.getElementById('ai-key').value.trim();
+  const statusEl = document.getElementById('ac-status');
+  const modelsEl = document.getElementById('ac-models');
+  if (!url || !key) { statusEl.className='ac-status error'; statusEl.textContent='请填写 URL 和 Key'; return; }
+  statusEl.className='ac-status'; statusEl.style.display='block'; statusEl.textContent='检测中...'; statusEl.style.color='var(--muted)';
+  modelsEl.innerHTML = '';
+  try {
+    const res = await fetch('/api/admin/detect-models', {
+      method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin',
+      body: JSON.stringify({url, key})
+    });
+    const data = await res.json();
+    if (data.success && data.models && data.models.length > 0) {
+      statusEl.className='ac-status success'; statusEl.textContent=`检测到 ${data.models.length} 个可用模型`;
+      const currentModel = document.getElementById('ai-model').value;
+      modelsEl.innerHTML = '<p style="font-size:.75rem;color:var(--muted);margin-bottom:.5rem">点击选择模型：</p>' +
+        data.models.map(m => `<div class="ac-model-item ${m.id===currentModel?'selected':''}" onclick="selectModel(this,'${m.id}')">${m.id} <span style="color:var(--muted);font-size:.7rem">${m.name||''}</span></div>`).join('');
+    } else {
+      statusEl.className='ac-status error'; statusEl.textContent=data.message || '未检测到模型';
+    }
+  } catch(e) {
+    statusEl.className='ac-status error'; statusEl.textContent='检测失败: ' + e.message;
+  }
+}
+function selectModel(el, modelId) {
+  document.querySelectorAll('.ac-model-item').forEach(e => e.classList.remove('selected'));
+  el.classList.add('selected');
+  document.getElementById('ai-model').value = modelId;
+}
+async function saveConfig() {
+  const url = document.getElementById('ai-url').value.trim();
+  const key = document.getElementById('ai-key').value.trim();
+  const model = document.getElementById('ai-model').value.trim();
+  const statusEl = document.getElementById('ac-status');
+  if (!url || !key || !model) { statusEl.className='ac-status error'; statusEl.textContent='请填写所有字段'; return; }
+  try {
+    const res = await fetch('/api/admin/save-ai-config', {
+      method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin',
+      body: JSON.stringify({url, key, model})
+    });
+    const data = await res.json();
+    if (data.success) {
+      statusEl.className='ac-status success'; statusEl.textContent='✅ 配置已保存';
+    } else {
+      statusEl.className='ac-status error'; statusEl.textContent=data.message || '保存失败';
+    }
+  } catch(e) {
+    statusEl.className='ac-status error'; statusEl.textContent='保存失败: ' + e.message;
+  }
+}
+</script>
+</body>
+</html>

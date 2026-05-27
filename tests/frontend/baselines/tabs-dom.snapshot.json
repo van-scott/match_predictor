@@ -1,0 +1,18 @@
+{
+  "classic": {
+    "sha256": "10ae81346b76fdd63b23c51b992e4127ccc1a7be84fb8cd94f5f12b5dba91ad9",
+    "length": 2999
+  },
+  "ai": {
+    "sha256": "4b9bb63c921a8dec3122b930828c9fef93d9b5e4b9d3e66e72aa2432f4f2c9ec",
+    "length": 1429
+  },
+  "smart": {
+    "sha256": "10c72f76a27ebaf1a57493f6962da70d7730d81a6476ce7ba4dfda1d4c897841",
+    "length": 2399
+  },
+  "wc": {
+    "sha256": "892ad776cb5f2f04af164df3b02de99315b4d09ceed4de8b63e5c3505103d75f",
+    "length": 3900
+  }
+}

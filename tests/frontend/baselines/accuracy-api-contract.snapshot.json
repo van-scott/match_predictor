@@ -1,0 +1,119 @@
+{
+  "/api/accuracy/summary": {
+    "method": "GET",
+    "query_params": [],
+    "top_level_fields": [
+      "success",
+      "summary",
+      "league_stats",
+      "trend"
+    ],
+    "summary_fields": [
+      "total_finished",
+      "total_predicted",
+      "correct",
+      "score_hit",
+      "accuracy",
+      "avg_goal_error"
+    ],
+    "league_stats_item_fields": [
+      "league",
+      "total",
+      "correct",
+      "score_hit",
+      "accuracy"
+    ],
+    "trend_item_fields": [
+      "date",
+      "total",
+      "correct",
+      "accuracy"
+    ],
+    "field_types": {
+      "success": "boolean",
+      "summary": "object",
+      "league_stats": "array",
+      "trend": "array",
+      "summary.total_finished": "number",
+      "summary.total_predicted": "number",
+      "summary.correct": "number",
+      "summary.score_hit": "number",
+      "summary.accuracy": "number",
+      "summary.avg_goal_error": "number",
+      "league_stats[].league": "string",
+      "league_stats[].total": "number",
+      "league_stats[].correct": "number",
+      "league_stats[].score_hit": "number",
+      "league_stats[].accuracy": "number",
+      "trend[].date": "string",
+      "trend[].total": "number",
+      "trend[].correct": "number",
+      "trend[].accuracy": "number"
+    }
+  },
+  "/api/accuracy/matches": {
+    "method": "GET",
+    "query_params": [
+      "league",
+      "result",
+      "page",
+      "per_page"
+    ],
+    "top_level_fields": [
+      "success",
+      "total",
+      "page",
+      "per_page",
+      "matches"
+    ],
+    "match_item_fields": [
+      "fixture_id",
+      "league",
+      "home_team",
+      "away_team",
+      "home_team_cn",
+      "away_team_cn",
+      "match_time",
+      "predicted_result",
+      "actual_result",
+      "predicted_score",
+      "actual_score",
+      "predicted_home_goals",
+      "predicted_away_goals",
+      "actual_home_goals",
+      "actual_away_goals",
+      "result_correct",
+      "score_correct",
+      "goal_diff_error",
+      "ml_probs",
+      "odds"
+    ],
+    "field_types": {
+      "success": "boolean",
+      "total": "number",
+      "page": "number",
+      "per_page": "number",
+      "matches": "array",
+      "matches[].fixture_id": "number",
+      "matches[].league": "string",
+      "matches[].home_team": "string",
+      "matches[].away_team": "string",
+      "matches[].home_team_cn": "string|null",
+      "matches[].away_team_cn": "string|null",
+      "matches[].match_time": "string|null",
+      "matches[].predicted_result": "string|null",
+      "matches[].actual_result": "string|null",
+      "matches[].predicted_score": "string|null",
+      "matches[].actual_score": "string|null",
+      "matches[].predicted_home_goals": "number|null",
+      "matches[].predicted_away_goals": "number|null",
+      "matches[].actual_home_goals": "number|null",
+      "matches[].actual_away_goals": "number|null",
+      "matches[].result_correct": "boolean|null",
+      "matches[].score_correct": "boolean|null",
+      "matches[].goal_diff_error": "number|null",
+      "matches[].ml_probs": "object|null",
+      "matches[].odds": "object|null"
+    }
+  }
+}
