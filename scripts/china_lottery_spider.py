@@ -19,7 +19,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('/Users/zhongjianjun/projects/claude/MatchPredict/lottery_spider.log', encoding='utf-8'),
+        logging.FileHandler('//lottery_spider.log', encoding='utf-8'),
         logging.StreamHandler()
     ]
 )

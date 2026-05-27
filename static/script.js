@@ -1,4 +1,4 @@
-/* ── MatchPredict Pro – Main Script ── */
+/* ── match_predictor Pro – Main Script ── */
 
 // ── STATE ─────────────────────────────────────────────────────────────────
 let currentTab = 'classic';
