@@ -861,6 +861,43 @@ body::after {
 .pr-trend-bar { flex: 1; border-radius: 3px 3px 0 0; background: var(--orange); min-width: 12px; position: relative; }
 .pr-trend-label { position: absolute; bottom: -18px; left: 50%; transform: translateX(-50%); font-size: 0.55rem; color: var(--sub); white-space: nowrap; }
 
+/* ML 模型评估区 */
+.pr-eval {
+  background: var(--card);
+  padding: 1.2rem;
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+  border: 1px solid var(--border);
+}
+.pr-eval-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.5rem; margin-bottom: 1rem; }
+.pr-eval-head h3 { font-size: 1rem; color: var(--cream); margin: 0; }
+.pr-eval-meta { font-size: 0.72rem; color: var(--muted); }
+.pr-eval-grid { display: grid; grid-template-columns: 120px 1fr; gap: 1rem; margin-bottom: 1rem; }
+@media (max-width: 600px) { .pr-eval-grid { grid-template-columns: 1fr; } }
+.pr-eval-panel { background: var(--surface); border-radius: 10px; padding: 1rem; }
+.pr-eval-acc { font-size: 2rem; font-weight: 900; color: var(--orange); text-align: center; }
+.pr-eval-acc-label { font-size: 0.7rem; color: var(--muted); text-align: center; margin-top: 0.25rem; }
+.pr-eval-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.pr-eval-table th, .pr-eval-table td { padding: 0.35rem 0.5rem; text-align: center; }
+.pr-eval-table th { color: var(--muted); font-weight: 600; }
+.pr-eval-cls { text-align: left !important; color: var(--sub); }
+.pr-eval-brier { color: var(--amber); font-size: 0.72rem; }
+.pr-eval-section { margin-top: 1rem; }
+.pr-eval-section h4 { font-size: 0.85rem; color: var(--cream); margin: 0 0 0.6rem; font-weight: 600; }
+.pr-eval-hint { font-size: 0.65rem; color: var(--muted); font-weight: 400; }
+.pr-eval-muted { font-size: 0.75rem; color: var(--muted); margin: 0; }
+.pr-reliability { display: flex; align-items: flex-end; gap: 6px; height: 90px; padding-bottom: 18px; overflow-x: auto; }
+.pr-rel-bin { flex: 1; min-width: 28px; display: flex; flex-direction: column; align-items: center; height: 100%; }
+.pr-rel-bars { flex: 1; display: flex; align-items: flex-end; gap: 2px; width: 100%; justify-content: center; }
+.pr-rel-bar { width: 40%; border-radius: 2px 2px 0 0; min-height: 2px; }
+.pr-rel-pred { background: var(--orange); opacity: 0.85; }
+.pr-rel-act { background: #4ade80; }
+.pr-rel-ok { box-shadow: 0 0 0 1px #4ade80; }
+.pr-rel-label { font-size: 0.55rem; color: var(--sub); margin-top: 4px; }
+.pr-eval-history { display: flex; align-items: flex-end; gap: 4px; height: 70px; padding-bottom: 16px; }
+.pr-eval-hist-bar { flex: 1; min-width: 14px; background: linear-gradient(180deg, var(--amber), var(--orange)); border-radius: 3px 3px 0 0; position: relative; min-height: 8px; }
+.pr-eval-hist-bar span { position: absolute; bottom: -14px; left: 50%; transform: translateX(-50%); font-size: 0.5rem; color: var(--sub); white-space: nowrap; }
+
 /* 筛选条 */
 .pr-filter { display: flex; gap: 0.8rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
 .pr-filter select {

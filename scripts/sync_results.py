@@ -573,6 +573,12 @@ def main():
 
     print_accuracy_summary(db)
 
+    try:
+        from matchpredict.services.eval_service import eval_service
+        eval_service.run_and_save(days=30)
+    except Exception as e:
+        logger.warning('评估快照写入失败: %s', e)
+
 
 if __name__ == "__main__":
     main()
