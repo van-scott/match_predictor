@@ -77,6 +77,17 @@ def setup_scheduler(app) -> None:
             logger.error('❌ [定时] 评估快照异常: %s', e)
 
     # 防止重入：同一任务未完成时不并发启动；错过窗口后在 grace 时间内补跑。
+    # 同步赛事数据，并且用ML模型预测
+    scheduler.add_job(
+        job_sync_upcoming,
+        IntervalTrigger(minutes=60),
+        id='sync_upcoming',
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=1800,
+    )
+
     scheduler.add_job(
         job_sync_results,
         IntervalTrigger(minutes=10),
@@ -95,15 +106,7 @@ def setup_scheduler(app) -> None:
         coalesce=True,
         misfire_grace_time=1800,
     )
-    scheduler.add_job(
-        job_sync_upcoming,
-        IntervalTrigger(minutes=60),
-        id='sync_upcoming',
-        replace_existing=True,
-        max_instances=1,
-        coalesce=True,
-        misfire_grace_time=1800,
-    )
+
     scheduler.add_job(
         job_eval_snapshot,
         IntervalTrigger(hours=6),
