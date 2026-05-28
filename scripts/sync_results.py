@@ -20,6 +20,9 @@ import requests
 import math
 from datetime import datetime, timezone, timedelta
 from scripts.database import prediction_db as db
+from psycopg2.extras import execute_batch
+import unicodedata
+import re
 
 # 加载 .env 文件（确保直接运行脚本时也能读取环境变量）
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -157,11 +160,10 @@ def sync_dm_results(db) -> int:
                     pass
 
             def _norm(name: str) -> str:
-                import unicodedata
+
                 s = unicodedata.normalize('NFKD', name)
                 s = ''.join(c for c in s if not unicodedata.combining(c))
                 # Remove common prefixes/suffixes
-                import re
                 s = re.sub(r'^(FC|SC|VfB|VfL|SpVgg|SSV|SV|TSV|RB|1\.|Rot.Weiss)\s+', '', s, flags=re.I)
                 s = re.sub(r'\s+(FC|SC|e\.V\.)$', '', s, flags=re.I)
                 return s.strip().lower()
@@ -351,79 +353,145 @@ def backfill_results(matches: list, league_code: str, db) -> dict:
     return stats
 
 
-def generate_predicted_scores(db):
+def _poisson_score(ph: float, pa: float) -> tuple[int, int]:
+    """从主胜/客胜概率用泊松反推最可能的比分（限制在 0-5）。"""
+    lam_h = max(-math.log(max(1 - ph, 0.01)) * 1.5, 0.3)
+    lam_a = max(-math.log(max(1 - pa, 0.01)) * 1.5, 0.3)
+    return min(round(lam_h), 5), min(round(lam_a), 5)
+
+
+def _odds_to_prob(ho, do_, ao):
+    """赔率 → 归一化概率（异常值返回 None）。"""
+    try:
+        ho_f, do_f, ao_f = float(ho), float(do_), float(ao)
+    except (TypeError, ValueError):
+        return None
+    if min(ho_f, do_f, ao_f) <= 1.01:
+        return None
+    rh, rd, ra = 1 / ho_f, 1 / do_f, 1 / ao_f
+    total = rh + rd + ra
+    if total <= 0:
+        return None
+    return rh / total, rd / total, ra / total
+
+
+def generate_predicted_scores(db, days_back: int = 14) -> dict:
     """
-    为有 ML 概率（或赔率）但无预测比分/概率的比赛，推算 ML 概率和预测比分。
-    对于 dm_ 前缀的彩票来源比赛，从赔率推算隐含概率，使其能进入预测回顾。
+    补全比赛派生字段，仅扫描近 days_back 天内（含未来）的比赛：
+      - case 1: 有 ML 概率但无预测比分 → 泊松反推比分
+      - case 2: 无 ML 概率但有赔率   → 赔率反推概率 + 比分（主要用于 dm_ 来源）
+
+    采用批量 UPDATE（execute_batch），相比逐行 UPDATE 显著降低 DB 往返。
+    赔率异常（任一 ≤1.01）的场次会被跳过并计入日志。
     """
+
+
+    stats = {'score_filled': 0, 'prob_from_odds': 0, 'skipped_bad_odds': 0}
     try:
         with db.get_db_connection() as conn:
             cur = conn.cursor()
 
-            # 1. 有 ML 概率但无预测比分 → 推算比分
-            cur.execute("""
+            # ── case 1: 有概率缺比分 ─────────────────────────────────────
+            cur.execute(
+                """
                 SELECT fixture_id, ml_home_prob, ml_away_prob
                 FROM upcoming_fixtures
                 WHERE ml_home_prob IS NOT NULL
                   AND predicted_home_goals IS NULL
-            """)
-            rows = cur.fetchall()
-            updated = 0
-            for fix_id, ml_h, ml_a in rows:
-                ph, pa = float(ml_h), float(ml_a)
-                lam_h = max(-math.log(max(1 - ph, 0.01)) * 1.5, 0.3)
-                lam_a = max(-math.log(max(1 - pa, 0.01)) * 1.5, 0.3)
-                pred_h = min(round(lam_h), 5)
-                pred_a = min(round(lam_a), 5)
-                cur.execute("""
+                  AND match_time > NOW() - (%s || ' days')::interval
+                """,
+                (days_back,),
+            )
+            payload_score = [
+                (*_poisson_score(float(ml_h), float(ml_a)), fid)
+                for fid, ml_h, ml_a in cur.fetchall()
+            ]
+            if payload_score:
+                execute_batch(
+                    cur,
+                    """
                     UPDATE upcoming_fixtures SET
-                        predicted_home_goals = %s, predicted_away_goals = %s
+                        predicted_home_goals = %s,
+                        predicted_away_goals = %s,
+                        updated_at = CURRENT_TIMESTAMP
                     WHERE fixture_id = %s
-                """, (pred_h, pred_a, fix_id))
-                updated += 1
+                      AND predicted_home_goals IS NULL
+                    """,
+                    payload_score,
+                    page_size=200,
+                )
+                stats['score_filled'] = len(payload_score)
 
-            # 2. 无 ML 概率但有赔率 → 从赔率推算隐含概率（用于彩票来源 dm_ 比赛）
-            cur.execute("""
+            # ── case 2: 无概率但有赔率 ───────────────────────────────────
+            cur.execute(
+                """
                 SELECT fixture_id, home_odds, draw_odds, away_odds
                 FROM upcoming_fixtures
                 WHERE ml_home_prob IS NULL
-                  AND home_odds IS NOT NULL AND draw_odds IS NOT NULL AND away_odds IS NOT NULL
-                  AND match_time < NOW()
-            """)
-            odds_rows = cur.fetchall()
-            for fix_id, ho, do_, ao in odds_rows:
-                try:
-                    rh, rd, ra = 1/float(ho), 1/float(do_), 1/float(ao)
-                    total = rh + rd + ra
-                    ph, pd, pa = rh/total, rd/total, ra/total
-                    lam_h = max(-math.log(max(1-ph, 0.01))*1.5, 0.3)
-                    lam_a = max(-math.log(max(1-pa, 0.01))*1.5, 0.3)
-                    pred_h = min(round(lam_h), 5)
-                    pred_a = min(round(lam_a), 5)
-                    cur.execute("""
-                        UPDATE upcoming_fixtures SET
-                            ml_home_prob = %s, ml_draw_prob = %s, ml_away_prob = %s,
-                            predicted_home_goals = COALESCE(predicted_home_goals, %s),
-                            predicted_away_goals = COALESCE(predicted_away_goals, %s)
-                        WHERE fixture_id = %s
-                    """, (ph, pd, pa, pred_h, pred_a, fix_id))
-                    updated += 1
-                except Exception:
-                    pass
+                  AND home_odds IS NOT NULL
+                  AND draw_odds IS NOT NULL
+                  AND away_odds IS NOT NULL
+                  AND match_time > NOW() - (%s || ' days')::interval
+                """,
+                (days_back,),
+            )
+            payload_odds = []
+            for fid, ho, do_, ao in cur.fetchall():
+                probs = _odds_to_prob(ho, do_, ao)
+                if probs is None:
+                    stats['skipped_bad_odds'] += 1
+                    continue
+                ph, pd_, pa = probs
+                pred_h, pred_a = _poisson_score(ph, pa)
+                payload_odds.append((ph, pd_, pa, pred_h, pred_a, fid))
+            if payload_odds:
+                execute_batch(
+                    cur,
+                    """
+                    UPDATE upcoming_fixtures SET
+                        ml_home_prob = %s,
+                        ml_draw_prob = %s,
+                        ml_away_prob = %s,
+                        predicted_home_goals = COALESCE(predicted_home_goals, %s),
+                        predicted_away_goals = COALESCE(predicted_away_goals, %s),
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE fixture_id = %s
+                      AND ml_home_prob IS NULL
+                    """,
+                    payload_odds,
+                    page_size=200,
+                )
+                stats['prob_from_odds'] = len(payload_odds)
 
             conn.commit()
-            if updated:
-                logger.info(f"📊 为 {updated} 场比赛生成/补全了预测概率和比分")
+
+        if any(stats.values()):
+            logger.info(
+                "📊 补全预测字段: 比分=%d, 由赔率推概率=%d, 跳过异常赔率=%d (窗口 %d 天)",
+                stats['score_filled'],
+                stats['prob_from_odds'],
+                stats['skipped_bad_odds'],
+                days_back,
+            )
     except Exception as e:
-        logger.error(f"生成预测比分失败: {e}")
+        logger.error(f"生成预测比分失败: {e}", exc_info=True)
+    return stats
 
 
-def _backfill_ml_predicted_result(db):
-    """补全：有实际结果 + 有 ML 概率但缺 ml_predicted_result 的比赛"""
+def _backfill_ml_predicted_result(db, days_back: int = 30) -> int:
+    """
+    兜底：有实际结果 + 有 ML 概率但缺 ml_predicted_result 的比赛，
+    重新计算 ml_predicted_result / result_correct / score_correct / goal_diff_error。
+    仅扫描最近 days_back 天，避免全表扫历史数据。
+    """
+    from psycopg2.extras import execute_batch
+
+    fixed = 0
     try:
         with db.get_db_connection() as conn:
             cur = conn.cursor()
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT fixture_id, ml_home_prob, ml_draw_prob, ml_away_prob,
                        predicted_home_goals, predicted_away_goals,
                        actual_home_goals, actual_away_goals, actual_result
@@ -431,10 +499,12 @@ def _backfill_ml_predicted_result(db):
                 WHERE actual_result IS NOT NULL
                   AND ml_home_prob IS NOT NULL
                   AND ml_predicted_result IS NULL
-            """)
-            rows = cur.fetchall()
-            fixed = 0
-            for r in rows:
+                  AND finished_at > NOW() - (%s || ' days')::interval
+                """,
+                (days_back,),
+            )
+            payload = []
+            for r in cur.fetchall():
                 fid, mlh, mld, mla, phg, pag, ahg, aag, ar = r
                 mlh, mld, mla = float(mlh), float(mld), float(mla)
                 if mlh >= mld and mlh >= mla:
@@ -444,28 +514,38 @@ def _backfill_ml_predicted_result(db):
                 else:
                     ml_pred = 'A'
                 if phg is None:
-                    lam_h = max(-math.log(max(1-mlh, 0.01))*1.5, 0.3)
-                    phg = min(round(lam_h), 5)
+                    phg, _ = _poisson_score(mlh, mla)
                 if pag is None:
-                    lam_a = max(-math.log(max(1-mla, 0.01))*1.5, 0.3)
-                    pag = min(round(lam_a), 5)
+                    _, pag = _poisson_score(mlh, mla)
                 rc = (ml_pred == ar)
                 sc = (phg == int(ahg) and pag == int(aag)) if ahg is not None else None
-                gde = abs((phg + pag) - (int(ahg) + int(aag))) if ahg is not None else None
-                cur.execute("""
+                gde = abs((phg - pag) - (int(ahg) - int(aag))) if ahg is not None else None
+                payload.append((ml_pred, rc, sc, gde, phg, pag, fid))
+
+            if payload:
+                execute_batch(
+                    cur,
+                    """
                     UPDATE upcoming_fixtures SET
-                        ml_predicted_result = %s, result_correct = %s,
-                        score_correct = %s, goal_diff_error = %s,
+                        ml_predicted_result = %s,
+                        result_correct = %s,
+                        score_correct = %s,
+                        goal_diff_error = %s,
                         predicted_home_goals = COALESCE(predicted_home_goals, %s),
-                        predicted_away_goals = COALESCE(predicted_away_goals, %s)
+                        predicted_away_goals = COALESCE(predicted_away_goals, %s),
+                        updated_at = CURRENT_TIMESTAMP
                     WHERE fixture_id = %s
-                """, (ml_pred, rc, sc, gde, phg, pag, fid))
-                fixed += 1
+                    """,
+                    payload,
+                    page_size=200,
+                )
+                fixed = len(payload)
             conn.commit()
             if fixed:
-                logger.info(f"📊 补全 {fixed} 场比赛的 ml_predicted_result")
+                logger.info(f"📊 兜底补全 {fixed} 场比赛的 ml_predicted_result (窗口 {days_back} 天)")
     except Exception as e:
-        logger.error(f"补全 ml_predicted_result 失败: {e}")
+        logger.error(f"补全 ml_predicted_result 失败: {e}", exc_info=True)
+    return fixed
 
 
 def print_accuracy_summary(db):
@@ -542,23 +622,16 @@ def main():
     print(f"   联赛: {', '.join(leagues)}  |  回溯 {args.days} 天")
     print("=" * 60)
 
-    # 先生成预测比分（含从赔率推算概率）
-    generate_predicted_scores(db)
-
-    # 同步彩票来源(dm_)的比赛结果（OpenLigaDB for German leagues）
-    dm_updated = sync_dm_results(db)
-    if dm_updated:
-        logger.info(f"✅ dm_ 比赛结果同步: {dm_updated} 场")
-
-    # 补全：有实际结果 + 有概率 但缺 ml_predicted_result 的比赛
-    _backfill_ml_predicted_result(db)
-
+    # ─── 步骤 1：拉取真实比分（数据输入）─────────────────────────────────
+    # 先把"输入"全部拿到位，确保后续派生字段都基于最新数据，
+    # 也避免新数据要等下一轮才被补全 / 进入统计。
     total_stats = {'updated': 0, 'inserted': 0, 'correct': 0, 'score_hit': 0, 'total_checked': 0}
 
     for league_id in leagues:
         logger.info(f"📥 {LEAGUE_NAMES.get(league_id, league_id)} ({league_id})")
-        raw = fetch_finished_matches(league_id, args.days,
-                                     include_cancelled=args.with_cancelled)
+        raw = fetch_finished_matches(
+            league_id, args.days, include_cancelled=args.with_cancelled
+        )
         if raw:
             if args.with_cancelled:
                 cancelled = _sync_cancelled_postponed(raw, db)
@@ -567,8 +640,21 @@ def main():
             s = backfill_results(raw, league_id, db)
             for k in total_stats:
                 total_stats[k] += s[k]
-        time.sleep(6)  # 免费版限速（8联赛 × 6s ≈ 48s，节省API额度）
+        time.sleep(6)  # 免费版限速（约 8 联赛 × 6s ≈ 48s）
 
+    # 同步彩票来源(dm_)比赛结果（OpenLigaDB for German leagues）
+    dm_updated = sync_dm_results(db)
+    if dm_updated:
+        logger.info(f"✅ dm_ 比赛结果同步: {dm_updated} 场")
+
+    # ─── 步骤 2：补全派生字段（基于刚入库的最新数据）─────────────────────
+    # backfill_results 内部已计算大部分派生字段，下面两步主要是：
+    #   - 给"无 ML 但有赔率/有概率无比分"的比赛补字段
+    #   - 给历史遗留的 ml_predicted_result 兜底
+    generate_predicted_scores(db, days_back=max(args.days, 14))
+    _backfill_ml_predicted_result(db, days_back=max(args.days * 2, 30))
+
+    # ─── 步骤 3：打印统计 ───────────────────────────────────────────────
     print(f"\n✅ 同步完成: 更新 {total_stats['updated']} 场, 新插入 {total_stats['inserted']} 场")
     if total_stats['total_checked'] > 0:
         acc = total_stats['correct'] / total_stats['total_checked'] * 100
