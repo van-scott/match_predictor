@@ -146,18 +146,18 @@ def step_fetch_fixtures(db, leagues: list[str], days_ahead: int) -> dict:
                 time.sleep(60)
                 resp = requests.get(url, headers=headers, params=params, timeout=15)
             if resp.status_code in (403, 404):
-                logger.debug("  [%s][%s] 免费套餐不含该联赛，跳过", league_id,league_name)
+                logger.debug("  [%s|%s] 免费套餐不含该联赛，跳过", league_id,league_name)
                 time.sleep(7)
                 continue
             if resp.status_code != 200:
-                logger.warning("  [%s] HTTP %s，跳过", league_id, resp.status_code)
+                logger.warning("  [%s|%s] HTTP %s，跳过", league_id, league_name,resp.status_code)
                 errors += 1
                 time.sleep(7)
                 continue
 
             raw_matches = resp.json().get("matches", [])
             if not raw_matches:
-                logger.info(" [%s][%s] 无未开赛比赛", league_id,league_name)
+                logger.info(" [%s|%s] 无未开赛比赛", league_id,league_name)
                 time.sleep(7)
                 continue
 
@@ -190,11 +190,11 @@ def step_fetch_fixtures(db, leagues: list[str], days_ahead: int) -> dict:
                 })
             total_fixtures += len(fixtures)
 
-            # 写库
+            #todo  这两个能保证不重复吗
             saved = create_or_update_fixtures(fixtures, db)
             odds_saved = create_or_update_match_odds(fixtures, db)  # 开盘追踪
             total_saved += saved
-            msg = f"  [{league_name}] {len(fixtures)} 场赛程，已写 {saved} 条，赔率追踪 {odds_saved} 条"
+            msg = f"  [{league_id}|{league_name}] {len(fixtures)} 场赛程，已写 {saved} 条，赔率追踪 {odds_saved} 条"
             logger.info(msg)
             detail.append(msg)
 
@@ -208,7 +208,7 @@ def step_fetch_fixtures(db, leagues: list[str], days_ahead: int) -> dict:
     lottery_added, lottery_fixtures = _sync_lottery_hhad(days_ahead, db)
     lottery_odds_saved = 0
     if lottery_fixtures:
-        # 让一球赛事也走同一套 match_odds 开盘追踪，避免“后面补充但没赔率追踪”的割裂。
+        # 让一球赛事也走同一套 match_odds 开盘追踪，避免“后面补充但没赔率追踪”的割裂。 这里和前面有点重复，但是双重保证
         lottery_odds_saved = create_or_update_match_odds(lottery_fixtures, db)
     if lottery_added:
         msg = f"  [竞彩] 让一球赔率补充 {lottery_added} 场，赔率追踪 {lottery_odds_saved} 条"
@@ -298,10 +298,6 @@ def create_or_update_match_odds(fixtures: list, db) -> int:
 
 def _sync_lottery_hhad(days_ahead: int, db) -> tuple[int, list]:
     """同步中国体彩比赛到 upcoming_fixtures：HAD 写基础赔率，HHAD 写让球赔率字段。"""
-    try:
-        from matchpredict.integrations.lottery_odds import ChinaLotterySpider
-    except ImportError:
-        return 0, []
 
     spider = ChinaLotterySpider()
     matches = spider.get_formatted_matches(days_ahead=days_ahead)
