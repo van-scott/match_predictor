@@ -64,8 +64,11 @@ def run_pipeline(
     sep = "=" * 65
 
     logger.info(sep)
-    logger.info("🚀 流水线开始  mode=%s  leagues=%d  ahead=%dd  back=%dd",
-                mode, len(leagues), days_ahead, days_back)
+    mode_cn = "完整模式" if mode == "full" else "结果回填模式"
+    logger.info(
+        "🚀 流水线开始  模式=%s  联赛数量=%d  赛程前瞻=%d天  结果回溯=%d天",
+        mode_cn, len(leagues), days_ahead, days_back
+    )
     logger.info(sep)
 
     summary: dict[str, dict] = {}
@@ -123,8 +126,10 @@ def run_pipeline(
         if key not in summary:
             continue
         v = summary[key]
-        logger.info("   %-12s processed=%-4d skipped=%-4d errors=%d",
-                    label, v.get("processed", 0), v.get("skipped", 0), v.get("errors", 0))
+        logger.info(
+            "   %-12s 处理=%-4d 跳过=%-4d 错误=%d",
+            label, v.get("processed", 0), v.get("skipped", 0), v.get("errors", 0)
+        )
     logger.info(sep)
 
     summary["_meta"] = {"elapsed_s": elapsed, "total_processed": total_processed,

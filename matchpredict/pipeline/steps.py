@@ -24,7 +24,7 @@ from datetime import datetime, timezone, timedelta
 from difflib import get_close_matches
 from decimal import Decimal
 from typing import Optional
-
+from psycopg2.extras import execute_batch
 import requests
 
 from matchpredict.pipeline.config import (
@@ -135,11 +135,6 @@ def step_fetch_fixtures(db, leagues: list[str], days_ahead: int) -> dict:
     errors = 0
     detail = []
 
-    try:
-        from psycopg2.extras import execute_batch
-    except ImportError:
-        execute_batch = None  # fallback：逐条写
-
     for league_id in leagues:
         league_name = LEAGUE_NAMES.get(league_id, league_id)
         url = f"{FOOTBALL_DATA_BASE_URL}/competitions/{league_id}/matches"
@@ -151,7 +146,7 @@ def step_fetch_fixtures(db, leagues: list[str], days_ahead: int) -> dict:
                 time.sleep(60)
                 resp = requests.get(url, headers=headers, params=params, timeout=15)
             if resp.status_code in (403, 404):
-                logger.debug("  [%s] 免费套餐不含该联赛，跳过", league_id)
+                logger.debug("  [%s][%s] 免费套餐不含该联赛，跳过", league_id,league_name)
                 time.sleep(7)
                 continue
             if resp.status_code != 200:
@@ -162,7 +157,7 @@ def step_fetch_fixtures(db, leagues: list[str], days_ahead: int) -> dict:
 
             raw_matches = resp.json().get("matches", [])
             if not raw_matches:
-                logger.info("  [%s] 无未开赛比赛", league_name)
+                logger.info(" [%s][%s] 无未开赛比赛", league_id,league_name)
                 time.sleep(7)
                 continue
 
@@ -196,8 +191,8 @@ def step_fetch_fixtures(db, leagues: list[str], days_ahead: int) -> dict:
             total_fixtures += len(fixtures)
 
             # 写库
-            saved = _upsert_fixtures(fixtures, db)
-            _upsert_match_odds(fixtures, db)  # 开盘追踪
+            saved = create_or_update_fixtures(fixtures, db)
+            create_or_update_match_odds(fixtures, db)  # 开盘追踪
             total_saved += saved
             msg = f"  [{league_name}] {len(fixtures)} 场赛程，已写 {saved} 条"
             logger.info(msg)
@@ -221,7 +216,7 @@ def step_fetch_fixtures(db, leagues: list[str], days_ahead: int) -> dict:
     return _result(processed=total_saved + lottery_added, errors=errors, detail=detail)
 
 
-def _upsert_fixtures(fixtures: list, db) -> int:
+def create_or_update_fixtures(fixtures: list, db) -> int:
     saved = 0
     try:
         with db.get_db_connection() as conn:
@@ -256,7 +251,7 @@ def _upsert_fixtures(fixtures: list, db) -> int:
     return saved
 
 
-def _upsert_match_odds(fixtures: list, db):
+def create_or_update_match_odds(fixtures: list, db):
     """开盘赔率追踪：首次写入时保存 open_*，后续只更新当前赔率。"""
     try:
         with db.get_db_connection() as conn:
