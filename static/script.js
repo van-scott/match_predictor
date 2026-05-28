@@ -188,6 +188,15 @@ function probBar(label, val, color) {
     </div>`;
 }
 
+function toLocalDateKey(input) {
+  const d = input instanceof Date ? input : new Date(input);
+  if (Number.isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 // ── LOTTERY MATCHES ───────────────────────────────────────────────────────
 async function loadLotteryMatches() {
   const listEl = document.getElementById('lottery-list');
@@ -215,16 +224,8 @@ function renderLotteryList() {
   const listEl = document.getElementById('lottery-list');
   listEl.innerHTML = '';
 
-  // 展示未开赛的比赛（不再强制要求有赔率）
-  const now = Date.now();
-  const upcoming = lotteryMatches.filter(m => {
-    const t = m.match_time || m.match_date;
-    if (t) {
-      const ts = new Date(t.replace(' ', 'T')).getTime();
-      if (!isNaN(ts) && ts < now) return false;
-    }
-    return true;
-  });
+  // 后端已按 match_time/status 过滤，这里不再二次按浏览器时区过滤，避免跨时区误杀比赛。
+  const upcoming = lotteryMatches;
 
   if (upcoming.length === 0) {
     listEl.innerHTML = `<div class="error-msg"><p>ℹ️ 暂无未开赛的比赛</p><p style="font-size:.8rem;color:var(--c-muted);margin-top:.5rem">赛事数据每日自动同步，请稍后再试</p></div>`;
@@ -233,15 +234,15 @@ function renderLotteryList() {
 
   // 按日期分组
   const weekDays = ['周日','周一','周二','周三','周四','周五','周六'];
-  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayKey = toLocalDateKey(new Date());
   const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowKey = tomorrow.toISOString().slice(0, 10);
+  const tomorrowKey = toLocalDateKey(tomorrow);
 
   const groups = {};
   upcoming.forEach(m => {
     const t = m.match_time || m.match_date;
     const d = t ? new Date(t.replace(' ', 'T')) : null;
-    const key = d ? d.toISOString().slice(0, 10) : 'unknown';
+    const key = d ? toLocalDateKey(d) : 'unknown';
     if (!groups[key]) groups[key] = [];
     groups[key].push(m);
   });

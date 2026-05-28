@@ -8,9 +8,9 @@
 3. 同步赔率（有赔率数据时），并追踪开盘 vs 当前变动
 
 用法:
-  python scripts/sync_upcoming.py                  # 同步全部联赛
+  python scripts/sync_upcoming.py                  # 同步全量配置（默认近7天）
   python scripts/sync_upcoming.py --leagues PL,PD  # 只同步英超+西甲
-  python scripts/sync_upcoming.py --days 14        # 拉未来14天内的比赛
+  python scripts/sync_upcoming.py --days 7         # 手动覆盖同步窗口
 """
 import os
 import sys
@@ -20,6 +20,7 @@ import argparse
 import requests
 from datetime import datetime, timezone, timedelta
 from typing import Optional
+from decimal import Decimal
 
 # 加载 .env 文件（确保直接运行脚本时也能读取环境变量）
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -60,8 +61,10 @@ LEAGUE_NAMES = {
     "CLI": "解放者杯",
 }
 
+# 全局同步配置：调度器和脚本统一依赖这组变量，避免多处配置不一致。
+SYNC_WINDOW_DAYS = int(os.getenv("SYNC_WINDOW_DAYS", "7"))
 # 按优先级排序：欧洲五大联赛 → 欧洲杯赛 → 其他欧洲联赛 → 南美（全年保底）
-DEFAULT_LEAGUES = ["PL", "PD", "SA", "BL1", "FL1", "CL", "ELC", "DED", "PPL", "BSA", "CLI"]
+SYNC_LEAGUES = ["PL", "PD", "SA", "BL1", "FL1", "CL", "ELC", "DED", "PPL", "BSA", "CLI"]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -137,15 +140,44 @@ def parse_fixture(raw: dict, league_code: str) -> dict:
 # 2. 写入数据库
 # ─────────────────────────────────────────────────────────────────────────────
 
-def upsert_fixtures(fixtures: list, db) -> int:
-    """批量 UPSERT 赛程数据"""
+def _normalize_decimal(v):
+    if v is None:
+        return None
+    if isinstance(v, Decimal):
+        return float(v)
+    try:
+        return float(v)
+    except Exception:
+        return None
+
+
+def _odds_changed(old_h, old_d, old_a, new_h, new_d, new_a) -> bool:
+    return (
+        _normalize_decimal(old_h) != _normalize_decimal(new_h)
+        or _normalize_decimal(old_d) != _normalize_decimal(new_d)
+        or _normalize_decimal(old_a) != _normalize_decimal(new_a)
+    )
+
+
+def upsert_fixtures(fixtures: list, db) -> tuple[int, set[str]]:
+    """批量 UPSERT 赛程数据，并返回赔率变化的 fixture_id 集合。"""
     if not fixtures:
-        return 0
+        return 0, set()
     saved = 0
+    changed_odds_fixture_ids: set[str] = set()
     try:
         with db.get_db_connection() as conn:
             cur = conn.cursor()
             for f in fixtures:
+                cur.execute(
+                    """
+                    SELECT home_odds, draw_odds, away_odds
+                    FROM upcoming_fixtures
+                    WHERE fixture_id = %s
+                    """,
+                    (f["fixture_id"],),
+                )
+                old = cur.fetchone()
                 cur.execute("""
                     INSERT INTO upcoming_fixtures (
                         fixture_id, league_code, league_name,
@@ -169,19 +201,21 @@ def upsert_fixtures(fixtures: list, db) -> int:
                         synced_at   = CURRENT_TIMESTAMP,
                         updated_at  = CURRENT_TIMESTAMP
                 """, f)
+                if old and _odds_changed(old[0], old[1], old[2], f.get("home_odds"), f.get("draw_odds"), f.get("away_odds")):
+                    changed_odds_fixture_ids.add(f["fixture_id"])
                 saved += 1
             conn.commit()
     except Exception as e:
         logger.error(f"写入 upcoming_fixtures 失败: {e}", exc_info=True)
-    return saved
+    return saved, changed_odds_fixture_ids
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 3. 批量 ML 推理
 # ─────────────────────────────────────────────────────────────────────────────
 
-def batch_ml_predict(db) -> int:
-    """对所有未开赛比赛批量计算 ML 概率并写回数据库"""
+def batch_ml_predict(db, fixture_ids: Optional[set[str]] = None) -> int:
+    """对指定比赛（或全部未开赛且有赔率比赛）计算 ML 概率并写回数据库。"""
     import pickle
     from scripts.feature_engineering import load_historical_matches, compute_team_stats
     from scripts.train_model import predict_probabilities
@@ -208,12 +242,26 @@ def batch_ml_predict(db) -> int:
     try:
         with db.get_db_connection() as conn:
             cur = conn.cursor()
-            cur.execute("""
-                SELECT fixture_id, home_team, away_team, home_odds, draw_odds, away_odds
-                FROM upcoming_fixtures
-                WHERE status IN ('SCHEDULED', 'TIMED')
-                  AND match_time > NOW()
-            """)
+            if fixture_ids:
+                cur.execute(
+                    """
+                    SELECT fixture_id, home_team, away_team, home_odds, draw_odds, away_odds
+                    FROM upcoming_fixtures
+                    WHERE status IN ('SCHEDULED', 'TIMED')
+                      AND match_time > NOW()
+                      AND fixture_id = ANY(%s)
+                      AND home_odds IS NOT NULL AND draw_odds IS NOT NULL AND away_odds IS NOT NULL
+                    """,
+                    (list(fixture_ids),),
+                )
+            else:
+                cur.execute("""
+                    SELECT fixture_id, home_team, away_team, home_odds, draw_odds, away_odds
+                    FROM upcoming_fixtures
+                    WHERE status IN ('SCHEDULED', 'TIMED')
+                      AND match_time > NOW()
+                      AND home_odds IS NOT NULL AND draw_odds IS NOT NULL AND away_odds IS NOT NULL
+                """)
             rows = cur.fetchall()
             logger.info(f"共 {len(rows)} 场待预测比赛")
 
@@ -390,7 +438,7 @@ ODDS_SPORT_MAP = {
 }
 
 
-def sync_odds_from_api(db) -> int:
+def sync_odds_from_api(db) -> tuple[int, set[str]]:
     """
     从 the-odds-api.com 获取五大联赛赔率，写入 upcoming_fixtures.home_odds/draw_odds/away_odds。
     通过球队名模糊匹配关联。
@@ -400,6 +448,7 @@ def sync_odds_from_api(db) -> int:
         return 0
 
     updated = 0
+    changed_odds_fixture_ids: set[str] = set()
     from difflib import get_close_matches
 
     try:
@@ -498,9 +547,15 @@ def sync_odds_from_api(db) -> int:
                             SET home_odds = %s, draw_odds = %s, away_odds = %s,
                                 updated_at = CURRENT_TIMESTAMP
                             WHERE fixture_id = %s
-                        """, (h_odds, d_odds, a_odds, fixture_id))
+                              AND (
+                                    home_odds IS DISTINCT FROM %s
+                                 OR draw_odds IS DISTINCT FROM %s
+                                 OR away_odds IS DISTINCT FROM %s
+                              )
+                        """, (h_odds, d_odds, a_odds, fixture_id, h_odds, d_odds, a_odds))
                         if cur.rowcount > 0:
                             updated += 1
+                            changed_odds_fixture_ids.add(fixture_id)
                             logger.info(f"  💰 {orig_home} vs {orig_away}: {h_odds}/{d_odds}/{a_odds}")
 
                     time.sleep(1)  # 避免限速
@@ -512,7 +567,109 @@ def sync_odds_from_api(db) -> int:
     except Exception as e:
         logger.error(f"赔率同步失败: {e}", exc_info=True)
 
-    return updated
+    return updated, changed_odds_fixture_ids
+
+
+def sync_lottery_hhad_matches(days_ahead: int, db) -> tuple[int, int, set[str]]:
+    """
+    从中国竞彩抓取让球胜平负（hhad）数据，要求有完整赔率且让球盘为 ±1，
+    合并到 upcoming_fixtures。返回 (insert_or_update, skipped, changed_ids)。
+    """
+    from scripts.china_lottery_spider import ChinaLotterySpider
+
+    spider = ChinaLotterySpider()
+    rows_changed = 0
+    skipped = 0
+    changed_ids: set[str] = set()
+
+    matches = spider.get_formatted_matches(days_ahead=days_ahead)
+    if not matches:
+        return 0, 0, set()
+
+    try:
+        with db.get_db_connection() as conn:
+            cur = conn.cursor()
+            for m in matches:
+                odds = (m.get("odds") or {}).get("hhad") or {}
+                goal_line = (m.get("odds") or {}).get("goal_line") or ""
+                if not (odds.get("h") and odds.get("d") and odds.get("a")):
+                    skipped += 1
+                    continue
+                if str(goal_line).strip() not in {"-1", "-1.0", "+1", "1", "1.0"}:
+                    skipped += 1
+                    continue
+                mt = m.get("match_time")
+                if not mt:
+                    skipped += 1
+                    continue
+                try:
+                    match_dt = datetime.strptime(mt, "%Y-%m-%d %H:%M:%S")
+                except Exception:
+                    try:
+                        match_dt = datetime.strptime(mt, "%Y-%m-%d %H:%M")
+                    except Exception:
+                        skipped += 1
+                        continue
+
+                fixture_id = f"dm_{m.get('match_id', '')}".replace("dm_lottery_", "dm_")
+                if fixture_id == "dm_":
+                    skipped += 1
+                    continue
+
+                ho = float(odds["h"])
+                do_ = float(odds["d"])
+                ao = float(odds["a"])
+                cur.execute(
+                    """
+                    SELECT home_odds, draw_odds, away_odds
+                    FROM upcoming_fixtures
+                    WHERE fixture_id = %s
+                    """,
+                    (fixture_id,),
+                )
+                old = cur.fetchone()
+
+                cur.execute(
+                    """
+                    INSERT INTO upcoming_fixtures (
+                        fixture_id, league_code, league_name,
+                        home_team, away_team, match_time, status, matchday,
+                        home_odds, draw_odds, away_odds, synced_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s, 'SCHEDULED', NULL, %s, %s, %s, CURRENT_TIMESTAMP)
+                    ON CONFLICT (fixture_id) DO UPDATE SET
+                        home_team = EXCLUDED.home_team,
+                        away_team = EXCLUDED.away_team,
+                        match_time = EXCLUDED.match_time,
+                        status = CASE
+                                   WHEN upcoming_fixtures.status = 'FINISHED' THEN upcoming_fixtures.status
+                                   ELSE EXCLUDED.status
+                                 END,
+                        home_odds = EXCLUDED.home_odds,
+                        draw_odds = EXCLUDED.draw_odds,
+                        away_odds = EXCLUDED.away_odds,
+                        synced_at = CURRENT_TIMESTAMP,
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    (
+                        fixture_id,
+                        "DM",
+                        m.get("league_name") or "竞彩",
+                        m.get("home_team") or "",
+                        m.get("away_team") or "",
+                        match_dt,
+                        ho,
+                        do_,
+                        ao,
+                    ),
+                )
+                if cur.rowcount > 0:
+                    rows_changed += 1
+                    if old is None or _odds_changed(old[0], old[1], old[2], ho, do_, ao):
+                        changed_ids.add(fixture_id)
+            conn.commit()
+    except Exception as e:
+        logger.error("同步竞彩让一球赔率失败: %s", e, exc_info=True)
+    return rows_changed, skipped, changed_ids
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -521,8 +678,8 @@ def sync_odds_from_api(db) -> int:
 
 def main():
     parser = argparse.ArgumentParser(description="同步未开赛赛程 + ML 批量预测")
-    parser.add_argument("--leagues", default=",".join(DEFAULT_LEAGUES))
-    parser.add_argument("--days",    type=int, default=14, help="未来N天")
+    parser.add_argument("--leagues", default=",".join(SYNC_LEAGUES))
+    parser.add_argument("--days",    type=int, default=SYNC_WINDOW_DAYS, help="未来N天（默认取 SYNC_WINDOW_DAYS）")
     parser.add_argument("--no-ml",   action="store_true", help="跳过 ML 预测步骤")
     parser.add_argument("--no-odds", action="store_true", help="跳过赔率同步（节省 API 配额）")
     args = parser.parse_args()
@@ -537,6 +694,7 @@ def main():
     print("=" * 60)
 
     all_fixtures = []
+    changed_odds_ids: set[str] = set()
 
     for league_id in leagues:
         logger.info(f"📥 {LEAGUE_NAMES.get(league_id, league_id)} ({league_id})")
@@ -546,8 +704,9 @@ def main():
             continue
 
         fixtures = [parse_fixture(m, league_id) for m in raw]
-        saved = upsert_fixtures(fixtures, db)
+        saved, changed = upsert_fixtures(fixtures, db)
         odds_synced = sync_odds_movement(fixtures, db)
+        changed_odds_ids.update(changed)
         all_fixtures.extend(fixtures)
 
         logger.info(f"   ✅ {saved} 场赛程  |  {odds_synced} 条赔率")
@@ -558,16 +717,25 @@ def main():
     # 从 the-odds-api.com 获取赔率并写入 upcoming_fixtures
     if not args.no_odds:
         print("\n💰 同步赔率数据（the-odds-api.com）...")
-        odds_updated = sync_odds_from_api(db)
+        odds_updated, changed_api = sync_odds_from_api(db)
+        changed_odds_ids.update(changed_api)
         print(f"   ✅ {odds_updated} 场比赛已更新赔率")
     else:
         print("\n⏭️  跳过赔率同步（--no-odds）")
 
+    # 合并竞彩让球盘（仅保留有让一球赔率的比赛）
+    merged, skipped, changed_dm = sync_lottery_hhad_matches(args.days, db)
+    changed_odds_ids.update(changed_dm)
+    print(f"\n🎯 竞彩让一球赔率同步: 合并 {merged} 场，跳过 {skipped} 场（无赔率/非让一球）")
+
     # 批量 ML 预测
     if not args.no_ml:
         print("\n🤖 批量 ML 预测...")
-        updated = batch_ml_predict(db)
-        print(f"   ✅ {updated} 场比赛已更新 ML 预测概率")
+        updated = batch_ml_predict(db, changed_odds_ids if changed_odds_ids else None)
+        if changed_odds_ids:
+            print(f"   ✅ {updated} 场比赛已按赔率变更重新预测")
+        else:
+            print(f"   ✅ {updated} 场比赛已更新 ML 预测概率")
 
     # 打印预览
     try:

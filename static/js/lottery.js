@@ -717,14 +717,14 @@ class LotteryManager {
                     <p><strong>当前数据来源：</strong>数据库缓存</p>
                     <p><strong>如需获取最新数据，请在服务器上运行以下命令：</strong></p>
                     <div class="code-block">
-                        <code>python scripts/sync_daily_matches.py --days 7</code>
-                        <button class="copy-btn" onclick="navigator.clipboard.writeText('python scripts/sync_daily_matches.py --days 7')">
+                        <code>python scripts/sync_upcoming.py --days 7</code>
+                        <button class="copy-btn" onclick="navigator.clipboard.writeText('python scripts/sync_upcoming.py --days 7')">
                             <i class="fas fa-copy"></i>
                         </button>
                     </div>
                     <p class="help-text">
                         <i class="fas fa-info-circle"></i>
-                        该命令将从体彩官网获取最新7天的比赛数据并更新数据库
+                        该命令会统一同步近7天赛事、赔率（含让一球）并触发 ML 预测
                     </p>
                 </div>
                 <div class="modal-footer">

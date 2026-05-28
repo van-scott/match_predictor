@@ -19,6 +19,7 @@ import argparse
 import requests
 import math
 from datetime import datetime, timezone, timedelta
+from scripts.database import prediction_db as db
 
 # 加载 .env 文件（确保直接运行脚本时也能读取环境变量）
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -49,7 +50,8 @@ LEAGUE_NAMES = {
     "BL1": "德甲", "FL1": "法甲",
     "CL":  "欧冠", "CLI": "解放者杯", "BSA": "巴甲",
 }
-DEFAULT_LEAGUES = ["PL", "PD", "SA", "BL1", "FL1", "CL", "CLI", "BSA"]
+# 与 sync_upcoming.py 保持一致，避免“已同步赛程但结果永不回填”的漏赛问题
+DEFAULT_LEAGUES = ["PL", "PD", "SA", "BL1", "FL1", "CL", "ELC", "DED", "PPL", "CLI", "BSA"]
 
 
 def fetch_finished_matches(league_id: str, days_back: int = 7,
@@ -529,7 +531,7 @@ def main():
                         help="同时同步取消/延期比赛状态（每小时跑一次即可）")
     args = parser.parse_args()
 
-    from scripts.database import prediction_db as db
+
 
     leagues = [l.strip() for l in args.leagues.split(",")]
 
@@ -572,12 +574,6 @@ def main():
         print(f"   比分精确命中: {total_stats['score_hit']} 场")
 
     print_accuracy_summary(db)
-
-    try:
-        from matchpredict.services.eval_service import eval_service
-        eval_service.run_and_save(days=30)
-    except Exception as e:
-        logger.warning('评估快照写入失败: %s', e)
 
 
 if __name__ == "__main__":
