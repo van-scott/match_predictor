@@ -253,6 +253,8 @@ def backfill_results(matches: list, league_code: str, db) -> dict:
                 score_correct_val = None
                 goal_diff_error = None
                 ml_predicted_result = None
+                pred_hg = None
+                pred_ag = None
 
                 if row and row[0] is not None:
                     ml_h, ml_d, ml_a = float(row[0]), float(row[1]), float(row[2])
