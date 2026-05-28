@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-⚠️ [已废弃] 中国体育彩票足球胜平负爬虫
-已被 sync_upcoming.py（football-data.org API）取代。
-保留仅供参考，不再被任何活跃代码调用。
+中国体彩 JSON API 客户端
+─────────────────────
+仅用于拉取 hhad (让一球/胜平负) 赔率，供数据流水线 Step 1 合并到 upcoming_fixtures。
+跟 `lottery_api.ChinaSportsLotterySpider`（HTML 爬虫）共用同一站点，
+但走的是结构化 JSON 接口，更适合做赔率同步。
 """
 
 import requests
@@ -13,16 +15,6 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 import time
 import random
-
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('//lottery_spider.log', encoding='utf-8'),
-        logging.StreamHandler()
-    ]
-)
 
 logger = logging.getLogger(__name__)
 

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Business logic for lottery/upcoming matches."""
-from matchpredict.data import prediction_db
+from matchpredict.db import prediction_db
 from matchpredict.domain.team_names import TEAM_NAME_CN
 from matchpredict.domain.leagues import TEAMS_DATA
 from matchpredict.repositories.upcoming_repository import UpcomingRepository

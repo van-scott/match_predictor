@@ -2,7 +2,7 @@
 """Prediction persistence."""
 from typing import Any
 
-from matchpredict.data import prediction_db
+from matchpredict.db import prediction_db
 
 
 class PredictionRepository:

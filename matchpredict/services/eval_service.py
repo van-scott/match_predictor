@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import Any, Optional
 
-from matchpredict.data import prediction_db
+from matchpredict.db import prediction_db
 from matchpredict.repositories.eval_repository import EvalRepository
 
 logger = logging.getLogger(__name__)

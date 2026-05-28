@@ -2,7 +2,7 @@
 """HTTP 控制器 — 仅处理请求/响应，业务逻辑在 services 层。"""
 from flask import Blueprint, request, jsonify, current_app
 
-from matchpredict.data import prediction_db
+from matchpredict.db import prediction_db
 from matchpredict.services.ai_prediction_service import ai_prediction_service
 from matchpredict.utils.auth import get_current_user
 

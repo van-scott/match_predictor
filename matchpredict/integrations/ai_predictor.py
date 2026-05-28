@@ -10,13 +10,10 @@ import logging
 import time
 import os
 import random
-import sys
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 
 import requests
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +48,7 @@ def fetch_team_context(home_team: str, away_team: str, db=None) -> Dict[str, Any
     """
     if db is None:
         try:
-            from scripts.database import prediction_db
+            from matchpredict.db import prediction_db
             db = prediction_db
         except Exception:
             return {}
@@ -162,10 +159,10 @@ def ml_predict(home_team: str, away_team: str) -> Dict[str, float]:
         with open(model_path, 'rb') as f:
             model_pkg = pickle.load(f)
 
-        from scripts.feature_engineering import (
+        from matchpredict.ml.features import (
             load_historical_matches, compute_team_stats
         )
-        from scripts.train_model import predict_probabilities
+        from matchpredict.ml.training import predict_probabilities
 
         df = load_historical_matches()
         if df.empty:
@@ -446,7 +443,7 @@ class AIFootballPredictor:
         # 1. 尝试从数据库读取用户的个性化 AI 配置
         if user_id:
             try:
-                from scripts.database import prediction_db
+                from matchpredict.db import prediction_db
                 if prediction_db:
                     user_cfg = prediction_db.get_user_ai_config(user_id)
                     if user_cfg:
@@ -484,7 +481,7 @@ class AIFootballPredictor:
         
         # 3. 如果无用户配置且无 override，则加载系统全局配置
         try:
-            from scripts.database import prediction_db
+            from matchpredict.db import prediction_db
             if prediction_db:
                 with prediction_db.get_db_connection() as conn:
                     cur = conn.cursor()

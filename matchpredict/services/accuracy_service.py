@@ -2,7 +2,7 @@
 """预测回顾业务逻辑。"""
 from typing import Any, Optional
 
-from matchpredict.data import prediction_db
+from matchpredict.db import prediction_db
 from matchpredict.domain.team_names import TEAM_NAME_CN
 from matchpredict.repositories.accuracy_repository import AccuracyRepository
 

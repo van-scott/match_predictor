@@ -4,29 +4,18 @@
 评估快照 CLI — 调用 matchpredict.services.eval_service
 
 用法:
-  python scripts/eval_snapshot.py              # 最近30天，写入库
-  python scripts/eval_snapshot.py --days 30    # 指定窗口
-  python scripts/eval_snapshot.py --show         # 只打印，不写库
-  python scripts/eval_snapshot.py --all          # 全量历史
+  python -m matchpredict.tools.eval_snapshot              # 最近30天，写入库
+  python -m matchpredict.tools.eval_snapshot --days 30    # 指定窗口
+  python -m matchpredict.tools.eval_snapshot --show       # 只打印，不写库
+  python -m matchpredict.tools.eval_snapshot --all        # 全量历史
 """
-import os
-import sys
 import logging
+import sys
 import argparse
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from matchpredict.utils.bootstrap import init_cli
 
-_env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
-if os.path.exists(_env_path):
-    with open(_env_path) as f:
-        for line in f:
-            line = line.strip()
-            if line and not line.startswith('#') and '=' in line:
-                k, v = line.split('=', 1)
-                if k.strip() not in os.environ:
-                    os.environ[k.strip()] = v.strip()
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)-8s %(message)s")
+init_cli()
 logger = logging.getLogger(__name__)
 
 

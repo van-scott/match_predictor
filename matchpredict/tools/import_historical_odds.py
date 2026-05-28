@@ -5,28 +5,16 @@
 数据源：football-data.co.uk 提供的免费 CSV（含 Bet365/Pinnacle 赔率）
 
 用法:
-  python scripts/import_historical_odds.py
+  python -m matchpredict.tools.import_historical_odds
 """
-import os
-import sys
 import logging
 import requests
 import io
 import pandas as pd
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-_env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.env')
-if os.path.exists(_env_path):
-    with open(_env_path) as f:
-        for line in f:
-            line = line.strip()
-            if line and not line.startswith('#') and '=' in line:
-                key, val = line.split('=', 1)
-                key, val = key.strip(), val.strip()
-                if key and key not in os.environ:
-                    os.environ[key] = val
+from matchpredict.utils.bootstrap import init_cli
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)-8s %(message)s", datefmt="%H:%M:%S")
+init_cli()
 logger = logging.getLogger(__name__)
 
 # football-data.co.uk CSV URLs for major leagues (2023-2024 and 2024-2025 seasons)
@@ -151,7 +139,7 @@ def import_odds_to_db(db):
 
 
 def main():
-    from scripts.database import prediction_db as db
+    from matchpredict.db import prediction_db as db
 
     print("=" * 60)
     print("💰 导入历史赔率数据（football-data.co.uk）")

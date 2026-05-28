@@ -2,7 +2,7 @@
 """认证与用户账户 API。"""
 from flask import Blueprint, current_app, jsonify, request, session
 
-from matchpredict.data import prediction_db
+from matchpredict.db import prediction_db
 from matchpredict.services.auth_service import auth_service
 from matchpredict.utils.auth import get_current_user
 

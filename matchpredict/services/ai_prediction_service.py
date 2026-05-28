@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """Business logic for /api/ai/predict."""
-from matchpredict.data import prediction_db
+from matchpredict.db import prediction_db
 from matchpredict.services.ai_prompt_service import (
     build_analysis_prompt,
     calc_implied_probability_str,
 )
 
 try:
-    from scripts.ai_predictor import AIFootballPredictor
+    from matchpredict.integrations.ai_predictor import AIFootballPredictor
 except ImportError:
     AIFootballPredictor = None
 

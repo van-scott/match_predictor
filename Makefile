@@ -1,4 +1,4 @@
-.PHONY: install run dev clean venv help init-db create-admin sync-history sync-upcoming train sync-all
+.PHONY: install run dev clean venv help init-db create-admin sync-history sync-upcoming sync-results eval-snapshot train sync-all
 
 # ── 工具链 ────────────────────────────────────────────────────────────────
 PYTHON     := python3
@@ -77,7 +77,7 @@ init-db: ## 初始化数据库表结构 + 超管账号
 	@if [ ! -f "$(VENV_PYTHON)" ]; then echo "❌ 请先执行 make install"; exit 1; fi
 	@$(VENV_PYTHON) -c "\
 import sys; sys.path.insert(0, '.'); \
-from scripts.database import prediction_db; \
+from matchpredict.db import prediction_db; \
 prediction_db.init_tables(); \
 prediction_db.ensure_credits_columns(); \
 r = prediction_db.init_admin(); \
@@ -88,7 +88,7 @@ print('✅' if r['created'] else 'ℹ️ ', r['message'])"
 create-admin: ## 创建/重置超管账号（交互式）
 	@$(VENV_PYTHON) -c "\
 import sys; sys.path.insert(0, '.'); \
-from scripts.database import prediction_db; \
+from matchpredict.db import prediction_db; \
 u = input('超管用户名 [admin]: ').strip() or 'admin'; \
 e = input('超管邮箱 [admin@matchpro.com]: ').strip() or 'admin@matchpro.com'; \
 p = input('初始密码 [admin888]: ').strip() or 'admin888'; \
@@ -109,23 +109,26 @@ dev: ## 开发模式启动（热重载 + DEBUG）
 # ── 数据管道 ───────────────────────────────────────────────────────────────
 sync-history: ## 同步五大联赛历史比赛数据（约3500+场）
 	@echo "📥 同步历史比赛数据..."
-	@$(VENV_PYTHON) scripts/sync_historical.py --leagues PL,PD,SA,BL1,FL1 --seasons 2023,2024
+	@$(VENV_PYTHON) -m matchpredict.tools.sync_historical --leagues PL,PD,SA,BL1,FL1 --seasons 2023,2024
 	@echo "✅ 历史数据同步完成"
 
-sync-upcoming: ## 同步未来14天赛程 + 批量 ML 预测
-	@echo "🔄 同步未开赛赛程 + ML 预测..."
-	@$(VENV_PYTHON) scripts/sync_upcoming.py --days 14
-	@echo "✅ 赛程同步完成"
+sync-upcoming: ## 完整流水线：拉赛程 → 赔率 → ML 预测 → 泊松比分 → 结果回填
+	@echo "🔄 运行同步流水线 (full)..."
+	@$(VENV_PYTHON) -m matchpredict.pipeline.runner --mode full --days-ahead 14
+	@echo "✅ 流水线完成"
 
 train: ## 训练 ML 预测模型（需先完成 sync-history）
 	@echo "🤖 训练 ML 模型..."
-	@$(VENV_PYTHON) scripts/train_model.py
+	@$(VENV_PYTHON) -m matchpredict.ml.training
 	@echo "✅ 模型训练完成"
 
-sync-results: ## 同步已结束比赛真实比分 + 计算预测准确率
+sync-results: ## 仅回填已结束比赛真实比分 + 计算预测准确率
 	@echo "📊 同步已结束比赛结果..."
-	@$(VENV_PYTHON) scripts/sync_results.py --days 14
+	@$(VENV_PYTHON) -m matchpredict.pipeline.runner --mode results --days-back 14
 	@echo "✅ 比赛结果同步完成"
+
+eval-snapshot: ## 生成 ML 评估快照（命中率、Brier、Reliability）
+	@$(VENV_PYTHON) -m matchpredict.tools.eval_snapshot --days 30
 
 sync-all: sync-history train sync-upcoming sync-results ## 全量同步：历史数据 → 训练 → 未来赛程 → 结果回填
 	@echo "🎉 全量同步完成"

@@ -2,7 +2,7 @@
 """页面渲染所需的业务数据组装。"""
 from datetime import date
 
-from matchpredict.data import prediction_db
+from matchpredict.db import prediction_db
 from matchpredict.domain.team_names import TEAM_NAME_CN
 from matchpredict.services.admin_service import get_ai_config
 

@@ -1,87 +1,74 @@
 # -*- coding: utf-8 -*-
-"""后台定时同步任务（APScheduler）。"""
+"""
+后台定时任务（APScheduler）
+──────────────────────────
+使用统一的流水线（matchpredict.pipeline）替代原来分散的多个 subprocess 脚本。
+
+任务表：
+  pipeline_full    — 每 60 分钟  — 完整流水线（赛程→赔率→ML→泊松→结果）
+  pipeline_results — 每 10 分钟  — 仅结果同步（轻量，覆盖刚完赛的比赛）
+
+Admin 手动触发接口：run_sync_upcoming_once()（向前兼容，实际调用 full 流水线）
+"""
 import atexit
 import logging
-import subprocess
-import sys
 import threading
+import sys
+import subprocess
+
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
-logger = logging.getLogger('matchpredict.scheduler')
+logger = logging.getLogger("matchpredict.scheduler")
 
 
 def setup_scheduler(app) -> None:
-    """在 Flask 进程内启动数据同步定时任务。"""
-
-    python_bin = sys.executable
+    """在 Flask 进程内启动定时任务。"""
     scheduler = BackgroundScheduler()
 
-    def _run_script(args, timeout):
-        return subprocess.run(
-            [python_bin] + args,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-
-    def job_sync_results():
+    def _run_pipeline(mode: str, days_ahead: int = 7, days_back: int = 7,
+                      include_cancelled: bool = False):
+        """在调度线程内直接调用流水线（比 subprocess 少一次解释器启动开销）。"""
         try:
-            result = _run_script(['scripts/sync_results.py', '--days', '7'], 300)
-            if result.returncode == 0:
-                if '更新 0 场' not in result.stdout or '新插入 0 场' not in result.stdout:
-                    logger.info('✅ [定时] 比赛结果已同步')
-            elif result.stderr.strip() and 'No matches' not in result.stderr:
-                logger.error('❌ [定时] 同步失败: %s', result.stderr.strip()[:200])
-        except subprocess.TimeoutExpired:
-            logger.warning('⚠️ [定时] 比赛结果同步超时 (300s)，跳过本次')
-        except Exception as e:
-            logger.error('❌ [定时] 同步异常: %s', e)
-
-    def job_sync_results_full():
-        try:
-            result = _run_script(
-                ['scripts/sync_results.py', '--days', '7', '--with-cancelled'], 360
+            from matchpredict.pipeline.runner import run_pipeline, _setup_logging
+            _setup_logging()
+            result = run_pipeline(
+                mode=mode,
+                days_ahead=days_ahead,
+                days_back=days_back,
+                include_cancelled=include_cancelled,
             )
-            if result.returncode != 0 and result.stderr.strip():
-                logger.error('❌ [定时] 结果完整同步失败: %s', result.stderr.strip()[:200])
-        except subprocess.TimeoutExpired:
-            logger.warning('⚠️ [定时] 结果完整同步超时 (360s)，跳过本次')
+            errors = result.get("_meta", {}).get("total_errors", 0)
+            processed = result.get("_meta", {}).get("total_processed", 0)
+            if errors:
+                logger.warning("⚠️ [%s] 流水线完成，%d 个错误 / %d 条处理",
+                               mode, errors, processed)
+            elif processed:
+                logger.info("✅ [%s] 流水线完成，处理 %d 条", mode, processed)
         except Exception as e:
-            logger.error('❌ [定时] 结果完整同步异常: %s', e)
+            logger.error("❌ [%s] 流水线异常: %s", mode, e, exc_info=True)
 
-    def job_sync_upcoming():
-        try:
-            result = _run_script(['scripts/sync_upcoming.py', '--days', '7'], 600)
-            if result.returncode == 0:
-                out = result.stdout.strip()
-                if out and ('插入' in out or '更新' in out or '赔率' in out):
-                    logger.info('✅ [定时] 赛程+赔率已同步')
-            elif result.stderr.strip():
-                logger.error('❌ [定时] 赛程同步失败: %s', result.stderr.strip()[:200])
-        except subprocess.TimeoutExpired:
-            logger.warning('⚠️ [定时] 赛程同步超时 (600s)，跳过本次')
-        except Exception as e:
-            logger.error('❌ [定时] 赛程同步异常: %s', e)
+    def job_full():
+        """完整流水线：拉取赛程 + 赔率 + ML预测 + 泊松比分 + 回填结果。"""
+        _run_pipeline("full", days_ahead=7, days_back=7)
 
-    def job_eval_snapshot():
-        try:
-            result = _run_script(['scripts/eval_snapshot.py', '--days', '30'], 120)
-            if result.returncode == 0:
-                logger.info('✅ [定时] ML 评估快照已更新')
-            elif result.stderr.strip():
-                logger.error('❌ [定时] 评估快照失败: %s', result.stderr.strip()[:200])
-        except subprocess.TimeoutExpired:
-            logger.warning('⚠️ [定时] 评估快照超时 (120s)，跳过本次')
-        except Exception as e:
-            logger.error('❌ [定时] 评估快照异常: %s', e)
+    def job_results():
+        """仅结果回填：轻量任务，每10分钟跑，追踪刚完赛的比赛。"""
+        _run_pipeline("results", days_back=3)
 
-    # 防止重入：同一任务未完成时不并发启动；错过窗口后在 grace 时间内补跑。
-    # 同步赛事数据，并且用ML模型预测
+    def job_results_full():
+        """每小时全量结果回填：包含取消/延期场次。"""
+        _run_pipeline("results", days_back=7, include_cancelled=True)
+
+    # ── 注册定时任务 ──────────────────────────────────────────────────────
+    # max_instances=1  保证同一任务不并发
+    # coalesce=True    多次错过只补跑一次
+    # misfire_grace_time 错过窗口内仍可补跑
+
     scheduler.add_job(
-        job_sync_upcoming,
+        job_full,
         IntervalTrigger(minutes=60),
-        id='sync_upcoming',
+        id="pipeline_full",
         replace_existing=True,
         max_instances=1,
         coalesce=True,
@@ -89,65 +76,67 @@ def setup_scheduler(app) -> None:
     )
 
     scheduler.add_job(
-        job_sync_results,
+        job_results,
         IntervalTrigger(minutes=10),
-        id='sync_results',
+        id="pipeline_results",
         replace_existing=True,
         max_instances=1,
         coalesce=True,
         misfire_grace_time=600,
     )
+
     scheduler.add_job(
-        job_sync_results_full,
+        job_results_full,
         IntervalTrigger(minutes=60),
-        id='sync_results_full',
+        id="pipeline_results_full",
         replace_existing=True,
         max_instances=1,
         coalesce=True,
         misfire_grace_time=1800,
     )
 
-    scheduler.add_job(
-        job_eval_snapshot,
-        IntervalTrigger(hours=6),
-        id='eval_snapshot',
-        replace_existing=True,
-        max_instances=1,
-        coalesce=True,
-        misfire_grace_time=3600,
-    )
-
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown(wait=False))
 
-    def run_bootstrap_sync():
-        """服务启动后立即补跑一次，避免首次定时窗口前数据过旧。"""
-        logger.info('⏱️ [启动补跑] 开始执行赛程/结果同步...')
+    # ── 服务启动时立即补跑一次，避免第一个定时窗口前数据过旧 ─────────────
+    def _bootstrap():
+        logger.info("⏱️ [启动补跑] 开始完整流水线...")
         try:
-            job_sync_upcoming()
-            job_sync_results()
-            job_sync_results_full()
-            job_eval_snapshot()
-            logger.info('✅ [启动补跑] 自动同步完成')
+            _run_pipeline("full", days_ahead=7, days_back=7, include_cancelled=True)
+            logger.info("✅ [启动补跑] 完成")
         except Exception as e:
-            logger.error('❌ [启动补跑] 自动同步异常: %s', e)
+            logger.error("❌ [启动补跑] 异常: %s", e)
 
-    threading.Thread(target=run_bootstrap_sync, daemon=True).start()
+    threading.Thread(target=_bootstrap, daemon=True, name="bootstrap-sync").start()
 
-    app.logger.info('📅 定时任务已启动:')
-    app.logger.info('   • sync_results       每10分钟 — 比赛结果')
-    app.logger.info('   • sync_results_full  每60分钟 — 含取消/延期')
-    app.logger.info('   • sync_upcoming      每60分钟 — 近7天赛程+赔率+ML（含让一球）')
-    app.logger.info('   • eval_snapshot      每6小时  — ML 评估快照')
+    app.logger.info("📅 定时任务已启动:")
+    app.logger.info("   • pipeline_full         每60分钟 — 完整流水线（赛程+赔率+ML+比分+结果）")
+    app.logger.info("   • pipeline_results      每10分钟 — 轻量结果同步（近3天）")
+    app.logger.info("   • pipeline_results_full 每60分钟 — 全量结果同步（含取消/延期）")
 
 
 def run_sync_upcoming_once(env: dict | None = None) -> subprocess.CompletedProcess:
-    """Admin API 使用的手动同步封装。"""
-    python_bin = sys.executable
-    return subprocess.run(
-        [python_bin, 'scripts/sync_upcoming.py', '--days', '7'],
-        capture_output=True,
-        text=True,
-        timeout=120,
-        env=env or None,
+    """
+    Admin API 使用的手动触发接口（向前兼容）。
+    直接在当前进程内调用流水线，不再 fork 子进程。
+    返回一个模拟的 CompletedProcess（兼容原调用方检查 returncode）。
+    """
+    try:
+        from matchpredict.pipeline.runner import run_pipeline, _setup_logging
+        _setup_logging()
+        result = run_pipeline(mode="full", days_ahead=7, days_back=7)
+        errors = result.get("_meta", {}).get("total_errors", 0)
+        rc = 0 if errors == 0 else 1
+        out = f"completed: processed={result['_meta']['total_processed']}, errors={errors}"
+    except Exception as e:
+        rc = 1
+        out = str(e)
+
+    # 构造兼容 subprocess.CompletedProcess 的对象
+    cp = subprocess.CompletedProcess(
+        args=["pipeline", "--mode", "full"],
+        returncode=rc,
+        stdout=out,
+        stderr="",
     )
+    return cp

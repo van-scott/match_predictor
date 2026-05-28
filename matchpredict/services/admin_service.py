@@ -2,7 +2,7 @@
 """管理员配置业务逻辑。"""
 import os
 
-from matchpredict.data import prediction_db
+from matchpredict.db import prediction_db
 
 
 def get_ai_config() -> dict:

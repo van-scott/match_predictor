@@ -9,11 +9,11 @@ import time
 import uuid
 from datetime import date
 
-from matchpredict.data import prediction_db
+from matchpredict.db import prediction_db
 from matchpredict.utils.auth import hash_password
 
 try:
-    from scripts.ai_predictor import AIFootballPredictor
+    from matchpredict.integrations.ai_predictor import AIFootballPredictor
 except ImportError:
     AIFootballPredictor = None
 

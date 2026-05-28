@@ -6,7 +6,7 @@ import os
 from flask import Flask
 
 from matchpredict.controllers import register_blueprints, register_hooks
-from matchpredict.data import prediction_db
+from matchpredict.db import prediction_db
 from matchpredict.extensions import configure_app, initialize_services
 from matchpredict.services.scheduler_service import setup_scheduler
 

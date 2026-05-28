@@ -2,12 +2,12 @@
 """智能选场单场预测业务逻辑。"""
 from typing import Any, Optional
 
-from matchpredict.data import prediction_db
+from matchpredict.db import prediction_db
 from matchpredict.repositories.fixture_repository import FixtureRepository
 from matchpredict.utils.goals import interpret_odds_signal
 
 try:
-    from scripts.ai_predictor import AIFootballPredictor
+    from matchpredict.integrations.ai_predictor import AIFootballPredictor
 except ImportError:
     AIFootballPredictor = None
 

@@ -21,7 +21,7 @@ from matchpredict.domain.leagues import LEAGUES, TEAMS_DATA
 from matchpredict.utils.goals import calc_predicted_goals, interpret_odds_signal
 
 try:
-    from scripts.ai_predictor import AIFootballPredictor
+    from matchpredict.integrations.ai_predictor import AIFootballPredictor
 except ImportError:
     AIFootballPredictor = None
 

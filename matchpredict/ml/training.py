@@ -42,9 +42,7 @@ except ImportError:
     HAS_LGBM = False
     print("⚠️  lightgbm 未安装，将跳过 LightGBM 模型。运行: pip install lightgbm")
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from scripts.feature_engineering import (
+from matchpredict.ml.features import (
     load_historical_matches,
     compute_team_stats,
     build_match_feature_matrix,
@@ -345,7 +343,7 @@ def predict_probabilities(home_team: str, away_team: str,
     如果提供了赔率，会加入赔率隐含概率特征以提高准确率。
     返回: {'H': 0.45, 'D': 0.28, 'A': 0.27, 'confidence': 'high/medium/low'}
     """
-    from scripts.feature_engineering import compute_h2h
+    from matchpredict.ml.features import compute_h2h
 
     if home_team not in team_stats or away_team not in team_stats:
         return {}
@@ -484,7 +482,7 @@ def main():
     # 尝试加载赔率数据
     odds_df = None
     try:
-        from scripts.database import prediction_db
+        from matchpredict.db import prediction_db
         with prediction_db.get_db_connection() as conn:
             odds_df = pd.read_sql("SELECT home_team, away_team, match_date, home_odds, draw_odds, away_odds FROM match_odds WHERE home_odds IS NOT NULL", conn)
         if odds_df is not None and not odds_df.empty:

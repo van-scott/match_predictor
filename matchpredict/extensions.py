@@ -6,7 +6,7 @@ from datetime import timedelta
 
 from flask import Flask
 
-from matchpredict.data import prediction_db
+from matchpredict.db import prediction_db
 
 lottery_spider = None
 ai_predictor = None
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 def get_ai_predictor_class():
     try:
-        from scripts.ai_predictor import AIFootballPredictor
+        from matchpredict.integrations.ai_predictor import AIFootballPredictor
         return AIFootballPredictor
     except ImportError:
         return None
@@ -27,12 +27,9 @@ def initialize_services(app: Flask) -> None:
     global lottery_spider, ai_predictor
 
     try:
-        from scripts.lottery_api import ChinaSportsLotterySpider
+        from matchpredict.integrations.lottery_api import ChinaSportsLotterySpider
     except ImportError:
-        try:
-            from lottery_api import ChinaSportsLotterySpider
-        except ImportError:
-            ChinaSportsLotterySpider = None
+        ChinaSportsLotterySpider = None
 
     try:
         if ChinaSportsLotterySpider:

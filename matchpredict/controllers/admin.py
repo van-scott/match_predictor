@@ -5,7 +5,7 @@ import os
 import requests
 from flask import Blueprint, jsonify, request, current_app
 
-from matchpredict.data import prediction_db
+from matchpredict.db import prediction_db
 from matchpredict.utils.auth import get_current_user
 
 bp = Blueprint('admin', __name__)

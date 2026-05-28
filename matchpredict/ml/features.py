@@ -4,8 +4,6 @@
 数据库驱动的特征工程模块
 从 historical_matches 表拉取数据，计算球队特征，存入 match_features 表
 """
-import os
-import sys
 import json
 import logging
 import warnings
@@ -13,10 +11,7 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 
-# 抑制 pandas 对 psycopg2 连接的 UserWarning（功能正常，只是不推荐）
 warnings.filterwarnings('ignore', message='.*pandas only supports SQLAlchemy.*')
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +23,7 @@ logger = logging.getLogger(__name__)
 def load_historical_matches(db=None) -> pd.DataFrame:
     """从 historical_matches 表加载所有已完赛比赛"""
     if db is None:
-        from scripts.database import prediction_db
+        from matchpredict.db import prediction_db
         db = prediction_db
 
     try:
@@ -506,7 +501,7 @@ def build_match_feature_matrix(df: pd.DataFrame, team_stats: dict = None,
 def save_team_ratings(team_stats: dict, db=None):
     """将球队统计写入 team_ratings 表，供 AI Prompt 实时查询"""
     if db is None:
-        from scripts.database import prediction_db
+        from matchpredict.db import prediction_db
         db = prediction_db
 
     saved = 0

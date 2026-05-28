@@ -4,7 +4,7 @@ import hashlib
 
 from flask import session
 
-from matchpredict.data import prediction_db
+from matchpredict.db import prediction_db
 
 
 def hash_password(password: str) -> str:

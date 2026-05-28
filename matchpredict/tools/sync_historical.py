@@ -3,19 +3,18 @@
 """
 历史比赛数据同步脚本
 从 football-data.org 拉取五大联赛近3个赛季数据，写入 historical_matches 表
-用法: python scripts/sync_historical.py [--leagues PL,PD,SA,BL1,FL1] [--seasons 2022,2023,2024]
+用法: python -m matchpredict.tools.sync_historical [--leagues PL,PD,SA,BL1,FL1] [--seasons 2022,2023,2024]
 """
 import os
-import sys
 import time
 import requests
 import argparse
 from datetime import datetime
 
-# 添加项目根目录到 path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from matchpredict.utils.bootstrap import init_cli
+init_cli()
 
-from scripts.database import prediction_db
+from matchpredict.db import prediction_db
 
 # ─────────────────────────────────────────────
 # 配置

@@ -2,11 +2,10 @@ import os
 import sys
 import shutil
 
-# 确保能导入 scripts
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from scripts.database import prediction_db
-from scripts.ai_predictor import AIFootballPredictor
+from matchpredict.db import prediction_db
+from matchpredict.integrations.ai_predictor import AIFootballPredictor
 
 def test_engines():
     print("--- 启动用户自定义 AI 引擎单元与安全测试 ---")

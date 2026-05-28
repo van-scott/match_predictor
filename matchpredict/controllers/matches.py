@@ -4,7 +4,7 @@ import os
 
 from flask import Blueprint, request, jsonify, current_app
 
-from matchpredict.data import prediction_db
+from matchpredict.db import prediction_db
 from matchpredict.extensions import lottery_spider
 from matchpredict.services.upcoming_service import upcoming_service
 from matchpredict.services.scheduler_service import run_sync_upcoming_once

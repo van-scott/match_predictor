@@ -2,7 +2,7 @@
 """预测回顾 API 控制器。"""
 from flask import Blueprint, jsonify, request, current_app
 
-from matchpredict.data import prediction_db
+from matchpredict.db import prediction_db
 from matchpredict.services.accuracy_service import accuracy_service
 from matchpredict.services.eval_service import eval_service
 

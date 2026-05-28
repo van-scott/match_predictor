@@ -33,22 +33,32 @@ make run        # 启动服务 → http://localhost:8000
 ## 目录结构
 
 ```
-app.py                          # Flask 主应用
-scripts/
-  database.py                   # 数据库连接池 + ORM
-  ai_predictor.py               # AI 调用模块（支持多服务商）
-  feature_engineering.py        # 特征工程
-  train_model.py                # ML 训练管道
-  sync_upcoming.py              # 同步赛程 + 赔率 + ML 预测
-  sync_results.py               # 同步比赛结果
-  sync_historical.py            # 同步历史数据
-  sync_daily_matches.py         # 彩票模式每日同步
-templates/                      # Jinja2 模板
-static/
-  script.js                     # 前端主脚本
-  style.css                     # 样式
-  js/                           # 模块化前端脚本
-models/                         # 训练好的 ML 模型 (.pkl)
+app.py                              # Flask 主应用入口
+matchpredict/
+  controllers/                      # HTTP 路由（薄控制器）
+  services/                         # 业务逻辑
+  repositories/                     # SQL 查询封装
+  db/                               # PostgreSQL 连接池 + 表操作
+  ml/                               # 特征工程 + 训练 + 推理
+    features.py                     #   从 historical_matches 计算特征
+    training.py                     #   训练管道 + predict_probabilities
+  integrations/                     # 外部 API 客户端
+    ai_predictor.py                 #   Gemini / 兼容 LLM
+    lottery_api.py                  #   体彩 HTML 爬虫（赛事列表）
+    lottery_odds.py                 #   体彩 JSON API（让一球赔率）
+  pipeline/                         # 数据同步流水线（5 步：赛程→赔率→ML→比分→结果）
+    runner.py                       #   编排器（CLI 入口）
+    steps.py                        #   各步骤独立函数
+    config.py                       #   联赛/窗口全局配置
+  tools/                            # 一次性 CLI（python -m matchpredict.tools.X）
+    sync_historical.py
+    import_historical_odds.py
+    eval_snapshot.py
+  domain/ utils/                    # 领域常量 / 通用工具
+
+templates/                          # Jinja2 模板
+static/                             # 前端资源
+models/                             # 训练好的 ML 模型 (.pkl)
 ```
 
 ## 配置
@@ -85,12 +95,24 @@ make sync-results   # 同步比赛结果
 make sync-all       # 全量同步
 ```
 
-## 数据管道
+## 数据管道（流水线）
+
+进程内统一由 `matchpredict.pipeline` 调度，定时器只跑两个任务：
 
 ```
-sync_historical → train_model → sync_upcoming → sync_results（每10分钟）
-                                     ↓
-                              sync_odds（the-odds-api）
+# pipeline_full（每 60 分钟）      pipeline_results（每 10 分钟）
+Step1 拉赛程 (football-data)        Step5 回填已结束比赛
+Step2 同步赔率 (the-odds-api)
+Step3 ML 概率预测（仅赔率变化场次）
+Step4 泊松反推预测比分
+Step5 回填已结束比赛 + 命中率
+```
+
+手动执行：
+
+```bash
+python -m matchpredict.pipeline.runner --mode full    --days-ahead 7
+python -m matchpredict.pipeline.runner --mode results --days-back  7
 ```
 
 ---
@@ -123,19 +145,20 @@ CREATE TABLE daily_matches (
 
 ### 同步命令
 
+彩票（让一球）赔率已合并进主流水线，直接调用：
+
 ```bash
-python scripts/sync_daily_matches.py --days 3      # 同步未来3天
-python scripts/sync_daily_matches.py --days 7 --force  # 强制全量更新
-python scripts/sync_daily_matches.py --stats       # 查看数据统计
-python scripts/sync_daily_matches.py --cleanup 30  # 清理30天前数据
-python scripts/sync_daily_matches.py --test        # 测试数据库连接
+python -m matchpredict.pipeline.runner --mode full --days-ahead 7
 ```
 
-### 定时任务（生产环境）
+### 定时任务
+
+Flask 启动时由 `matchpredict.services.scheduler_service` 自动注册 APScheduler 任务，
+无需 crontab。如需脱离 Flask 单独跑，可加 crontab：
 
 ```bash
-0 8 * * *  cd /path/to/match_predictor && python scripts/sync_daily_matches.py --days 3
-0 2 * * 0  cd /path/to/match_predictor && python scripts/sync_daily_matches.py --cleanup 30
+*/10 * * * *  cd /path/to/match_predictor && venv/bin/python -m matchpredict.pipeline.runner --mode results --days-back 3
+0    * * * *  cd /path/to/match_predictor && venv/bin/python -m matchpredict.pipeline.runner --mode full    --days-ahead 7
 ```
 
 ### 故障排除
