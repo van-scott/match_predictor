@@ -13,7 +13,7 @@
 每个步骤都可以单独调用和测试。
 """
 from __future__ import annotations
-
+import pickle
 import math
 import os
 import time
@@ -26,7 +26,8 @@ from decimal import Decimal
 from typing import Optional
 import requests
 from matchpredict.integrations.lottery_odds import ChinaLotterySpider
-
+from matchpredict.ml.features import load_historical_matches, compute_team_stats
+from matchpredict.ml.training import predict_probabilities
 from matchpredict.pipeline.config import (
     FOOTBALL_DATA_API_KEY, FOOTBALL_DATA_BASE_URL,
     ODDS_API_KEY, ODDS_API_BASE_URL, ODDS_SPORT_MAP,
@@ -486,7 +487,10 @@ def step_sync_odds(db) -> dict:
                         h_odds = outcomes.get(api_home)
                         a_odds = outcomes.get(api_away)
                         d_odds = outcomes.get("Draw")
-                        if not h_odds or not a_odds:
+                        # 仅接受三项胜平负赔率都齐全的数据，避免把已有 draw_odds 覆盖成 NULL。
+                        if not h_odds or not d_odds or not a_odds:
+                            logger.debug("  跳过赔率不完整: %s vs %s (h=%s d=%s a=%s)",
+                                         api_home, api_away, h_odds, d_odds, a_odds)
                             continue
 
                         norm_h = _norm_team(api_home)
@@ -502,6 +506,10 @@ def step_sync_odds(db) -> dict:
 
                         fixture_id = row[0]
                         orig_home, orig_away = row[3], row[4]
+                        # 数值归一化后再比较，降低字符串格式差异造成的误更新（如 2.1 vs 2.10）。
+                        h_new = round(float(h_odds), 3)
+                        d_new = round(float(d_odds), 3)
+                        a_new = round(float(a_odds), 3)
                         cur.execute("""
                             UPDATE upcoming_fixtures
                             SET home_odds = %s, draw_odds = %s, away_odds = %s,
@@ -510,13 +518,13 @@ def step_sync_odds(db) -> dict:
                               AND (home_odds IS DISTINCT FROM %s
                                 OR draw_odds IS DISTINCT FROM %s
                                 OR away_odds IS DISTINCT FROM %s)
-                        """, (h_odds, d_odds, a_odds, fixture_id,
-                              h_odds, d_odds, a_odds))
+                        """, (h_new, d_new, a_new, fixture_id,
+                              h_new, d_new, a_new))
                         if cur.rowcount > 0:
                             league_updated += 1
                             changed_ids.add(fixture_id)
                             logger.info("  💰 %s vs %s: %.2f/%.2f/%.2f",
-                                        orig_home, orig_away, h_odds, d_odds or 0, a_odds)
+                                        orig_home, orig_away, h_new, d_new, a_new)
                     if league_updated:
                         msg = f"  [{LEAGUE_NAMES.get(league_code, league_code)}] 赔率更新 {league_updated} 场"
                         detail.append(msg)
@@ -548,15 +556,6 @@ def step_ml_predict(db, changed_ids: Optional[set[str]] = None) -> dict:
     if not os.path.exists(MODEL_PATH):
         logger.warning("  ML 模型不存在 (%s)，跳过（请先运行 train_model.py）", MODEL_PATH)
         return _result(skipped=1)
-
-    import pickle
-    try:
-        from matchpredict.ml.features import load_historical_matches, compute_team_stats
-        from matchpredict.ml.training import predict_probabilities
-    except ImportError as e:
-        logger.error("  导入 ML 工具失败: %s", e)
-        return _result(errors=1)
-
     try:
         with open(MODEL_PATH, "rb") as f:
             model_pkg = pickle.load(f)
