@@ -315,19 +315,41 @@ def _sync_lottery_hhad(days_ahead: int, db) -> tuple[int, list]:
             for m in matches:
                 odds_payload = m.get("odds") or {}
                 odds_type = str(odds_payload.get("type") or "").lower()
-                if odds_type not in {"had", "hhad"}:
+                if odds_type not in {"had", "hhad"} and not m.get("hhad_odds"):
                     continue
 
-                odds = odds_payload.get("hhad") or {}
-                if not (odds.get("h") and odds.get("d") and odds.get("a")):
-                    continue
-                goal_line_raw = (
-                    odds_payload.get("goal_line")
-                    or odds.get("goal_line")
-                    or odds.get("goalLine")
-                    or ""
-                )
-                goal_line = str(goal_line_raw).strip() or None
+                base_odds = odds_payload.get("hhad") or {}
+                if odds_type == "had":
+                    if not (base_odds.get("h") and base_odds.get("d") and base_odds.get("a")):
+                        continue
+                    base_ho, base_do, base_ao = float(base_odds["h"]), float(base_odds["d"]), float(base_odds["a"])
+                else:
+                    base_ho, base_do, base_ao = None, None, None
+
+                # HHAD 专用赔率（来自爬虫透传的 hhad_odds；若主赔率本身就是 hhad，也兼容回退）
+                hhad_payload = (m.get("hhad_odds") or {})
+                if not hhad_payload and odds_type == "hhad":
+                    hhad_payload = base_odds
+                    goal_line_fallback = (
+                        odds_payload.get("goal_line")
+                        or base_odds.get("goal_line")
+                        or base_odds.get("goalLine")
+                        or ""
+                    )
+                    hhad_payload = {
+                        "h": hhad_payload.get("h"),
+                        "d": hhad_payload.get("d"),
+                        "a": hhad_payload.get("a"),
+                        "goal_line": goal_line_fallback,
+                    }
+
+                if hhad_payload and all(hhad_payload.get(k) for k in ("h", "d", "a")):
+                    hhad_ho = float(hhad_payload["h"])
+                    hhad_do = float(hhad_payload["d"])
+                    hhad_ao = float(hhad_payload["a"])
+                    goal_line = str(hhad_payload.get("goal_line") or "").strip() or None
+                else:
+                    hhad_ho, hhad_do, hhad_ao, goal_line = None, None, None, None
                 mt = m.get("match_time")
                 if not mt:
                     continue
@@ -341,9 +363,6 @@ def _sync_lottery_hhad(days_ahead: int, db) -> tuple[int, list]:
                 fixture_id = f"dm_{m.get('match_id', '')}".replace("dm_lottery_", "dm_")
                 if fixture_id == "dm_":
                     continue
-                ho, do_, ao = float(odds["h"]), float(odds["d"]), float(odds["a"])
-                base_ho, base_do, base_ao = (ho, do_, ao) if odds_type == "had" else (None, None, None)
-                hhad_ho, hhad_do, hhad_ao = (ho, do_, ao) if odds_type == "hhad" else (None, None, None)
                 league_name = m.get("league_name") or "竞彩"
                 cur.execute("""
                     INSERT INTO upcoming_fixtures (

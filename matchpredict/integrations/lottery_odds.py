@@ -416,6 +416,25 @@ class ChinaLotterySpider:
                                 'type': 'had',  # 但标记类型为不让球胜平负
                                 'update_time': f"{had_odds.get('updateDate', '')} {had_odds.get('updateTime', '')}"
                             }
+        # 创建 HHAD（让球盘）映射，和 HAD 并行保留，避免“优先 HAD 后丢失 HHAD”。
+        hhad_odds_map = {}
+        if hhad_data and 'value' in hhad_data:
+            for date_info in hhad_data['value'].get('matchInfoList', []):
+                for match_data in date_info.get('subMatchList', []):
+                    match_id = match_data.get('matchId', '')
+                    if not match_id:
+                        continue
+                    hhad_raw = match_data.get('hhad')
+                    if not hhad_raw:
+                        continue
+                    if all(key in hhad_raw for key in ['h', 'd', 'a']):
+                        hhad_odds_map[match_id] = {
+                            'h': str(hhad_raw.get('h')),
+                            'd': str(hhad_raw.get('d')),
+                            'a': str(hhad_raw.get('a')),
+                            'goal_line': hhad_raw.get('goalLine') or hhad_raw.get('goal_line') or '',
+                            'update_time': f"{hhad_raw.get('updateDate', '')} {hhad_raw.get('updateTime', '')}",
+                        }
         
         # 处理HHAD数据，并优先使用HAD赔率
         try:
@@ -460,6 +479,9 @@ class ChinaLotterySpider:
                         
                         if odds_info:
                             match_info['odds'] = odds_info
+                            # 即使本场主赔率用 HAD，也把 HHAD 侧写带上，供下游入库到 hhad_* 字段。
+                            if match_id in hhad_odds_map:
+                                match_info['hhad_odds'] = hhad_odds_map[match_id]
                             
                             # 验证数据完整性
                             if self.validate_match(match_info):

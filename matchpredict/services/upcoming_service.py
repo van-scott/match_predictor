@@ -96,6 +96,7 @@ class UpcomingService:
         for r in rows:
             (
                 fix_id, lg_code, lg_name, ht, at, mt, matchday, h_odds, d_odds, a_odds,
+                hhad_h, hhad_d, hhad_a, hhad_line,
                 ml_h, ml_d, ml_a, ml_rec, open_h, open_d, open_a, pred_hg, pred_ag,
             ) = r
             odds_movement = {}
@@ -148,6 +149,12 @@ class UpcomingService:
                     'home': float(h_odds) if h_odds else None,
                     'draw': float(d_odds) if d_odds else None,
                     'away': float(a_odds) if a_odds else None,
+                },
+                'hhad_odds': {
+                    'home': float(hhad_h) if hhad_h else None,
+                    'draw': float(hhad_d) if hhad_d else None,
+                    'away': float(hhad_a) if hhad_a else None,
+                    'goal_line': hhad_line,
                 },
                 'open_odds': {
                     'home': float(open_h) if open_h else None,

@@ -272,7 +272,14 @@ function renderLotteryList() {
     const body = section.querySelector('.pr-day-body');
     groups[key].forEach(m => {
       const inCart = aiCart.some(c => c.match_id === m.match_id);
-      const odds = m.odds?.hhad || {};
+      const had = m.odds?.had || {};
+      const hhad = m.odds?.hhad || {};
+      const hasHhad = (
+        m.hhad_home_odds != null ||
+        m.hhad_draw_odds != null ||
+        m.hhad_away_odds != null
+      );
+      const hhadLine = m.hhad_goal_line || hhad.goal_line || '';
       const mlProbs = m.ml_probs || {};
       const card = document.createElement('div');
       card.className = `lotto-card ${inCart ? 'selected' : ''}`;
@@ -289,10 +296,16 @@ function renderLotteryList() {
           <span>${m.away_team_cn || m.away_team}</span>
         </div>
         <div class="lotto-odds">
-          <div class="lotto-odd-box"><span class="lotto-odd-label">主胜</span><span class="lotto-odd-val">${odds.h || (mlProbs.home ? (mlProbs.home * 100).toFixed(0) + '%' : '-')}</span></div>
-          <div class="lotto-odd-box"><span class="lotto-odd-label">平局</span><span class="lotto-odd-val">${odds.d || (mlProbs.draw ? (mlProbs.draw * 100).toFixed(0) + '%' : '-')}</span></div>
-          <div class="lotto-odd-box"><span class="lotto-odd-label">客胜</span><span class="lotto-odd-val">${odds.a || (mlProbs.away ? (mlProbs.away * 100).toFixed(0) + '%' : '-')}</span></div>
-        </div>`;
+          <div class="lotto-odd-box"><span class="lotto-odd-label">主胜</span><span class="lotto-odd-val">${had.h || (mlProbs.home ? (mlProbs.home * 100).toFixed(0) + '%' : '-')}</span></div>
+          <div class="lotto-odd-box"><span class="lotto-odd-label">平局</span><span class="lotto-odd-val">${had.d || (mlProbs.draw ? (mlProbs.draw * 100).toFixed(0) + '%' : '-')}</span></div>
+          <div class="lotto-odd-box"><span class="lotto-odd-label">客胜</span><span class="lotto-odd-val">${had.a || (mlProbs.away ? (mlProbs.away * 100).toFixed(0) + '%' : '-')}</span></div>
+        </div>
+        ${hasHhad ? `
+        <div class="lotto-odds" style="margin-top:.35rem">
+          <div class="lotto-odd-box"><span class="lotto-odd-label">让胜${hhadLine ? `(${hhadLine})` : ''}</span><span class="lotto-odd-val">${m.hhad_home_odds || hhad.h || '-'}</span></div>
+          <div class="lotto-odd-box"><span class="lotto-odd-label">让平${hhadLine ? `(${hhadLine})` : ''}</span><span class="lotto-odd-val">${m.hhad_draw_odds || hhad.d || '-'}</span></div>
+          <div class="lotto-odd-box"><span class="lotto-odd-label">让负${hhadLine ? `(${hhadLine})` : ''}</span><span class="lotto-odd-val">${m.hhad_away_odds || hhad.a || '-'}</span></div>
+        </div>` : ''}`;
       body.appendChild(card);
     });
     listEl.appendChild(section);
@@ -1101,6 +1114,32 @@ function buildSmartCard(m) {
       </div>`;
   }
 
+  // 让球赔率块（智能选场卡片中单独展示）
+  const hhad = m.hhad_odds || {};
+  const hasHhad = hhad.home || hhad.draw || hhad.away;
+  let hhadHtml = '';
+  if (hasHhad) {
+    const lineTag = hhad.goal_line ? `（${hhad.goal_line}）` : '';
+    hhadHtml = `
+      <div class="smart-odds-row" style="margin-top:.45rem">
+        <div class="smart-odd-box">
+          <span class="smart-odd-label">让胜${lineTag}</span>
+          <div class="smart-odd-val">${hhad.home?.toFixed(2) || '-'}</div>
+          <div class="smart-odd-change"><span class="smart-change-stable">—</span></div>
+        </div>
+        <div class="smart-odd-box">
+          <span class="smart-odd-label">让平${lineTag}</span>
+          <div class="smart-odd-val">${hhad.draw?.toFixed(2) || '-'}</div>
+          <div class="smart-odd-change"><span class="smart-change-stable">—</span></div>
+        </div>
+        <div class="smart-odd-box">
+          <span class="smart-odd-label">让负${lineTag}</span>
+          <div class="smart-odd-val">${hhad.away?.toFixed(2) || '-'}</div>
+          <div class="smart-odd-change"><span class="smart-change-stable">—</span></div>
+        </div>
+      </div>`;
+  }
+
   card.innerHTML = `
     <div class="smart-card-meta">
       <span class="smart-league-tag">${leagueEmoji} ${m.league}${m.matchday ? ' 第'+m.matchday+'轮' : ''}</span>
@@ -1126,6 +1165,7 @@ function buildSmartCard(m) {
 
     ${probHtml}
     ${oddsHtml}
+    ${hhadHtml}
 
     <div class="smart-card-footer">
       <button class="smart-btn-ml" onclick="showSmartDetail('${m.fixture_id}', false)">
