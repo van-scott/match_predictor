@@ -1,13 +1,11 @@
 # -*- coding: utf-8 -*-
 """HTTP 控制器 — 仅处理请求/响应，业务逻辑在 services 层。"""
-import os
-
 from flask import Blueprint, request, jsonify, current_app
 
 from matchpredict.db import prediction_db
 from matchpredict.extensions import lottery_spider
 from matchpredict.services.upcoming_service import upcoming_service
-from matchpredict.services.scheduler_service import run_sync_upcoming_once
+from matchpredict.services.scheduler_service import run_pipeline_once
 from matchpredict.utils.auth import get_current_user
 
 bp = Blueprint("matches", __name__)
@@ -103,25 +101,21 @@ def get_upcoming_matches():
 
 @bp.route('/api/sync-upcoming', methods=['POST'])
 def trigger_sync_upcoming():
-    """管理员接口：手动触发赛程同步（仅 admin 可用）"""
+    """管理员接口：手动触发一次完整流水线（仅 admin 可用）。"""
     try:
         current_user = get_current_user()
         if not current_user or current_user.get('user_type') != 'admin':
             return jsonify({'success': False, 'message': '仅管理员可操作'}), 403
 
-        env = {
-            **os.environ,
-            'DB_HOST': os.environ.get('DB_HOST', ''),
-            'DB_PORT': os.environ.get('DB_PORT', '5432'),
-            'DB_NAME': os.environ.get('DB_NAME', ''),
-            'DB_USER': os.environ.get('DB_USER', ''),
-            'DB_PASS': os.environ.get('DB_PASS', ''),
-        }
-        result = run_sync_upcoming_once(env)
+        result = run_pipeline_once()
+        meta = result.get('_meta', {})
+        errors = meta.get('total_errors', 0)
         return jsonify({
-            'success':   result.returncode == 0,
-            'stdout':    result.stdout[-2000:],
-            'stderr':    result.stderr[-500:] if result.returncode != 0 else '',
+            'success':   errors == 0,
+            'processed': meta.get('total_processed', 0),
+            'errors':    errors,
+            'elapsed_s': round(meta.get('elapsed_s', 0), 2),
+            'detail':    {k: v for k, v in result.items() if k != '_meta'},
         })
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
