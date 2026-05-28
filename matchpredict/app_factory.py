@@ -31,6 +31,7 @@ def create_app() -> Flask:
         try:
             prediction_db.ensure_credits_columns()
             prediction_db.ensure_ai_config_columns()
+            prediction_db.ensure_upcoming_hhad_columns()
         except Exception as e:
             app.logger.warning('字段初始化跳过: %s', e)
 

@@ -14,6 +14,7 @@ class UpcomingRepository:
                 SELECT fixture_id, league_code, league_name,
                        home_team, away_team, match_time, matchday,
                        home_odds, draw_odds, away_odds,
+                       hhad_home_odds, hhad_draw_odds, hhad_away_odds, hhad_goal_line,
                        ml_home_prob, ml_draw_prob, ml_away_prob, ml_recommendation
                 FROM upcoming_fixtures
                 WHERE status IN ('SCHEDULED','TIMED')

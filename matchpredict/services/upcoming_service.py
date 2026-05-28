@@ -22,7 +22,9 @@ class UpcomingService:
         for r in rows:
             (
                 fixture_id, league_code, league_name, home_team, away_team, match_time, matchday,
-                home_odds, draw_odds, away_odds, ml_home_prob, ml_draw_prob, ml_away_prob, ml_recommendation,
+                home_odds, draw_odds, away_odds,
+                hhad_home_odds, hhad_draw_odds, hhad_away_odds, hhad_goal_line,
+                ml_home_prob, ml_draw_prob, ml_away_prob, ml_recommendation,
             ) = r
             ht_cn = TEAM_NAME_CN.get(home_team, '')
             at_cn = TEAM_NAME_CN.get(away_team, '')
@@ -33,6 +35,24 @@ class UpcomingService:
                 odds['d'] = draw_odds
             if away_odds:
                 odds['a'] = away_odds
+            hhad_odds = {}
+            if hhad_home_odds:
+                hhad_odds['h'] = hhad_home_odds
+            if hhad_draw_odds:
+                hhad_odds['d'] = hhad_draw_odds
+            if hhad_away_odds:
+                hhad_odds['a'] = hhad_away_odds
+            if hhad_goal_line:
+                hhad_odds['goal_line'] = hhad_goal_line
+            odds_payload = {}
+            if odds:
+                odds_payload['had'] = odds
+            if hhad_odds:
+                odds_payload['hhad'] = hhad_odds
+            elif odds:
+                # 向后兼容：历史前端默认从 odds.hhad 读取三项赔率
+                odds_payload['hhad'] = odds
+
             matches.append({
                 'fixture_id': fixture_id,
                 'match_id': fixture_id,
@@ -50,7 +70,11 @@ class UpcomingService:
                 'home_odds': home_odds,
                 'draw_odds': draw_odds,
                 'away_odds': away_odds,
-                'odds': {'hhad': odds} if odds else {},
+                'hhad_home_odds': hhad_home_odds,
+                'hhad_draw_odds': hhad_draw_odds,
+                'hhad_away_odds': hhad_away_odds,
+                'hhad_goal_line': hhad_goal_line,
+                'odds': odds_payload,
                 'ml_probs': (
                     {
                         'home': round(ml_home_prob, 4),

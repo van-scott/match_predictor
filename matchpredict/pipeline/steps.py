@@ -24,8 +24,8 @@ from datetime import datetime, timezone, timedelta
 from difflib import get_close_matches
 from decimal import Decimal
 from typing import Optional
-from psycopg2.extras import execute_batch
 import requests
+from matchpredict.integrations.lottery_odds import ChinaLotterySpider
 
 from matchpredict.pipeline.config import (
     FOOTBALL_DATA_API_KEY, FOOTBALL_DATA_BASE_URL,
@@ -192,9 +192,9 @@ def step_fetch_fixtures(db, leagues: list[str], days_ahead: int) -> dict:
 
             # 写库
             saved = create_or_update_fixtures(fixtures, db)
-            create_or_update_match_odds(fixtures, db)  # 开盘追踪
+            odds_saved = create_or_update_match_odds(fixtures, db)  # 开盘追踪
             total_saved += saved
-            msg = f"  [{league_name}] {len(fixtures)} 场赛程，已写 {saved} 条"
+            msg = f"  [{league_name}] {len(fixtures)} 场赛程，已写 {saved} 条，赔率追踪 {odds_saved} 条"
             logger.info(msg)
             detail.append(msg)
 
@@ -205,9 +205,13 @@ def step_fetch_fixtures(db, leagues: list[str], days_ahead: int) -> dict:
         time.sleep(7)  # football-data 免费限速
 
     # 竞彩让一球补充（无 football-data 数据的联赛也能进入赛事广场）
-    lottery_added = _sync_lottery_hhad(days_ahead, db)
+    lottery_added, lottery_fixtures = _sync_lottery_hhad(days_ahead, db)
+    lottery_odds_saved = 0
+    if lottery_fixtures:
+        # 让一球赛事也走同一套 match_odds 开盘追踪，避免“后面补充但没赔率追踪”的割裂。
+        lottery_odds_saved = create_or_update_match_odds(lottery_fixtures, db)
     if lottery_added:
-        msg = f"  [竞彩] 让一球赔率补充 {lottery_added} 场"
+        msg = f"  [竞彩] 让一球赔率补充 {lottery_added} 场，赔率追踪 {lottery_odds_saved} 条"
         logger.info(msg)
         detail.append(msg)
 
@@ -251,8 +255,9 @@ def create_or_update_fixtures(fixtures: list, db) -> int:
     return saved
 
 
-def create_or_update_match_odds(fixtures: list, db):
+def create_or_update_match_odds(fixtures: list, db) -> int:
     """开盘赔率追踪：首次写入时保存 open_*，后续只更新当前赔率。"""
+    written = 0
     try:
         with db.get_db_connection() as conn:
             cur = conn.cursor()
@@ -283,32 +288,46 @@ def create_or_update_match_odds(fixtures: list, db):
                     f["home_odds"], f["draw_odds"], f["away_odds"],
                     "football-data",
                 ))
+                # INSERT 或 ON CONFLICT UPDATE 都计入“被处理条数”
+                written += 1
             conn.commit()
     except Exception as e:
         logger.error("写入 match_odds 失败: %s", e, exc_info=True)
+    return written
 
 
-def _sync_lottery_hhad(days_ahead: int, db) -> int:
-    """竞彩让一球赔率（±1 盘口），补充到 upcoming_fixtures。"""
+def _sync_lottery_hhad(days_ahead: int, db) -> tuple[int, list]:
+    """同步中国体彩比赛到 upcoming_fixtures：HAD 写基础赔率，HHAD 写让球赔率字段。"""
     try:
         from matchpredict.integrations.lottery_odds import ChinaLotterySpider
     except ImportError:
-        return 0
+        return 0, []
+
     spider = ChinaLotterySpider()
     matches = spider.get_formatted_matches(days_ahead=days_ahead)
     if not matches:
-        return 0
+        return 0, []
     count = 0
+    fixtures_for_odds = []
     try:
         with db.get_db_connection() as conn:
             cur = conn.cursor()
             for m in matches:
-                odds = (m.get("odds") or {}).get("hhad") or {}
-                goal_line = str((m.get("odds") or {}).get("goal_line") or "").strip()
+                odds_payload = m.get("odds") or {}
+                odds_type = str(odds_payload.get("type") or "").lower()
+                if odds_type not in {"had", "hhad"}:
+                    continue
+
+                odds = odds_payload.get("hhad") or {}
                 if not (odds.get("h") and odds.get("d") and odds.get("a")):
                     continue
-                if goal_line not in {"-1", "-1.0", "+1", "1", "1.0"}:
-                    continue
+                goal_line_raw = (
+                    odds_payload.get("goal_line")
+                    or odds.get("goal_line")
+                    or odds.get("goalLine")
+                    or ""
+                )
+                goal_line = str(goal_line_raw).strip() or None
                 mt = m.get("match_time")
                 if not mt:
                     continue
@@ -323,32 +342,54 @@ def _sync_lottery_hhad(days_ahead: int, db) -> int:
                 if fixture_id == "dm_":
                     continue
                 ho, do_, ao = float(odds["h"]), float(odds["d"]), float(odds["a"])
+                base_ho, base_do, base_ao = (ho, do_, ao) if odds_type == "had" else (None, None, None)
+                hhad_ho, hhad_do, hhad_ao = (ho, do_, ao) if odds_type == "hhad" else (None, None, None)
+                league_name = m.get("league_name") or "竞彩"
                 cur.execute("""
                     INSERT INTO upcoming_fixtures (
                         fixture_id, league_code, league_name,
                         home_team, away_team, match_time, status, matchday,
-                        home_odds, draw_odds, away_odds, synced_at
-                    ) VALUES (%s,'DM',%s,%s,%s,%s,'SCHEDULED',NULL,%s,%s,%s,CURRENT_TIMESTAMP)
+                        home_odds, draw_odds, away_odds,
+                        hhad_home_odds, hhad_draw_odds, hhad_away_odds, hhad_goal_line,
+                        synced_at
+                    ) VALUES (%s,'DM',%s,%s,%s,%s,'SCHEDULED',NULL,%s,%s,%s,%s,%s,%s,%s,CURRENT_TIMESTAMP)
                     ON CONFLICT (fixture_id) DO UPDATE SET
                         home_team  = EXCLUDED.home_team,
                         away_team  = EXCLUDED.away_team,
                         match_time = EXCLUDED.match_time,
                         status     = CASE WHEN upcoming_fixtures.status = 'FINISHED'
                                          THEN upcoming_fixtures.status ELSE EXCLUDED.status END,
-                        home_odds  = EXCLUDED.home_odds,
-                        draw_odds  = EXCLUDED.draw_odds,
-                        away_odds  = EXCLUDED.away_odds,
+                        home_odds  = COALESCE(EXCLUDED.home_odds, upcoming_fixtures.home_odds),
+                        draw_odds  = COALESCE(EXCLUDED.draw_odds, upcoming_fixtures.draw_odds),
+                        away_odds  = COALESCE(EXCLUDED.away_odds, upcoming_fixtures.away_odds),
+                        hhad_home_odds = COALESCE(EXCLUDED.hhad_home_odds, upcoming_fixtures.hhad_home_odds),
+                        hhad_draw_odds = COALESCE(EXCLUDED.hhad_draw_odds, upcoming_fixtures.hhad_draw_odds),
+                        hhad_away_odds = COALESCE(EXCLUDED.hhad_away_odds, upcoming_fixtures.hhad_away_odds),
+                        hhad_goal_line = COALESCE(EXCLUDED.hhad_goal_line, upcoming_fixtures.hhad_goal_line),
                         synced_at  = CURRENT_TIMESTAMP,
                         updated_at = CURRENT_TIMESTAMP
-                """, (fixture_id, m.get("league_name") or "竞彩",
+                """, (fixture_id, league_name,
                       m.get("home_team") or "", m.get("away_team") or "",
-                      match_dt, ho, do_, ao))
+                      match_dt, base_ho, base_do, base_ao, hhad_ho, hhad_do, hhad_ao, goal_line))
+                fixtures_for_odds.append({
+                    "fixture_id": fixture_id,
+                    "league_code": "DM",
+                    "league_name": league_name,
+                    "home_team": m.get("home_team") or "",
+                    "away_team": m.get("away_team") or "",
+                    "match_time": match_dt,
+                    "status": "SCHEDULED",
+                    "matchday": None,
+                    "home_odds": base_ho,
+                    "draw_odds": base_do,
+                    "away_odds": base_ao,
+                })
                 if cur.rowcount > 0:
                     count += 1
             conn.commit()
     except Exception as e:
         logger.error("同步竞彩让一球失败: %s", e, exc_info=True)
-    return count
+    return count, fixtures_for_odds
 
 
 # ─────────────────────────────────────────────────────────────────────────────

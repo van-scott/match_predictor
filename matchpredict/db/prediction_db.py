@@ -428,6 +428,10 @@ class PredictionDatabase:
                     away_team             VARCHAR(100)    NOT NULL,
                     match_time            TIMESTAMP,
                     status                VARCHAR(20)     DEFAULT 'NS',
+                    hhad_home_odds        DECIMAL(6,2),
+                    hhad_draw_odds        DECIMAL(6,2),
+                    hhad_away_odds        DECIMAL(6,2),
+                    hhad_goal_line        VARCHAR(10),
                     updated_at            TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
             """)
@@ -440,6 +444,10 @@ class PredictionDatabase:
                 ("away_team", "客队名称"),
                 ("match_time", "开赛时间"),
                 ("status", "状态 (NS=未开始)"),
+                ("hhad_home_odds", "让球胜平负主胜赔率"),
+                ("hhad_draw_odds", "让球胜平负平局赔率"),
+                ("hhad_away_odds", "让球胜平负客胜赔率"),
+                ("hhad_goal_line", "让球盘口（如 -1/+1）"),
                 ("updated_at", "记录更新时间")
             ]:
                 cursor.execute(f"COMMENT ON COLUMN upcoming_fixtures.{col} IS %s", (comment,))
@@ -1463,6 +1471,22 @@ class PredictionDatabase:
                 logger.info("AI 用户中心配置字段检查/添加完成")
         except Exception as e:
             logger.error(f"添加AI配置相关字段失败: {e}")
+
+    def ensure_upcoming_hhad_columns(self):
+        """确保 upcoming_fixtures 有让球赔率字段（幂等操作）。"""
+        try:
+            with self.get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    ALTER TABLE upcoming_fixtures
+                        ADD COLUMN IF NOT EXISTS hhad_home_odds DECIMAL(6,2),
+                        ADD COLUMN IF NOT EXISTS hhad_draw_odds DECIMAL(6,2),
+                        ADD COLUMN IF NOT EXISTS hhad_away_odds DECIMAL(6,2),
+                        ADD COLUMN IF NOT EXISTS hhad_goal_line VARCHAR(10);
+                """)
+                logger.info("upcoming_fixtures 让球赔率字段检查/添加完成")
+        except Exception as e:
+            logger.error(f"添加 upcoming_fixtures 让球赔率字段失败: {e}")
 
     def get_user_ai_config(self, user_id: int) -> dict:
         """获取用户的 AI 配置"""

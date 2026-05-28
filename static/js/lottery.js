@@ -261,7 +261,7 @@ class LotteryManager {
                     </div>
                 </div>
                 
-                ${this.renderOddsSection(odds)}
+                ${this.renderOddsSection(match)}
                 
                 <div class="match-actions">
                     <button class="select-match-btn ${isSelected ? 'selected' : ''}" 
@@ -274,7 +274,8 @@ class LotteryManager {
         `;
     }
 
-    renderOddsSection(odds) {
+    renderOddsSection(match) {
+        const odds = match.odds || {};
         const wdlOdds = this.getWdlOdds(odds);
         const scoreOdds = odds.score || {};
         const goalOdds = odds.goal || {};
@@ -291,6 +292,30 @@ class LotteryManager {
                         <span class="odds-item">主胜: ${wdlOdds.h || 'N/A'}</span>
                         <span class="odds-item">平局: ${wdlOdds.d || 'N/A'}</span>
                         <span class="odds-item">客胜: ${wdlOdds.a || 'N/A'}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 让球胜平负赔率（单独展示，避免和普通胜平负混淆）
+        const hhadH = match.hhad_home_odds ?? odds?.hhad?.h;
+        const hhadD = match.hhad_draw_odds ?? odds?.hhad?.d;
+        const hhadA = match.hhad_away_odds ?? odds?.hhad?.a;
+        const hhadLine = match.hhad_goal_line ?? odds?.hhad?.goal_line ?? '';
+        const hasDedicatedHhad = (
+            match.hhad_home_odds != null
+            || match.hhad_draw_odds != null
+            || match.hhad_away_odds != null
+            || Boolean(match.hhad_goal_line)
+        );
+        if (hasDedicatedHhad && (hhadH || hhadD || hhadA)) {
+            html += `
+                <div class="odds-group">
+                    <div class="odds-title">让球胜平负${hhadLine ? `（${hhadLine}）` : ''}</div>
+                    <div class="odds-values">
+                        <span class="odds-item">让胜: ${hhadH || 'N/A'}</span>
+                        <span class="odds-item">让平: ${hhadD || 'N/A'}</span>
+                        <span class="odds-item">让负: ${hhadA || 'N/A'}</span>
                     </div>
                 </div>
             `;
@@ -456,6 +481,16 @@ class LotteryManager {
 
     renderSelectedMatchCard(match, index) {
         const odds = this.getWdlOdds(match.odds);
+        const hhadH = match.hhad_home_odds ?? match.odds?.hhad?.h;
+        const hhadD = match.hhad_draw_odds ?? match.odds?.hhad?.d;
+        const hhadA = match.hhad_away_odds ?? match.odds?.hhad?.a;
+        const hhadLine = match.hhad_goal_line ?? match.odds?.hhad?.goal_line ?? '';
+        const hasHhad = (
+            match.hhad_home_odds != null
+            || match.hhad_draw_odds != null
+            || match.hhad_away_odds != null
+            || Boolean(match.hhad_goal_line)
+        ) && (hhadH || hhadD || hhadA);
         return `
             <div class="match-card lottery-selected-card" data-match-id="${match.match_id}">
                 <div class="match-info">
@@ -472,6 +507,12 @@ class LotteryManager {
                         <span class="odds-label">胜平负:</span>
                         <span class="odds-values">${odds.h || 'N/A'} / ${odds.d || 'N/A'} / ${odds.a || 'N/A'}</span>
                     </div>
+                    ${hasHhad ? `
+                    <div class="odds-group">
+                        <span class="odds-label">让球胜平负${hhadLine ? `(${hhadLine})` : ''}:</span>
+                        <span class="odds-values">${hhadH || 'N/A'} / ${hhadD || 'N/A'} / ${hhadA || 'N/A'}</span>
+                    </div>
+                    ` : ''}
                 </div>
                 
                 <div class="match-actions">
