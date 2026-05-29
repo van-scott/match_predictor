@@ -644,9 +644,13 @@ def step_ml_predict(db, changed_ids: Optional[set[str]] = None) -> dict:
                     cur.execute("""
                         UPDATE upcoming_fixtures SET
                             ml_home_prob = %s, ml_draw_prob = %s, ml_away_prob = %s,
-                            ml_recommendation = %s, updated_at = CURRENT_TIMESTAMP
+                            ml_recommendation = %s,
+                            bet_market = 'HAD',
+                            bet_odds_home = %s, bet_odds_draw = %s, bet_odds_away = %s,
+                            bet_odds_captured_at = CURRENT_TIMESTAMP,
+                            updated_at = CURRENT_TIMESTAMP
                         WHERE fixture_id = %s
-                    """, (ph, pd_v, pa, rec, fixture_id))
+                    """, (ph, pd_v, pa, rec, ho, do_, ao, fixture_id))
                     logger.info("  🤖 %s vs %s → 主%.0f%%/平%.0f%%/客%.0f%%  %s",
                                 home_team, away_team, ph*100, pd_v*100, pa*100, rec)
                     updated += 1
@@ -730,7 +734,7 @@ def step_poisson_scores(db, days_back: int = 14) -> dict:
                     continue
                 ph_p, pd_p, pa_p = probs
                 pred_h, pred_a = _poisson_score(ph_p, pa_p)
-                payload_odds.append((ph_p, pd_p, pa_p, pred_h, pred_a, fid))
+                payload_odds.append((ph_p, pd_p, pa_p, pred_h, pred_a, ho, do_, ao, fid))
             if payload_odds:
                 if execute_batch:
                     execute_batch(cur, """
@@ -738,12 +742,24 @@ def step_poisson_scores(db, days_back: int = 14) -> dict:
                             ml_home_prob = %s, ml_draw_prob = %s, ml_away_prob = %s,
                             predicted_home_goals = COALESCE(predicted_home_goals, %s),
                             predicted_away_goals = COALESCE(predicted_away_goals, %s),
+                            bet_market = 'HAD',
+                            bet_odds_home = %s, bet_odds_draw = %s, bet_odds_away = %s,
+                            bet_odds_captured_at = CURRENT_TIMESTAMP,
                             updated_at = CURRENT_TIMESTAMP
                         WHERE fixture_id = %s AND ml_home_prob IS NULL
                     """, payload_odds, page_size=200)
                 else:
-                    for row in payload_odds:
-                        cur.execute("UPDATE upcoming_fixtures SET ml_home_prob=%s,ml_draw_prob=%s,ml_away_prob=%s,predicted_home_goals=COALESCE(predicted_home_goals,%s),predicted_away_goals=COALESCE(predicted_away_goals,%s) WHERE fixture_id=%s AND ml_home_prob IS NULL", row)
+                    for ph_p, pd_p, pa_p, pred_h, pred_a, ho, do_, ao, fid in payload_odds:
+                        cur.execute("""
+                            UPDATE upcoming_fixtures SET
+                                ml_home_prob=%s, ml_draw_prob=%s, ml_away_prob=%s,
+                                predicted_home_goals=COALESCE(predicted_home_goals,%s),
+                                predicted_away_goals=COALESCE(predicted_away_goals,%s),
+                                bet_market='HAD',
+                                bet_odds_home=%s, bet_odds_draw=%s, bet_odds_away=%s,
+                                bet_odds_captured_at=CURRENT_TIMESTAMP
+                            WHERE fixture_id=%s AND ml_home_prob IS NULL
+                        """, (ph_p, pd_p, pa_p, pred_h, pred_a, ho, do_, ao, fid))
                 prob_from_odds = len(payload_odds)
                 logger.info("  📐 由赔率推概率+比分: %d 场 (跳过异常赔率 %d)", prob_from_odds, skipped_bad_odds)
 

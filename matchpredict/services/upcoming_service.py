@@ -4,6 +4,7 @@ from matchpredict.db import prediction_db
 from matchpredict.domain.team_names import TEAM_NAME_CN
 from matchpredict.domain.leagues import TEAMS_DATA
 from matchpredict.repositories.upcoming_repository import UpcomingRepository
+from matchpredict.domain.betting import build_value_analysis
 from matchpredict.utils.goals import calc_predicted_goals, interpret_odds_signal
 
 
@@ -133,6 +134,12 @@ class UpcomingService:
                 ml_pred = None
 
             pg_home, pg_away = calc_predicted_goals(pred_hg, pred_ag, ml_pred, h_odds, d_odds, a_odds)
+            value_analysis = None
+            if ml_pred and ml_pred.get('source') == 'ml' and h_odds and d_odds and a_odds:
+                value_analysis = build_value_analysis(
+                    ml_pred['home_prob'], ml_pred['draw_prob'], ml_pred['away_prob'],
+                    h_odds, d_odds, a_odds,
+                )
             matches.append({
                 'fixture_id': fix_id,
                 'league': lg_name,
@@ -163,6 +170,7 @@ class UpcomingService:
                 },
                 'odds_movement': odds_movement,
                 'ml_prediction': ml_pred,
+                'value_analysis': value_analysis,
                 'predicted_home_goals': pg_home,
                 'predicted_away_goals': pg_away,
             })

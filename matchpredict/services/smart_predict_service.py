@@ -3,6 +3,7 @@
 from typing import Any, Optional
 
 from matchpredict.db import prediction_db
+from matchpredict.domain.betting import build_value_analysis
 from matchpredict.repositories.fixture_repository import FixtureRepository
 from matchpredict.utils.goals import interpret_odds_signal
 
@@ -58,7 +59,7 @@ class SmartPredictService:
 
         # ── D1: 置信度门控 ─────────────────────────────────────────────
         ml_confidence = 'unknown'
-        value_edge = None
+        value_analysis = None
         if ml_h and ml_d and ml_a:
             max_ml_prob = max(float(ml_h), float(ml_d), float(ml_a))
             if max_ml_prob >= 0.60:
@@ -68,28 +69,8 @@ class SmartPredictService:
             else:
                 ml_confidence = 'low'
 
-            # ── D3: 赔率套利检测 (edge = ML概率 - 赔率隐含概率) ────────────
             if h_odds and d_odds and a_odds:
-                ho, do, ao = float(h_odds), float(d_odds), float(a_odds)
-                total_inv = 1/ho + 1/do + 1/ao
-                imp_h = (1/ho) / total_inv
-                imp_d = (1/do) / total_inv
-                imp_a = (1/ao) / total_inv
-                edges = {
-                    'H': round(float(ml_h) - imp_h, 4),
-                    'D': round(float(ml_d) - imp_d, 4),
-                    'A': round(float(ml_a) - imp_a, 4),
-                }
-                best_edge_key = max(edges, key=edges.get)
-                best_edge_val = edges[best_edge_key]
-                if best_edge_val > 0.08 and max_ml_prob > 0.50:
-                    value_edge = {
-                        'outcome': best_edge_key,
-                        'edge': best_edge_val,
-                        'ml_prob': round(max_ml_prob, 4),
-                        'implied_prob': round({'H': imp_h, 'D': imp_d, 'A': imp_a}[best_edge_key], 4),
-                        'is_value': True,
-                    }
+                value_analysis = build_value_analysis(ml_h, ml_d, ml_a, h_odds, d_odds, a_odds)
 
         result: dict[str, Any] = {
             'fixture_id': fix_id,
@@ -109,7 +90,15 @@ class SmartPredictService:
                 'recommendation': ml_rec,
                 'confidence': ml_confidence,
             } if ml_h else None,
-            'value_edge': value_edge,
+            'value_analysis': value_analysis,
+            'value_edge': (
+                {
+                    'outcome': value_analysis['pick'],
+                    'edge': value_analysis['edge'],
+                    'ml_prob': max(float(ml_h), float(ml_d), float(ml_a)),
+                    'is_value': True,
+                } if value_analysis and value_analysis.get('is_value') else None
+            ),
         }
 
         odds_mv = self._build_odds_movement(fix_id)

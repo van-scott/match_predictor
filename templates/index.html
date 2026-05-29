@@ -231,7 +231,7 @@
     <header class="pr-hero">
       <div class="pr-hero-icon"><i class="fas fa-chart-pie"></i></div>
       <h2 class="pr-hero-title">预测回顾</h2>
-      <p class="pr-hero-subtitle">ML 模型预测 vs 真实比赛结果，逐场对照</p>
+      <p class="pr-hero-subtitle">ML 预测 vs 真实结果 · 模拟跟单回报率（固定 1 单位）</p>
     </header>
 
     <!-- 状态区：loading / error / empty（与 content 互斥） -->
@@ -241,9 +241,11 @@
 
     <!-- 内容区：仅在 total_predicted > 0 时由 JS 显示 -->
     <section id="pr-content" class="pr-content" hidden>
-      <!-- 4 统计卡 -->
+      <!-- 统计卡 -->
       <div id="pr-stats" class="pr-stats"></div>
-      <!-- 分联赛准确率（条件展示） -->
+      <!-- 策略对比 -->
+      <div id="pr-strategies" class="pr-strategies" hidden></div>
+      <!-- 分联赛 ROI（条件展示） -->
       <div id="pr-leagues" class="pr-leagues" hidden></div>
       <!-- 14 天趋势（条件展示） -->
       <div id="pr-trend" class="pr-trend" hidden></div>
@@ -373,8 +375,8 @@
       <div class="smart-hero-inner">
         <div class="smart-hero-icon"><i class="fas fa-crosshairs"></i></div>
         <div>
-          <h2 class="smart-hero-title">智能选场 <span class="smart-badge-new">NEW</span></h2>
-          <p class="smart-hero-sub">基于 3500+ 场历史比赛训练的 AI 模型，自动分析五大联赛即将开赛比赛，给出胜平负概率和推荐。选一场感兴趣的，深度分析仅需 2 积分。</p>
+          <h2 class="smart-hero-title">智能选场 <span class="smart-badge-new">价值版</span></h2>
+          <p class="smart-hero-sub">ML 模型对比市场赔率，找出正期望值（+EV）场次。默认按 Edge 排序，价值场优先展示；历史价值场 ROI 见「预测回顾」。</p>
         </div>
       </div>
       <!-- 简洁说明指引 -->
@@ -386,7 +388,7 @@
         <div class="smart-guide-arrow"><i class="fas fa-chevron-right"></i></div>
         <div class="smart-guide-step">
           <div class="smart-guide-num">2</div>
-          <div class="smart-guide-text">查看 AI 预测概率和推荐</div>
+          <div class="smart-guide-text">查看 Edge / EV 与价值场标签</div>
         </div>
         <div class="smart-guide-arrow"><i class="fas fa-chevron-right"></i></div>
         <div class="smart-guide-step">
@@ -413,6 +415,9 @@
         <button class="smart-filter-btn" onclick="filterSmartLeague('德乙', this)">🇩🇪 德乙</button>
       </div>
       <div class="smart-filter-right">
+        <button id="smart-filter-value-btn" class="smart-filter-btn smart-filter-value" onclick="toggleSmartValueFilter(this)">
+          <i class="fas fa-gem"></i> 仅价值场
+        </button>
         <span id="smart-match-count" class="smart-count-badge">加载中...</span>
       </div>
     </div>

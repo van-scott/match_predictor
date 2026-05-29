@@ -906,6 +906,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
 let smartMatches = [];         // 全部未开赛比赛缓存
 let smartFilterLeague = 'all'; // 当前联赛筛选
+let smartFilterValueOnly = false; // 仅价值场
+
+function formatEv(v) {
+  if (v == null || v === undefined) return '-';
+  const n = Number(v) * 100;
+  return (n > 0 ? '+' : '') + n.toFixed(1) + '%';
+}
+
+function formatEdge(v) {
+  if (v == null || v === undefined) return '-';
+  const n = Number(v) * 100;
+  return (n > 0 ? '+' : '') + n.toFixed(1) + 'pp';
+}
+
+function toggleSmartValueFilter(btn) {
+  smartFilterValueOnly = !smartFilterValueOnly;
+  if (btn) btn.classList.toggle('active', smartFilterValueOnly);
+  renderSmartMatches();
+}
+
+function smartSortScore(m) {
+  const va = m.value_analysis;
+  if (!va) return -9999;
+  return va.is_value ? 1000 + (va.sort_score || 0) : (va.sort_score || -9999);
+}
 
 // Tab 切换逻辑已合并到顶部 switchTab 函数中
 
@@ -950,11 +975,23 @@ function renderSmartMatches() {
   if (smartFilterLeague !== 'all') {
     filtered = smartMatches.filter(m => m.league === smartFilterLeague);
   }
+  if (smartFilterValueOnly) {
+    filtered = filtered.filter(m => m.value_analysis && m.value_analysis.is_value);
+  }
 
-  if (countEl) countEl.textContent = `${filtered.length} 场比赛`;
+  filtered = [...filtered].sort((a, b) => smartSortScore(b) - smartSortScore(a));
+
+  const valueCount = smartMatches.filter(m => m.value_analysis && m.value_analysis.is_value).length;
+  if (countEl) {
+    countEl.textContent = smartFilterValueOnly
+      ? `${filtered.length} 场价值场`
+      : `${filtered.length} 场 · ${valueCount} 价值场`;
+  }
 
   if (filtered.length === 0) {
-    listEl.innerHTML = `<div class="error-msg"><i class="fas fa-search"></i> 该联赛暂无未开赛比赛</div>`;
+    listEl.innerHTML = smartFilterValueOnly
+      ? `<div class="error-msg"><i class="fas fa-gem"></i> 当前暂无价值场（Edge&gt;8% 且 ML&gt;50%），可取消筛选查看全部</div>`
+      : `<div class="error-msg"><i class="fas fa-search"></i> 该联赛暂无未开赛比赛</div>`;
     return;
   }
 
@@ -1018,7 +1055,8 @@ function groupMatchesByDate(matches) {
 // ── 构建单张比赛卡片 ───────────────────────────────────────────────────
 function buildSmartCard(m) {
   const card = document.createElement('div');
-  card.className = 'smart-card';
+  const va = m.value_analysis;
+  card.className = 'smart-card' + (va && va.is_value ? ' smart-card-value' : '');
   card.id = `smart-card-${m.fixture_id}`;
 
   const ml = m.ml_prediction;
@@ -1140,6 +1178,26 @@ function buildSmartCard(m) {
       </div>`;
   }
 
+  // 价值 / EV 行
+  let valueHtml = '';
+  if (va && va.ml_pick_label && va.ml_odds) {
+    if (va.is_value && va.pick_label) {
+      valueHtml = `
+      <div class="smart-value-row">
+        <span class="smart-value-tag"><i class="fas fa-gem"></i> 价值场</span>
+        <span>推 <strong>${escapeHtml(va.pick_label)}</strong> @${Number(va.odds).toFixed(2)}</span>
+        <span class="smart-value-meta">Edge ${formatEdge(va.edge)} · EV ${formatEv(va.ev)}</span>
+      </div>`;
+    } else {
+      valueHtml = `
+      <div class="smart-value-row smart-value-muted">
+        <span>ML 推 <strong>${escapeHtml(va.ml_pick_label)}</strong> @${Number(va.ml_odds).toFixed(2)}</span>
+        <span class="smart-value-meta">EV ${formatEv(va.ml_ev)}</span>
+        ${va.edge != null && va.edge > 0 ? `<span class="smart-value-meta">Edge ${formatEdge(va.edge)}</span>` : ''}
+      </div>`;
+    }
+  }
+
   card.innerHTML = `
     <div class="smart-card-meta">
       <span class="smart-league-tag">${leagueEmoji} ${m.league}${m.matchday ? ' 第'+m.matchday+'轮' : ''}</span>
@@ -1164,6 +1222,7 @@ function buildSmartCard(m) {
     </div>
 
     ${probHtml}
+    ${valueHtml}
     ${oddsHtml}
     ${hhadHtml}
 
@@ -1359,6 +1418,7 @@ function buildDetailView(data, aiText) {
   const ml  = data.ml_prediction || {};
   const mov = data.odds_movement || {};
   const odds = data.current_odds || {};
+  const va = data.value_analysis || null;
 
   const ph = Math.round((ml.home_prob || 0) * 100);
   const pd = Math.round((ml.draw_prob || 0) * 100);
@@ -1413,6 +1473,22 @@ function buildDetailView(data, aiText) {
     </div>
     ${rec ? `<div class="sdr-rec-banner ${recClass}"><i class="fas fa-crosshairs"></i> ${rec}</div>` : ''}
     ` : '<div class="smart-no-ml"><i class="fas fa-clock"></i> 暂无 ML 概率数据（比赛球队在我们数据库中尚无足够历史记录）</div>'}
+
+    ${va && va.ml_pick_label ? `
+    <div class="sdr-value-box ${va.is_value ? 'sdr-value-positive' : ''}">
+      <div class="sdr-ai-title"><i class="fas fa-coins"></i> 跟单价值评估</div>
+      ${va.is_value ? `
+        <div class="sdr-value-main"><span class="smart-value-tag"><i class="fas fa-gem"></i> 价值场</span>
+          推荐 <strong>${escapeHtml(va.pick_label)}</strong> @${Number(va.odds).toFixed(2)}
+          · Edge ${formatEdge(va.edge)} · EV ${formatEv(va.ev)}
+        </div>
+        <div class="sdr-value-sub">ML 最高概率方向：${escapeHtml(va.ml_pick_label)} @${Number(va.ml_odds).toFixed(2)}（EV ${formatEv(va.ml_ev)}）</div>
+      ` : `
+        <div class="sdr-value-main">ML 推 <strong>${escapeHtml(va.ml_pick_label)}</strong> @${Number(va.ml_odds).toFixed(2)} · EV ${formatEv(va.ml_ev)}</div>
+        <div class="sdr-value-sub">未达价值场阈值（Edge&gt;8% 且 ML&gt;50%）。固定 1 单位模拟，详见预测回顾 ROI。</div>
+      `}
+    </div>
+    ` : ''}
 
     ${odds.home ? `
     <div style="margin-bottom:1rem">
@@ -1586,7 +1662,8 @@ function renderRecord(summaryData, matchesData, evalData) {
   if (contentEl) contentEl.hidden = false;
 
   renderRecordStats(summary);
-  renderRecordLeagues(summaryData.league_stats || []);
+  renderRecordStrategies(summaryData.strategies || [], summary);
+  renderRecordLeagues(summaryData.league_roi || summaryData.league_stats || []);
   renderRecordTrend(summaryData.trend || []);
   renderRecordEval(evalData);
   renderRecordList(matchesData.matches || []);
@@ -1614,16 +1691,65 @@ function renderRecordError(message) {
   console.error('[record]', message);
 }
 
+function formatRoi(v) {
+  if (v == null || v === undefined) return '-';
+  const n = Number(v);
+  return (n > 0 ? '+' : '') + n.toFixed(1) + '%';
+}
+
+function formatUnits(v) {
+  if (v == null || v === undefined) return '-';
+  const n = Number(v);
+  return (n > 0 ? '+' : '') + n.toFixed(2) + 'u';
+}
+
+function roiClass(v) {
+  if (v == null || v === undefined) return '';
+  return Number(v) >= 0 ? 'pr-roi-pos' : 'pr-roi-neg';
+}
+
 function renderRecordStats(summary) {
   const el = document.getElementById('pr-stats');
   if (!el) return;
   const scoreHitRate = summary.total_predicted > 0
     ? (summary.score_hit / summary.total_predicted * 100).toFixed(1) : '0';
+  const roiVal = summary.roi;
+  const unitsVal = summary.total_units;
   el.innerHTML = `
-    <div class="pr-stat-card"><div class="pr-stat-value">${summary.total_predicted ?? '-'}</div><div class="pr-stat-label">已对比场次</div></div>
+    <div class="pr-stat-card"><div class="pr-stat-value ${roiClass(roiVal)}">${formatRoi(roiVal)}</div><div class="pr-stat-label">全跟 ML 回报率</div></div>
+    <div class="pr-stat-card"><div class="pr-stat-value ${roiClass(unitsVal)}">${formatUnits(unitsVal)}</div><div class="pr-stat-label">累计盈亏</div></div>
     <div class="pr-stat-card"><div class="pr-stat-value">${summary.accuracy != null ? summary.accuracy + '%' : '-'}</div><div class="pr-stat-label">胜平负命中率</div></div>
-    <div class="pr-stat-card"><div class="pr-stat-value">${scoreHitRate}%</div><div class="pr-stat-label">比分精确命中率</div></div>
-    <div class="pr-stat-card"><div class="pr-stat-value">${summary.avg_goal_error != null ? summary.avg_goal_error : '-'}</div><div class="pr-stat-label">平均进球偏差</div></div>`;
+    <div class="pr-stat-card"><div class="pr-stat-value">${summary.avg_bet_odds != null ? summary.avg_bet_odds : '-'}</div><div class="pr-stat-label">平均跟单赔率</div></div>
+    <div class="pr-stat-card"><div class="pr-stat-value">${summary.breakeven_accuracy != null ? summary.breakeven_accuracy + '%' : '-'}</div><div class="pr-stat-label">盈亏平衡命中率</div></div>
+    <div class="pr-stat-card"><div class="pr-stat-value">${scoreHitRate}%</div><div class="pr-stat-label">比分精确命中率</div></div>`;
+}
+
+function renderRecordStrategies(strategies, summary) {
+  const el = document.getElementById('pr-strategies');
+  if (!el) return;
+  if (!strategies || strategies.length === 0) { el.hidden = true; return; }
+  el.hidden = false;
+  const valueBets = summary.value_bets || {};
+  const rows = strategies.map(s => {
+    const roi = s.roi != null ? formatRoi(s.roi) : '-';
+    const units = s.total_units != null ? formatUnits(s.total_units) : '-';
+    return `<tr>
+      <td>${escapeHtml(s.name || s.id)}</td>
+      <td>${s.bets ?? '-'}</td>
+      <td>${s.accuracy != null ? s.accuracy + '%' : '-'}</td>
+      <td>${s.avg_odds != null ? s.avg_odds : '-'}</td>
+      <td class="${roiClass(s.roi)}">${roi}</td>
+      <td class="${roiClass(s.total_units)}">${units}</td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `
+    <h3><i class="fas fa-coins"></i> 跟单策略对比 <span class="pr-eval-hint">固定每场 1 单位 · 胜平负盘</span></h3>
+    <table class="pr-strategy-table">
+      <thead><tr><th>策略</th><th>场次</th><th>命中率</th><th>均赔</th><th>ROI</th><th>盈亏</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    ${valueBets.bets ? `<p class="pr-strategy-note">价值场（Edge&gt;8% 且 ML&gt;50%）：${valueBets.bets} 场，ROI ${formatRoi(valueBets.roi)}，盈亏 ${formatUnits(valueBets.total_units)}</p>` : ''}
+    <p class="pr-strategy-disclaimer">模拟跟单，不含串关与水位变化；无快照场次使用当前赔率估算</p>`;
 }
 
 function renderRecordLeagues(leagueStats) {
@@ -1631,6 +1757,16 @@ function renderRecordLeagues(leagueStats) {
   if (!el) return;
   if (!leagueStats || leagueStats.length === 0) { el.hidden = true; return; }
   el.hidden = false;
+  const hasRoi = leagueStats.some(lg => lg.roi != null);
+  if (hasRoi) {
+    el.innerHTML = '<h3><i class="fas fa-flag"></i> 分联赛回报率（全跟 ML）</h3>' +
+      leagueStats.map(lg => `<div class="pr-league-row">
+        <span class="pr-league-name">${escapeHtml(lg.league)}</span>
+        <div class="pr-league-bar-bg"><div class="pr-league-bar-fill ${roiClass(lg.roi)}" style="width:${Math.min(Math.abs(lg.roi || 0), 100)}%"></div></div>
+        <span class="pr-league-pct ${roiClass(lg.roi)}">${formatRoi(lg.roi)} · ${lg.bets || 0}场</span>
+      </div>`).join('');
+    return;
+  }
   el.innerHTML = '<h3><i class="fas fa-flag"></i> 分联赛准确率</h3>' +
     leagueStats.map(lg => `<div class="pr-league-row"><span class="pr-league-name">${escapeHtml(lg.league)}</span><div class="pr-league-bar-bg"><div class="pr-league-bar-fill" style="width:${lg.accuracy||0}%"></div></div><span class="pr-league-pct">${lg.correct||0}/${lg.total||0} (${lg.accuracy||0}%)</span></div>`).join('');
 }
@@ -1640,6 +1776,19 @@ function renderRecordTrend(trend) {
   if (!el) return;
   if (!trend || trend.length === 0) { el.hidden = true; return; }
   el.hidden = false;
+  const hasUnits = trend.some(t => t.units != null);
+  if (hasUnits) {
+    const maxAbs = Math.max(...trend.map(t => Math.abs(t.cumulative_units || t.units || 0)), 1);
+    const sorted = [...trend].sort((a, b) => a.date.localeCompare(b.date));
+    el.innerHTML = '<h3><i class="fas fa-chart-line"></i> 累计盈亏趋势（全跟 ML）</h3><div class="pr-trend-bars pr-trend-units">' +
+      sorted.map(t => {
+        const cum = t.cumulative_units != null ? t.cumulative_units : t.units;
+        const h = Math.max(Math.abs(cum) / maxAbs * 100, 5);
+        const cls = cum >= 0 ? 'pr-trend-up' : 'pr-trend-down';
+        return `<div class="pr-trend-bar ${cls}" style="height:${h}%" title="${t.date}: ${formatUnits(cum)} (当日 ${formatUnits(t.units)}, ROI ${formatRoi(t.roi)})"><span class="pr-trend-label">${t.date?t.date.slice(5):''}</span></div>`;
+      }).join('') + '</div>';
+    return;
+  }
   const maxTotal = Math.max(...trend.map(t => t.total || 1));
   const sorted = [...trend].sort((a, b) => a.date.localeCompare(b.date));
   el.innerHTML = '<h3><i class="fas fa-chart-area"></i> 近期命中趋势</h3><div class="pr-trend-bars">' +
@@ -1776,6 +1925,15 @@ function renderRecordMatchCard(m) {
   }
 
   const timeStr = m.match_time ? formatTime(m.match_time) : '-';
+  const bt = m.betting || {};
+  const betLine = bt.bet_pick && bt.bet_odds
+    ? `<div class="pr-bet-line">
+        跟单：${escapeHtml(bt.bet_pick_label || bt.bet_pick)} @${bt.bet_odds}
+        · 盈亏 <span class="${roiClass(bt.bet_profit)}">${formatUnits(bt.bet_profit)}</span>
+        ${bt.is_value_bet ? '<span class="pr-value-tag">价值场</span>' : ''}
+        ${bt.odds_source === 'current' ? '<span class="pr-odds-est">估</span>' : ''}
+      </div>`
+    : '';
 
   // 净胜球误差展示
   let goalHitDisplay = '-', goalHitClass = 'pr-hit-diff';
@@ -1800,6 +1958,7 @@ function renderRecordMatchCard(m) {
       <span class="pr-teams">${escapeHtml(m.home_team_cn || m.home_team || '-')} <em>vs</em> ${escapeHtml(m.away_team_cn || m.away_team || '-')}</span>
       <span class="pr-time">${escapeHtml(timeStr)}</span>
     </header>
+    ${betLine}
     <table class="pr-table">
       <thead>
         <tr>

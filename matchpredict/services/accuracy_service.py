@@ -5,6 +5,7 @@ from typing import Any, Optional
 from matchpredict.db import prediction_db
 from matchpredict.domain.team_names import TEAM_NAME_CN
 from matchpredict.repositories.accuracy_repository import AccuracyRepository
+from matchpredict.services.roi_service import roi_service
 
 RESULT_LABEL = {'H': '主胜', 'D': '平局', 'A': '客胜'}
 
@@ -28,7 +29,8 @@ class AccuracyService:
                     'accuracy': round(corr / pred * 100, 1),
                 })
 
-        trend = [
+        roi_data = roi_service.compute_summary()
+        trend = roi_data.get('trend') or [
             {
                 'date': str(day),
                 'total': total,
@@ -47,8 +49,16 @@ class AccuracyService:
                 'score_hit': score_hit or 0,
                 'accuracy': accuracy,
                 'avg_goal_error': float(avg_err) if avg_err else None,
+                'roi': roi_data.get('roi'),
+                'total_units': roi_data.get('total_units'),
+                'avg_bet_odds': roi_data.get('avg_bet_odds'),
+                'breakeven_accuracy': roi_data.get('breakeven_accuracy'),
+                'bets_with_odds': roi_data.get('bets_with_odds'),
+                'value_bets': roi_data.get('value_bets'),
             },
+            'strategies': roi_data.get('strategies', []),
             'league_stats': league_stats,
+            'league_roi': roi_data.get('league_roi', []),
             'trend': trend,
         }
 
@@ -84,10 +94,13 @@ class AccuracyService:
          mlpr, mlrec,
          phg, pag,
          rc, sc, gde,
-         ho, do_, ao) = r
+         ho, do_, ao,
+         bet_h, bet_d, bet_a) = r
 
         ht_cn = TEAM_NAME_CN.get(ht, '')
         at_cn = TEAM_NAME_CN.get(at, '')
+
+        betting = roi_service.enrich_match(r)
 
         return {
             'fixture_id': fid,
@@ -122,6 +135,7 @@ class AccuracyService:
                 'draw': float(do_) if do_ else None,
                 'away': float(ao) if ao else None,
             },
+            'betting': betting,
         }
 
 

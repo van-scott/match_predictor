@@ -38,6 +38,31 @@ class AccuracyRepository:
             """)
             return cur.fetchall()
 
+    def fetch_finished_for_roi(self) -> list:
+        """已完赛且有 ML 预测的行，供 ROI 计算。"""
+        with self._db.get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT fixture_id, league_name, league_code,
+                       home_team, away_team, match_time,
+                       actual_home_goals, actual_away_goals, actual_result,
+                       ml_home_prob, ml_draw_prob, ml_away_prob,
+                       ml_predicted_result, ml_recommendation,
+                       predicted_home_goals, predicted_away_goals,
+                       result_correct, score_correct, goal_diff_error,
+                       home_odds, draw_odds, away_odds,
+                       bet_odds_home, bet_odds_draw, bet_odds_away
+                FROM upcoming_fixtures
+                WHERE actual_result IS NOT NULL
+                  AND ml_predicted_result IS NOT NULL
+                  AND ml_home_prob IS NOT NULL
+                  AND home_odds IS NOT NULL
+                  AND draw_odds IS NOT NULL
+                  AND away_odds IS NOT NULL
+                ORDER BY match_time DESC
+            """)
+            return cur.fetchall()
+
     def fetch_daily_trend(self, limit: int = 14) -> list:
         with self._db.get_db_connection() as conn:
             cur = conn.cursor()
@@ -93,7 +118,8 @@ class AccuracyRepository:
                        ml_predicted_result, ml_recommendation,
                        predicted_home_goals, predicted_away_goals,
                        result_correct, score_correct, goal_diff_error,
-                       home_odds, draw_odds, away_odds
+                       home_odds, draw_odds, away_odds,
+                       bet_odds_home, bet_odds_draw, bet_odds_away
                 FROM upcoming_fixtures
                 WHERE {where}
                 ORDER BY match_time DESC

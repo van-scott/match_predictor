@@ -1488,6 +1488,23 @@ class PredictionDatabase:
         except Exception as e:
             logger.error(f"添加 upcoming_fixtures 让球赔率字段失败: {e}")
 
+    def ensure_bet_odds_columns(self):
+        """确保 upcoming_fixtures 有跟单赔率快照字段（幂等）。"""
+        try:
+            with self.get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    ALTER TABLE upcoming_fixtures
+                        ADD COLUMN IF NOT EXISTS bet_market VARCHAR(10),
+                        ADD COLUMN IF NOT EXISTS bet_odds_home DECIMAL(8,3),
+                        ADD COLUMN IF NOT EXISTS bet_odds_draw DECIMAL(8,3),
+                        ADD COLUMN IF NOT EXISTS bet_odds_away DECIMAL(8,3),
+                        ADD COLUMN IF NOT EXISTS bet_odds_captured_at TIMESTAMP;
+                """)
+                logger.info("upcoming_fixtures 跟单赔率快照字段检查/添加完成")
+        except Exception as e:
+            logger.error(f"添加 upcoming_fixtures 跟单赔率快照字段失败: {e}")
+
     def get_user_ai_config(self, user_id: int) -> dict:
         """获取用户的 AI 配置"""
         try:

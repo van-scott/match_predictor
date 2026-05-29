@@ -2765,6 +2765,79 @@ footer {
     margin-top: 0.3rem;
 }
 
+.pr-roi-pos { color: #16a34a !important; }
+.pr-roi-neg { color: #dc2626 !important; }
+
+.pr-strategies {
+    background: var(--card-bg);
+    padding: 1.2rem;
+    border-radius: 12px;
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-light);
+}
+
+.pr-strategies h3 {
+    font-size: 1rem;
+    margin-bottom: 0.8rem;
+    color: var(--text-primary);
+}
+
+.pr-strategy-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.pr-strategy-table th,
+.pr-strategy-table td {
+    padding: 0.5rem 0.4rem;
+    text-align: center;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.pr-strategy-table th:first-child,
+.pr-strategy-table td:first-child { text-align: left; }
+
+.pr-strategy-note,
+.pr-strategy-disclaimer {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 0.6rem;
+}
+
+.pr-bet-line {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    padding: 0.4rem 0.8rem 0;
+}
+
+.pr-value-tag {
+    display: inline-block;
+    margin-left: 0.4rem;
+    padding: 0 0.35rem;
+    border-radius: 4px;
+    background: rgba(22, 163, 74, 0.15);
+    color: #16a34a;
+    font-size: 0.7rem;
+}
+
+.pr-odds-est {
+    display: inline-block;
+    margin-left: 0.3rem;
+    font-size: 0.65rem;
+    color: var(--text-light);
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    padding: 0 0.2rem;
+}
+
+.pr-trend-up { background: #16a34a !important; }
+.pr-trend-down { background: #dc2626 !important; }
+
+.pr-league-bar-fill.pr-roi-pos { background: #16a34a; }
+.pr-league-bar-fill.pr-roi-neg { background: #dc2626; }
+
 /* 分联赛区 */
 .pr-leagues {
     background: var(--card-bg);
