@@ -42,6 +42,29 @@ def _result(processed=0, skipped=0, errors=0, detail=None):
     return {"processed": processed, "skipped": skipped, "errors": errors, "detail": detail or []}
 
 
+def _format_backfill_league_line(league_name: str, fetched: int, s: dict,
+                                 fetch_note: str = "") -> str:
+    """格式化单联赛 Step5 统计行。"""
+    parts = [f"[{league_name}]", f"拉取={fetched}"]
+    if fetch_note:
+        parts.append(fetch_note)
+    parts.extend([f"更新={s.get('updated', 0)}", f"新增={s.get('inserted', 0)}"])
+    skip_bits = []
+    for key, label in (
+        ("skipped_no_score", "无比分"),
+        ("skipped_cancelled", "取消/延期"),
+        ("insert_conflict", "插入冲突"),
+    ):
+        n = s.get(key, 0)
+        if n:
+            skip_bits.append(f"{label}={n}")
+    if skip_bits:
+        parts.append("跳过:" + ",".join(skip_bits))
+    if s.get("total_checked"):
+        parts.append(f"命中={s['correct']}/{s['total_checked']}")
+    return "  " + " ".join(parts)
+
+
 # ── 工具函数 ──────────────────────────────────────────────────────────────────
 
 def _norm_team(name: str) -> str:
@@ -756,14 +779,21 @@ def step_backfill_results(db, leagues: list[str], days_back: int,
     total_correct = 0
     total_checked = 0
     total_score_hit = 0
+    total_skipped_no_score = 0
+    total_skipped_cancelled = 0
+    total_insert_conflict = 0
     errors = 0
     detail = []
+    date_range = f"{start.strftime('%Y-%m-%d')}~{now.strftime('%Y-%m-%d')}"
+    logger.info("  日期窗口(UTC): %s", date_range)
 
     status_filters = ["FINISHED"] + (["CANCELLED", "POSTPONED"] if include_cancelled else [])
 
     for league_id in leagues:
         league_name = LEAGUE_NAMES.get(league_id, league_id)
         all_raw: list = []
+        seen_ids: set = set()
+        fetch_notes: list[str] = []
         for sf in status_filters:
             params = {
                 "status": sf,
@@ -776,27 +806,43 @@ def step_backfill_results(db, leagues: list[str], days_back: int,
                     headers=headers, params=params, timeout=15,
                 )
                 if resp.status_code == 429:
-                    logger.warning("  [%s] 限速，等待60s ...", league_id)
+                    logger.warning("  [%s] 限速，等待60s ...", league_name)
                     time.sleep(60)
                     resp = requests.get(
                         f"{FOOTBALL_DATA_BASE_URL}/competitions/{league_id}/matches",
                         headers=headers, params=params, timeout=15,
                     )
                 if resp.status_code == 200:
-                    all_raw.extend(resp.json().get("matches", []))
-                elif resp.status_code not in (403, 404):
-                    logger.warning("  [%s] HTTP %s", league_id, resp.status_code)
+                    for m in resp.json().get("matches", []):
+                        mid = m.get("id")
+                        if mid not in seen_ids:
+                            seen_ids.add(mid)
+                            all_raw.append(m)
+                elif resp.status_code in (403, 404):
+                    fetch_notes.append(f"HTTP{resp.status_code}")
+                else:
+                    fetch_notes.append(f"HTTP{resp.status_code}")
+                    logger.warning("  [%s] 拉取失败 HTTP %s (status=%s)",
+                                   league_name, resp.status_code, sf)
                     errors += 1
             except Exception as e:
-                logger.error("  [%s] 拉取失败: %s", league_id, e)
+                fetch_notes.append("异常")
+                logger.error("  [%s] 拉取失败: %s", league_name, e)
                 errors += 1
 
+        fetch_note = ",".join(fetch_notes) if fetch_notes else ""
+        empty_stats = {
+            "updated": 0, "inserted": 0, "correct": 0, "total_checked": 0,
+            "skipped_no_score": 0, "skipped_cancelled": 0, "insert_conflict": 0,
+        }
+
         if not all_raw:
-            logger.info("  [%s] 无已结束比赛", league_name)
+            msg = _format_backfill_league_line(league_name, 0, empty_stats,
+                                               fetch_note or "API无数据")
+            logger.info(msg)
+            detail.append(msg.strip())
             time.sleep(6)
             continue
-
-        logger.info("  [%s] 获取 %d 场已结束比赛", league_name, len(all_raw))
 
         # 取消/延期状态更新
         if include_cancelled:
@@ -809,33 +855,57 @@ def step_backfill_results(db, leagues: list[str], days_back: int,
         total_correct += s["correct"]
         total_checked += s["total_checked"]
         total_score_hit += s["score_hit"]
+        total_skipped_no_score += s.get("skipped_no_score", 0)
+        total_skipped_cancelled += s.get("skipped_cancelled", 0)
+        total_insert_conflict += s.get("insert_conflict", 0)
 
-        if s["updated"] or s["inserted"]:
-            msg = (f"  [{league_name}] 更新={s['updated']} 新增={s['inserted']}"
-                   + (f" 命中={s['correct']}/{s['total_checked']}" if s['total_checked'] else ""))
-            logger.info(msg)
-            detail.append(msg)
+        msg = _format_backfill_league_line(league_name, len(all_raw), s, fetch_note)
+        logger.info(msg)
+        detail.append(msg.strip())
 
         time.sleep(6)
 
     # dm_ 彩票来源结果同步
-    dm_updated = _sync_dm_results(db)
-    if dm_updated:
-        msg = f"  [竞彩dm_] 结果同步 {dm_updated} 场"
-        logger.info(msg)
-        detail.append(msg)
+    dm_stats = _sync_dm_results(db)
+    dm_updated = dm_stats.get("updated", 0)
+    dm_msg = (f"  [竞彩dm_] 待回填={dm_stats.get('pending', 0)} "
+              f"更新={dm_updated} 未匹配={dm_stats.get('unmatched', 0)}")
+    logger.info(dm_msg)
+    detail.append(dm_msg.strip())
+    if dm_stats.get("unmatched_samples"):
+        logger.info("  [竞彩dm_] 未匹配样例(最多3): %s",
+                    "; ".join(dm_stats["unmatched_samples"]))
 
     # 兜底：历史遗留的 ml_predicted_result 缺失
     backfilled = _backfill_ml_predicted_result(db, days_back=max(days_back * 2, 30))
     if backfilled:
         logger.info("  🔧 兜底补全 ml_predicted_result: %d 场", backfilled)
 
+    skip_summary = ""
+    skip_parts = []
+    if total_skipped_no_score:
+        skip_parts.append(f"无比分={total_skipped_no_score}")
+    if total_skipped_cancelled:
+        skip_parts.append(f"取消/延期={total_skipped_cancelled}")
+    if total_insert_conflict:
+        skip_parts.append(f"插入冲突={total_insert_conflict}")
+    if skip_parts:
+        skip_summary = " 跳过:" + ",".join(skip_parts)
+
     summary = (f"  Step 5 完成: 更新={total_updated} 新增={total_inserted}"
-               + (f" 命中率={total_correct}/{total_checked}={total_correct/total_checked*100:.1f}%"
+               + skip_summary
+               + (f" 命中率={total_correct}/{total_checked}"
+                  f"={total_correct/total_checked*100:.1f}%"
                   if total_checked else ""))
     logger.info(summary)
-    detail.append(summary)
-    return _result(processed=total_updated + total_inserted, errors=errors, detail=detail)
+    detail.append(summary.strip())
+    return _result(
+        processed=total_updated + total_inserted + dm_updated,
+        skipped=total_skipped_no_score + total_skipped_cancelled + total_insert_conflict
+              + dm_stats.get("unmatched", 0),
+        errors=errors,
+        detail=detail,
+    )
 
 
 def _update_cancelled(matches: list, db):
@@ -856,18 +926,25 @@ def _update_cancelled(matches: list, db):
 
 
 def _backfill_to_db(matches: list, league_code: str, db) -> dict:
-    stats = {"updated": 0, "inserted": 0, "correct": 0, "score_hit": 0, "total_checked": 0}
+    stats = {
+        "updated": 0, "inserted": 0, "correct": 0, "score_hit": 0, "total_checked": 0,
+        "skipped_no_score": 0, "skipped_cancelled": 0, "insert_conflict": 0,
+    }
     try:
         with db.get_db_connection() as conn:
             cur = conn.cursor()
             for m in matches:
                 if m.get("status") in ("CANCELLED", "POSTPONED"):
+                    stats["skipped_cancelled"] += 1
                     continue
                 fixture_id = str(m.get("id", ""))
                 ft = m.get("score", {}).get("fullTime", {})
                 home_goals = ft.get("home")
                 away_goals = ft.get("away")
                 if home_goals is None or away_goals is None:
+                    stats["skipped_no_score"] += 1
+                    logger.debug("  跳过无比分 fixture_id=%s status=%s",
+                                   fixture_id, m.get("status"))
                     continue
 
                 actual_result = "H" if home_goals > away_goals else ("D" if home_goals == away_goals else "A")
@@ -884,7 +961,7 @@ def _backfill_to_db(matches: list, league_code: str, db) -> dict:
 
                 cur.execute("""
                     SELECT ml_home_prob, ml_draw_prob, ml_away_prob,
-                           predicted_home_goals, predicted_away_goals
+                           predicted_home_goals, predicted_away_goals,league_name,match_time
                     FROM upcoming_fixtures WHERE fixture_id = %s
                 """, (fixture_id,))
                 row = cur.fetchone()
@@ -931,8 +1008,8 @@ def _backfill_to_db(matches: list, league_code: str, db) -> dict:
                     if cur.rowcount > 0:
                         stats["updated"] += 1
                         icon = "✅" if result_correct else ("❌" if result_correct is False else "⚪")
-                        logger.info("  %s %s %d-%d %s  ML=%s 实际=%s",
-                                    icon, home_team, home_goals, away_goals, away_team,
+                        logger.info("  联赛:%s 比赛时间:%s %s %s %d-%d %s  ML=%s 实际=%s",
+                                    row[5],row[6],icon, home_team, home_goals, away_goals, away_team,
                                     ml_predicted_result or "无", actual_result)
                 else:
                     cur.execute("""
@@ -951,15 +1028,18 @@ def _backfill_to_db(matches: list, league_code: str, db) -> dict:
                         stats["inserted"] += 1
                         logger.info("  🆕 %s %d-%d %s (新插入，无ML预测)",
                                     home_team, home_goals, away_goals, away_team)
+                    else:
+                        stats["insert_conflict"] += 1
+                        logger.debug("  插入冲突(已有同id) fixture_id=%s", fixture_id)
             conn.commit()
     except Exception as e:
         logger.error("回填结果失败: %s", e, exc_info=True)
     return stats
 
 
-def _sync_dm_results(db) -> int:
-    """同步 dm_ 来源（竞彩/OpenLigaDB）的比赛结果。"""
-    updated = 0
+def _sync_dm_results(db) -> dict:
+    """同步 dm_ 来源（竞彩/OpenLigaDB）的比赛结果。返回统计字典。"""
+    stats = {"updated": 0, "pending": 0, "unmatched": 0, "unmatched_samples": []}
     try:
         with db.get_db_connection() as conn:
             cur = conn.cursor()
@@ -972,8 +1052,9 @@ def _sync_dm_results(db) -> int:
                 ORDER BY match_time DESC LIMIT 50
             """)
             pending = cur.fetchall()
+            stats["pending"] = len(pending)
             if not pending:
-                return 0
+                return stats
 
             ol_results: dict = {}
             for shortcut in ("bl1", "bl2", "bl3", "rel"):
@@ -1014,6 +1095,9 @@ def _sync_dm_results(db) -> int:
                         score = (s2, s1)
                         break
                 if score is None:
+                    stats["unmatched"] += 1
+                    if len(stats["unmatched_samples"]) < 3:
+                        stats["unmatched_samples"].append(f"{fid} {home} vs {away}")
                     continue
                 hg, ag = score
                 ar = "H" if hg > ag else ("D" if hg == ag else "A")
@@ -1026,11 +1110,11 @@ def _sync_dm_results(db) -> int:
                 """, (hg, ag, ar, fid))
                 if cur.rowcount > 0:
                     logger.info("  ✅ dm %s %d-%d %s", home, hg, ag, away)
-                    updated += 1
+                    stats["updated"] += 1
             conn.commit()
     except Exception as e:
         logger.error("同步 dm_ 结果失败: %s", e, exc_info=True)
-    return updated
+    return stats
 
 
 def _backfill_ml_predicted_result(db, days_back: int = 30) -> int:
