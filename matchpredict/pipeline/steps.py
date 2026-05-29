@@ -53,6 +53,7 @@ def _format_backfill_league_line(league_name: str, fetched: int, s: dict,
     for key, label in (
         ("skipped_no_score", "无比分"),
         ("skipped_cancelled", "取消/延期"),
+        ("skipped_already_done", "已回填"),
         ("insert_conflict", "插入冲突"),
     ):
         n = s.get(key, 0)
@@ -781,6 +782,7 @@ def step_backfill_results(db, leagues: list[str], days_back: int,
     total_score_hit = 0
     total_skipped_no_score = 0
     total_skipped_cancelled = 0
+    total_skipped_already_done = 0
     total_insert_conflict = 0
     errors = 0
     detail = []
@@ -833,7 +835,8 @@ def step_backfill_results(db, leagues: list[str], days_back: int,
         fetch_note = ",".join(fetch_notes) if fetch_notes else ""
         empty_stats = {
             "updated": 0, "inserted": 0, "correct": 0, "total_checked": 0,
-            "skipped_no_score": 0, "skipped_cancelled": 0, "insert_conflict": 0,
+            "skipped_no_score": 0, "skipped_cancelled": 0,
+            "skipped_already_done": 0, "insert_conflict": 0,
         }
 
         if not all_raw:
@@ -857,6 +860,7 @@ def step_backfill_results(db, leagues: list[str], days_back: int,
         total_score_hit += s["score_hit"]
         total_skipped_no_score += s.get("skipped_no_score", 0)
         total_skipped_cancelled += s.get("skipped_cancelled", 0)
+        total_skipped_already_done += s.get("skipped_already_done", 0)
         total_insert_conflict += s.get("insert_conflict", 0)
 
         msg = _format_backfill_league_line(league_name, len(all_raw), s, fetch_note)
@@ -887,6 +891,8 @@ def step_backfill_results(db, leagues: list[str], days_back: int,
         skip_parts.append(f"无比分={total_skipped_no_score}")
     if total_skipped_cancelled:
         skip_parts.append(f"取消/延期={total_skipped_cancelled}")
+    if total_skipped_already_done:
+        skip_parts.append(f"已回填={total_skipped_already_done}")
     if total_insert_conflict:
         skip_parts.append(f"插入冲突={total_insert_conflict}")
     if skip_parts:
@@ -901,11 +907,31 @@ def step_backfill_results(db, leagues: list[str], days_back: int,
     detail.append(summary.strip())
     return _result(
         processed=total_updated + total_inserted + dm_updated,
-        skipped=total_skipped_no_score + total_skipped_cancelled + total_insert_conflict
-              + dm_stats.get("unmatched", 0),
+        skipped=(total_skipped_no_score + total_skipped_cancelled
+                 + total_skipped_already_done + total_insert_conflict
+                 + dm_stats.get("unmatched", 0)),
         errors=errors,
         detail=detail,
     )
+
+
+def _is_result_already_backfilled(
+    status, db_home_goals, db_away_goals, db_result,
+    api_home_goals, api_away_goals, api_result,
+) -> bool:
+    """本地已 FINISHED 且比分/赛果与 API 一致则无需再 UPDATE。"""
+    if status != "FINISHED" or db_result is None:
+        return False
+    if db_home_goals is None or db_away_goals is None:
+        return False
+    try:
+        return (
+            int(db_home_goals) == int(api_home_goals)
+            and int(db_away_goals) == int(api_away_goals)
+            and db_result == api_result
+        )
+    except (TypeError, ValueError):
+        return False
 
 
 def _update_cancelled(matches: list, db):
@@ -928,7 +954,8 @@ def _update_cancelled(matches: list, db):
 def _backfill_to_db(matches: list, league_code: str, db) -> dict:
     stats = {
         "updated": 0, "inserted": 0, "correct": 0, "score_hit": 0, "total_checked": 0,
-        "skipped_no_score": 0, "skipped_cancelled": 0, "insert_conflict": 0,
+        "skipped_no_score": 0, "skipped_cancelled": 0,
+        "skipped_already_done": 0, "insert_conflict": 0,
     }
     try:
         with db.get_db_connection() as conn:
@@ -961,10 +988,17 @@ def _backfill_to_db(matches: list, league_code: str, db) -> dict:
 
                 cur.execute("""
                     SELECT ml_home_prob, ml_draw_prob, ml_away_prob,
-                           predicted_home_goals, predicted_away_goals,league_name,match_time
+                           predicted_home_goals, predicted_away_goals,
+                           league_name, match_time,
+                           status, actual_home_goals, actual_away_goals, actual_result
                     FROM upcoming_fixtures WHERE fixture_id = %s
                 """, (fixture_id,))
                 row = cur.fetchone()
+
+                if row is not None and _is_result_already_backfilled(
+                        row[7], row[8], row[9], row[10], home_goals, away_goals, actual_result):
+                    stats["skipped_already_done"] += 1
+                    continue
 
                 result_correct = None
                 score_correct_val = None
